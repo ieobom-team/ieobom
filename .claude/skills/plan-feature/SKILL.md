@@ -9,6 +9,8 @@ Manyfast 명세를 **하나의 PR로 끝나는 크기**의 GitHub Issue 초안�
 
 ## 절차
 
+0. **이름 있는 기준 버전이 있는지 확인한다.** 자동 저장(`v1`, `v2`)만 있으면 Issue를 만들 수 없다.
+   Issue template의 "기준 버전"이 필수 항목이기 때문이다. 없으면 `sync-manyfast`의 버전 규칙대로 먼저 저장한다.
 1. 지정된 Manyfast **Requirement / Feature / Spec**을 읽는다.
 2. 범위, 완료 조건, 범위 제외, 미결정 질문을 추출한다.
 3. **하나의 Issue가 하나의 검토 가능한 PR**이 되도록 분해한다.
@@ -36,7 +38,8 @@ Manyfast 명세를 **하나의 PR로 끝나는 크기**의 GitHub Issue 초안�
 
 ```
 ### Issue 1 — [feat] 인계 텍스트 입력 폼
-- Manyfast: R-01 / F-01 / S-01 · v0.1-core-flow
+- Manyfast: R-LIEATL / F-XXXXXX / S-XXXXXX · v0.1-core-flow
+- 관련 화면: n14 텍스트 입력 화면
 - 목적:
 - 완료 조건:
   - [ ]

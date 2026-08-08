@@ -13,8 +13,8 @@ body:
     id: manyfast-requirement
     attributes:
       label: Manyfast Requirement
-      description: 예 - R-01 인계 정보 입력 및 AI 구조화
-      placeholder: R-01
+      description: Manyfast에 표시된 ID를 그대로 적습니다. 예 - R-LIEATL 현장 인계 정보 수집
+      placeholder: R-LIEATL
     validations:
       required: true
 
@@ -22,8 +22,8 @@ body:
     id: manyfast-feature
     attributes:
       label: Manyfast Feature / Spec
-      description: 예 - F-01 / S-01
-      placeholder: F-01 / S-01
+      description: Manyfast에 표시된 ID를 그대로 적습니다. 임의로 번호를 붙이지 않습니다.
+      placeholder: F-XXXXXX / S-XXXXXX
     validations:
       required: true
 
@@ -35,6 +35,13 @@ body:
       placeholder: v0.1-core-flow
     validations:
       required: true
+
+  - type: input
+    id: manyfast-screen
+    attributes:
+      label: 관련 화면
+      description: 유저플로우 노드 ID 또는 와이어프레임 페이지 ID. 화면이 없는 작업이면 비웁니다.
+      placeholder: n20 어르신 인계 카드 상세
 
   - type: textarea
     id: goal
@@ -72,6 +79,13 @@ body:
     attributes:
       label: 예상 영향 파일
       placeholder: apps/api/src/main/java/com/ieobom/api/handover/...
+
+  - type: textarea
+    id: contracts
+    attributes:
+      label: 관련 기술 계약
+      description: 이 작업이 읽거나 바꾸는 `docs/contracts/` 문서. 계약이 바뀌면 같은 PR에서 갱신합니다.
+      placeholder: docs/contracts/README.md
 
   - type: textarea
     id: risk
