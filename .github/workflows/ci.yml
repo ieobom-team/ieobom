@@ -20,7 +20,7 @@ jobs:
     name: 저장소 가드
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: 필수 문서·템플릿 존재 확인
         run: |
