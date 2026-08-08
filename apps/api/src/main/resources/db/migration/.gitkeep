@@ -1,0 +1,4 @@
+# Flyway 마이그레이션 디렉터리
+#
+# 파일명 규칙: V1__create_care_recipient.sql, V2__create_handover.sql ...
+# 첫 파일을 추가할 때 application.yml 의 spring.flyway.enabled 를 true 로 바꾼다.

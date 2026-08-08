@@ -1,0 +1,105 @@
+name: 기능 구현
+description: Manyfast 명세 하나를 구현하는 작업
+title: "[feat] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Manyfast가 개발 명세의 유일한 기준입니다.**
+        아래 참조가 비어 있으면 AI 에이전트는 구현하지 않고 보완을 요청합니다.
+
+  - type: input
+    id: manyfast-requirement
+    attributes:
+      label: Manyfast Requirement
+      description: 예 - R-01 인계 정보 입력 및 AI 구조화
+      placeholder: R-01
+    validations:
+      required: true
+
+  - type: input
+    id: manyfast-feature
+    attributes:
+      label: Manyfast Feature / Spec
+      description: 예 - F-01 / S-01
+      placeholder: F-01 / S-01
+    validations:
+      required: true
+
+  - type: input
+    id: manyfast-version
+    attributes:
+      label: 기준 버전
+      description: 구현 기준이 되는 Manyfast 저장 버전
+      placeholder: v0.1-core-flow
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: 구현 목표
+      description: Manyfast Spec의 완료 조건을 코드로 어떻게 충족할 것인가
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 완료 조건
+      description: 데모와 QA에서 독립적으로 확인 가능한 동작으로 적습니다.
+      value: |
+        - [ ] Manyfast 명세 충족
+        - [ ] 테스트 통과
+        - [ ] PR에 검증 결과 기록
+    validations:
+      required: true
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: 범위 제외
+      description: 이 Issue에서 하지 않을 것. 비워두면 에이전트가 범위를 넓힐 수 있습니다.
+      placeholder: |
+        - 음성 입력 (P1)
+        - 로그인/권한
+    validations:
+      required: true
+
+  - type: textarea
+    id: files
+    attributes:
+      label: 예상 영향 파일
+      placeholder: apps/api/src/main/java/com/ieobom/api/handover/...
+
+  - type: textarea
+    id: risk
+    attributes:
+      label: 위험 · 미결정 사항
+      description: 추측해서 채우지 말고, 모르는 것은 모른다고 남깁니다.
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 우선순위
+      options:
+        - P0 (데모 코어 플로우)
+        - P1 (있으면 좋음)
+        - P2 (이후)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 영역
+      multiple: true
+      options:
+        - frontend
+        - backend
+        - ai
+        - infra
+        - docs
+    validations:
+      required: true

@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 기획 논의 (Notion)
+    url: https://www.notion.so
+    about: 아직 확정되지 않은 기획·문제 정의 논의는 Notion에서 합니다. 확정된 내용만 Manyfast → Issue 로 내려옵니다.

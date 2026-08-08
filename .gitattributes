@@ -1,0 +1,15 @@
+# 팀원 OS 가 섞여 있어도(Windows/macOS) 레포 안의 줄바꿈은 LF 로 통일한다.
+# CI 는 ubuntu 에서 돌기 때문에 CRLF 가 섞이면 셸 스크립트와 gradlew 가 깨진다.
+* text=auto eol=lf
+
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+gradlew text eol=lf
+*.sh   text eol=lf
+
+*.jar  binary
+*.png  binary
+*.jpg  binary
+*.gif  binary
+*.webp binary
+*.ico  binary

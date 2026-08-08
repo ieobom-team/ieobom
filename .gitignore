@@ -1,0 +1,36 @@
+# --- 비밀값 (Public 레포다. 절대 커밋 금지) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa
+secrets/
+
+# --- Node / 프론트엔드 ---
+node_modules/
+dist/
+.vite/
+*.local
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Java / Gradle ---
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+out/
+*.log
+
+# --- 에이전트 세션 파일 (개인 파일이므로 추적하지 않는다) ---
+.agent/current-task.md
+.claude/settings.local.json
+
+# --- IDE / OS ---
+.idea/
+*.iml
+*.iws
+.vscode/
+.DS_Store
+Thumbs.db

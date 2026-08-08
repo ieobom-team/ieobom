@@ -1,0 +1,53 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '4.1.0'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.ieobom'
+version = '0.0.1-SNAPSHOT'
+description = 'Ieobom handover API'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-flyway'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.flywaydb:flyway-mysql'
+	compileOnly 'org.projectlombok:lombok'
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+	runtimeOnly 'com.mysql:mysql-connector-j'
+	annotationProcessor 'org.projectlombok:lombok'
+	testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-flyway-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testCompileOnly 'org.projectlombok:lombok'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testAnnotationProcessor 'org.projectlombok:lombok'
+
+	// 테스트 전용. 로컬/배포 DB 는 MySQL 8.4 이고, H2 는 테스트에서만 쓴다.
+	// src/test/resources/application.yml 참고.
+	testRuntimeOnly 'com.h2database:h2'
+
+	// TODO(P1): API 문서(Swagger UI).
+	//   springdoc-openapi 최신 릴리스(2.8.x)는 Spring Boot 3.x / Spring Framework 6 대상이라
+	//   Boot 4.1 과 호환되지 않는다. Boot 4 지원 버전이 나오면 아래를 활성화할 것.
+	// implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:<boot4-compatible>'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}

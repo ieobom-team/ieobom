@@ -1,0 +1,69 @@
+name: 버그
+description: 명세대로 동작하지 않는 문제
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 무엇이 잘못됐나
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 재현 절차
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: 기대 동작 / 실제 동작
+      value: |
+        **기대:**
+
+        **실제:**
+    validations:
+      required: true
+
+  - type: dropdown
+    id: location
+    attributes:
+      label: 문제의 위치
+      description: 명세가 틀린 건지, 구현이 틀린 건지 판단합니다. 불명확하면 "판단 필요"를 고르고 구현을 멈춥니다.
+      options:
+        - 구현이 명세를 못 따라감
+        - 명세 자체가 현실과 안 맞음 (Manyfast 변경 필요)
+        - 판단 필요
+    validations:
+      required: true
+
+  - type: input
+    id: manyfast
+    attributes:
+      label: 관련 Manyfast 항목
+      placeholder: R-02 / F-03 / v0.1-core-flow
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 로그 · 에러 메시지
+      description: 비밀값(키·토큰·DB 접속 정보)은 지우고 붙여넣습니다.
+      render: text
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 우선순위
+      options:
+        - P0 (데모가 안 됨)
+        - P1
+        - P2
+    validations:
+      required: true

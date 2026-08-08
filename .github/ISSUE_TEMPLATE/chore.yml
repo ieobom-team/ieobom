@@ -1,0 +1,64 @@
+name: 인프라 · 문서 · 백로그
+description: 사용자에게 보이는 기능이 아닌 작업 (세팅, CI, 문서, 리팩터링, 후속 개선)
+title: "[chore] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        제품 동작이나 정책이 바뀌는 작업이라면 이 템플릿이 아니라 **기능 구현**을 쓰고,
+        Manyfast를 먼저 갱신하세요.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: 무엇을 하나
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: 왜 필요한가
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 완료 조건
+      value: |
+        - [ ]
+    validations:
+      required: true
+
+  - type: input
+    id: manyfast
+    attributes:
+      label: 관련 Manyfast 항목 (있으면)
+      placeholder: 없으면 비워둡니다
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 우선순위
+      options:
+        - P0
+        - P1
+        - P2
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 영역
+      multiple: true
+      options:
+        - frontend
+        - backend
+        - ai
+        - infra
+        - docs
+    validations:
+      required: true

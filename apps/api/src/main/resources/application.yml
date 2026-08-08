@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: ieobom-api
+
+  # DB 접속 정보는 코드에 적지 않는다. 로컬은 .env, 배포는 환경변수로 주입한다.
+  # 로컬 MySQL 8.4 는 루트의 docker-compose.yml 로 띄운다. (docs/development.md)
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/ieobom?characterEncoding=UTF-8&serverTimezone=Asia/Seoul}
+    username: ${DB_USERNAME:ieobom}
+    password: ${DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      # 개발 초반 속도를 위한 설정이다.
+      # 제출 전에 Flyway 마이그레이션으로 스키마를 고정하고 validate 로 바꾼다.
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    # db/migration 에 첫 마이그레이션 파일이 들어오면 true 로 바꾼다.
+    enabled: false
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+server:
+  port: ${SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    com.ieobom.api: DEBUG

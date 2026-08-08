@@ -1,0 +1,18 @@
+# 테스트 전용 설정.
+#
+# 로컬/배포 DB 는 MySQL 8.4 다. 여기서만 H2 인메모리를 쓴다.
+# 이유: CI 와 개발자 로컬에서 DB 컨테이너 없이도 ./gradlew build 가 돌아야 하기 때문이다.
+# MySQL 고유 문법이 필요한 테스트가 생기면 Testcontainers 도입을 별도 Issue 로 검토한다.
+spring:
+  datasource:
+    url: jdbc:h2:mem:ieobom;MODE=MySQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+
+  flyway:
+    enabled: false

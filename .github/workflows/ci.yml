@@ -1,0 +1,77 @@
+# 저장소 전체에 걸리는 경량 가드.
+#
+# 앱 코드 검증은 앱별 워크플로로 분리한다.
+#   - apps/api  -> .github/workflows/api.yml
+#   - apps/web  -> apps/web 을 생성하는 PR 에서 web.yml 을 같은 형태로 추가할 것
+#     (paths: apps/web/**, setup-node, npm ci, npm run lint, npm run build)
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: 저장소 가드
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 필수 문서·템플릿 존재 확인
+        run: |
+          set -e
+          required=(
+            README.md
+            AGENTS.md
+            CLAUDE.md
+            GEMINI.md
+            .gitignore
+            .env.example
+            .github/pull_request_template.md
+            .github/ISSUE_TEMPLATE/feature.yml
+            docs/development.md
+            docs/architecture.md
+            docs/conventions.md
+          )
+          missing=0
+          for f in "${required[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "::error file=$f::필수 파일이 없습니다: $f"
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] && echo "OK - 필수 파일 ${#required[@]}개 확인"
+          exit "$missing"
+
+      - name: 비밀값 커밋 여부 검사
+        run: |
+          set -e
+          fail=0
+
+          # 1) 추적되면 안 되는 파일명
+          if git ls-files | grep -nE '(^|/)\.env$|(^|/)\.env\.(local|development|production)$|\.pem$|\.p12$|(^|/)id_rsa$'; then
+            echo "::error::비밀 파일이 추적되고 있습니다. .gitignore 를 확인하고 git rm --cached 로 제거하세요."
+            fail=1
+          fi
+
+          # 2) 파일 내용의 키 패턴
+          #    이 워크플로 자신은 패턴 문자열을 담고 있으므로 검사 대상에서 제외한다.
+          files=$(git ls-files | grep -v '^.github/workflows/ci.yml$' || true)
+          if [ -n "$files" ]; then
+            hits=$(printf '%s\n' "$files" \
+              | xargs -d '\n' grep -nEI 'AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9_-]{20,}|BEGIN [A-Z ]*PRIVATE KEY' \
+              || true)
+            if [ -n "$hits" ]; then
+              echo "$hits"
+              echo "::error::API 키 또는 개인키로 보이는 문자열이 있습니다. Public 저장소입니다."
+              fail=1
+            fi
+          fi
+
+          [ "$fail" -eq 0 ] && echo "OK - 비밀값 검사 통과"
+          exit "$fail"

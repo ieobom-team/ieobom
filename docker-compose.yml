@@ -1,0 +1,33 @@
+# 로컬 개발용 MySQL. 배포 환경도 같은 8.4 LTS 로 맞춘다.
+#
+#   cp .env.example .env   # 값을 채운 뒤
+#   docker compose up -d
+#
+# 비밀값은 이 파일에 직접 쓰지 않는다. 전부 .env 에서 주입한다.
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: ieobom-mysql
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      TZ: Asia/Seoul
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  mysql-data:
