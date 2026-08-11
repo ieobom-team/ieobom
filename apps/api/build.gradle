@@ -73,4 +73,10 @@ tasks.register('llmLiveTest', Test) {
 	}
 	// 입력이 그대로여도 다시 돌아야 한다. 확인하려고 부른 것이기 때문이다.
 	outputs.upToDateWhen { false }
+	// 실패했을 때 제공자가 뭐라고 거부했는지 콘솔에서 바로 보이게 한다.
+	// 리포트를 내려받아야만 이유를 알 수 있으면 CI 에서 확인하기 어렵다.
+	testLogging {
+		showStandardStreams = true
+		exceptionFormat = 'full'
+	}
 }
