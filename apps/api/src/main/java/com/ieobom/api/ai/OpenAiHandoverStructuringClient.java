@@ -7,6 +7,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -77,11 +78,20 @@ class OpenAiHandoverStructuringClient implements HandoverStructuringClient {
 					restClient
 							.post()
 							.uri(COMPLETIONS_PATH)
-							.header(HttpHeaders.AUTHORIZATION, "Bearer " + properties.apiKey())
+							.header(HttpHeaders.AUTHORIZATION, "Bearer " + properties.bearerToken())
 							.contentType(MediaType.APPLICATION_JSON)
 							.body(body)
 							.retrieve()
 							.body(String.class);
+		} catch (RestClientResponseException e) {
+			// 거부 이유는 응답 본문에 있다. 이게 없으면 키 문제인지 모델 이름 문제인지 구분할 수 없다.
+			// 본문에는 우리가 보낸 원문이 들어가지 않는다. 키는 제공자가 가려서 돌려준다.
+			log.error(
+					"구조화 요청이 거부되었습니다 — status={}, model={}, body={}",
+					e.getStatusCode(),
+					properties.model(),
+					e.getResponseBodyAsString());
+			throw new LlmUnavailableException("구조화 요청이 거부되었습니다. 설정을 확인해 주세요.", e);
 		} catch (Exception e) {
 			throw new LlmUnavailableException("구조화 요청이 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
 		}

@@ -23,6 +23,16 @@ public record LlmProperties(
 		@DefaultValue("60s") Duration timeout) {
 
 	public boolean hasApiKey() {
-		return apiKey != null && !apiKey.isBlank();
+		return !bearerToken().isEmpty();
+	}
+
+	/**
+	 * 인증 헤더에 실을 키.
+	 *
+	 * <p>앞뒤 공백을 떼고 쓴다. 키는 사람이 복사해 환경변수나 저장소 Secret 에 붙여 넣는 값이라 줄바꿈이 함께 딸려 오기 쉽다. 그대로 헤더에 실으면
+	 * 401 이 나는데, 화면에 보이는 값은 멀쩡해서 원인을 찾기 어렵다.
+	 */
+	public String bearerToken() {
+		return apiKey == null ? "" : apiKey.trim();
 	}
 }
