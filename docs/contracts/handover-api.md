@@ -117,7 +117,7 @@ AI 구조화는 이 API가 하지 않는다. (별도 Issue)
 
 | 항목 | 어디서 |
 |---|---|
-| AI 구조화 · 어르신별 카드 생성 | 별도 Issue |
+| AI 구조화 · 어르신별 카드 생성 | [`handover-card-schema.md`](handover-card-schema.md) — 저장이 끝난 뒤 `POST /api/handovers/{id}/cards` 로 따로 호출한다 |
 | 음성 파일 업로드 | 별도 Issue. 지금은 `inputMethod: "VOICE"` + 전사된 `rawText`만 받는다 |
 | 인계 수정 · 삭제 | 미정 |
 | 오프라인 임시 저장 · 자동 재전송 | **프론트엔드 책임.** 서버는 재전송된 요청을 일반 요청과 똑같이 받는다 |

@@ -15,6 +15,7 @@ on:
     paths:
       - "apps/api/**"
       - ".github/workflows/api.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -48,3 +49,48 @@ jobs:
         with:
           name: api-test-report
           path: apps/api/build/reports/tests/test
+
+  # 실제 LLM 을 부르는 확인. gradlew build 에서는 제외돼 있고 여기서만 돈다.
+  #
+  # 호출마다 크레딧이 나가므로 모든 PR 에서 돌리지 않는다.
+  # 'ai' 라벨이 붙은 PR 과 수동 실행에서만 돈다. 스키마 강제와 근거 규칙은 stub 으로 확인할 수 없어서,
+  # 그쪽 코드를 건드리는 PR 에는 라벨을 붙여 한 번 실제로 불러 본다.
+  llm-live:
+    name: gradlew llmLiveTest
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || contains(github.event.pull_request.labels.*.name, 'ai')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - run: chmod +x ./gradlew
+
+      # 키가 없으면 테스트가 조용히 skip 된다. 초록불만 보고 확인됐다고 오해하지 않도록 먼저 막는다.
+      - name: 키 확인
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: |
+          if [ -z "$LLM_API_KEY" ]; then
+            echo "LLM_API_KEY 시크릿이 없습니다. 저장소 Settings > Secrets and variables > Actions 에 등록하세요."
+            exit 1
+          fi
+
+      - name: llmLiveTest
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: ./gradlew llmLiveTest --no-daemon
+
+      - name: 테스트 리포트 업로드
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: api-llm-live-report
+          path: apps/api/build/reports/tests/llmLiveTest

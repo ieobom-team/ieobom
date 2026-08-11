@@ -79,6 +79,25 @@ public class ApiExceptionHandler {
 				.body(ApiErrorResponse.of(e.getCode(), e.getMessage()));
 	}
 
+	@ExceptionHandler(ConflictException.class)
+	public ResponseEntity<ApiErrorResponse> handleConflict(ConflictException e) {
+		log.debug("지금 상태에서 할 수 없는 요청 — {}", e.getMessage());
+		return ResponseEntity.status(HttpStatus.CONFLICT)
+				.body(ApiErrorResponse.of(e.getCode(), e.getMessage()));
+	}
+
+	/**
+	 * 바깥 의존성이 응답하지 못한 경우.
+	 *
+	 * <p>원인은 로그로 남기고 응답에는 내보내지 않는다. 예외 메시지에 요청 본문이나 키가 섞여 나갈 수 있기 때문이다.
+	 */
+	@ExceptionHandler(ServiceUnavailableException.class)
+	public ResponseEntity<ApiErrorResponse> handleServiceUnavailable(ServiceUnavailableException e) {
+		log.error("바깥 의존성 호출 실패 — {}", e.getMessage(), e);
+		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+				.body(ApiErrorResponse.of(e.getCode(), e.getMessage()));
+	}
+
 	/**
 	 * Jackson 이 막힌 지점의 필드 이름. 알 수 없으면 {@code null}.
 	 *
