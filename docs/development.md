@@ -130,9 +130,13 @@ API 키나 비밀값을 넣지 않는다.**
 apps/web/src/
 ├── features/<도메인>/     화면과 그 도메인 전용 로직 (session, handover, ...)
 ├── routes/                라우트 정의와 진입 가드
+├── shared/api/            백엔드 호출 한 겹과 쿼리 캐시 설정
 ├── shared/ui/             여러 화면이 함께 쓰는 UI 조각
 └── test/setup.ts          vitest 공통 설정
 ```
+
+`shared/api/client.ts`는 서버 오류 응답의 `fields`를 살려 `ApiError`로 던진다.
+**보완할 항목을 한 번에 모아 보여 주는 화면이 이 목록에 기대고 있으므로** 메시지 한 줄로 뭉개지 않는다.
 
 ### 테스트
 
@@ -153,6 +157,9 @@ npm test -- -t "본인 바꾸기"       # 이름으로 좁혀 실행
 
 직원 명단(`features/session/staffDirectory.ts`)은 **프론트 상수(mock)다.**
 서버에 직원 엔티티가 없고 API 는 직원을 `reporterName` 같은 문자열로만 받는다.
+
+**어르신 목록은 다르다.** `GET /api/care-recipients`로 서버에서 받아 온다.
+인계 등록이 서버가 발급한 `careRecipientId`를 요구하므로 프론트 상수로 두면 id 를 추측하게 된다.
 
 ## 5. PR 전 검증
 

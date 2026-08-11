@@ -1,0 +1,284 @@
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createQueryClient } from '../../shared/api/queryClient'
+import { AppRoutes } from '../../routes/AppRoutes'
+import { SessionProvider } from '../session/SessionProvider'
+import { saveSession } from '../session/sessionStorage'
+import { STAFF_DIRECTORY } from '../session/staffDirectory'
+import type { HandoverCreateRequest } from './handoverApi'
+
+const 김하늘 = STAFF_DIRECTORY[0]
+
+const 어르신들 = [
+  { id: 6, name: '강복순', code: 'IB-006' },
+  { id: 1, name: '김말순', code: 'IB-001' },
+  { id: 2, name: '박순자', code: 'IB-002' },
+]
+
+type PostOutcome = { status: number; body: unknown }
+
+let 저장_응답: PostOutcome
+let 목록_응답: PostOutcome
+let 보낸_요청: HandoverCreateRequest[]
+
+function json({ status, body }: PostOutcome) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+beforeEach(() => {
+  보낸_요청 = []
+  목록_응답 = { status: 200, body: { careRecipients: 어르신들 } }
+  저장_응답 = {
+    status: 201,
+    body: {
+      id: 12,
+      careRecipientId: 1,
+      careRecipientName: '김말순',
+      rawText: '점심 드시고 나서 오른쪽 다리를 계속 주무르셨어요.',
+      inputMethod: 'TEXT',
+      occurredAt: '2026-08-11T13:10:00',
+      reporterName: 김하늘.name,
+      proxyInput: false,
+      infoSource: null,
+      createdAt: '2026-08-11T13:11:04.512',
+    },
+  }
+
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: string, init?: RequestInit) => {
+      if (input.includes('/api/care-recipients')) {
+        return Promise.resolve(json(목록_응답))
+      }
+      if (input.includes('/api/handovers')) {
+        보낸_요청.push(JSON.parse(String(init?.body)) as HandoverCreateRequest)
+        return Promise.resolve(json(저장_응답))
+      }
+      throw new Error(`테스트가 예상하지 못한 호출입니다: ${input}`)
+    }),
+  )
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+function renderApp(initialPath = '/field/handovers/new') {
+  saveSession({ entryRole: 'FIELD_WORKER', staff: 김하늘 })
+  return render(
+    <QueryClientProvider client={createQueryClient()}>
+      <SessionProvider>
+        <MemoryRouter initialEntries={[initialPath]}>
+          <AppRoutes />
+        </MemoryRouter>
+      </SessionProvider>
+    </QueryClientProvider>,
+  )
+}
+
+/** n8 직접 관찰 → n11 → n13 까지 온다. */
+async function 직접_본_내용을_텍스트로(user: ReturnType<typeof userEvent.setup>, 내용: string) {
+  await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
+  await user.click(screen.getByRole('button', { name: /텍스트로 쓰기/ }))
+  await user.type(screen.getByLabelText(/보신 그대로/), 내용)
+  await user.click(screen.getByRole('button', { name: '다음' }))
+}
+
+describe('현장 홈에서 들어오기', () => {
+  it('특이사항 남기기를 누르면 입력 화면이 열린다', async () => {
+    const user = userEvent.setup()
+    renderApp('/field')
+
+    await user.click(screen.getByRole('button', { name: /특이사항 남기기/ }))
+
+    expect(screen.getByRole('heading', { name: '특이사항 남기기' })).toBeInTheDocument()
+  })
+})
+
+describe('입력 방식 선택 (n11)', () => {
+  it('세 가지 방식이 모두 보이고 지금 쓸 수 있는 것은 텍스트뿐이다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
+
+    expect(screen.getByRole('button', { name: /텍스트로 쓰기/ })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /말로 남기기/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /체크로 고르기/ })).toBeDisabled()
+  })
+})
+
+describe('대리 입력과 정보 출처 (n8 → n9)', () => {
+  it('다른 분께 들었다고 하면 정보 출처를 고르는 항목이 나온다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole('button', { name: /다른 분께 들었어요/ }))
+
+    expect(screen.getByRole('heading', { name: /어느 분께 들으셨나요/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '보호자' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '운전원' })).toBeInTheDocument()
+  })
+
+  it('직접 봤다고 하면 정보 출처를 묻지 않는다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
+
+    expect(screen.queryByRole('heading', { name: /어느 분께 들으셨나요/ })).not.toBeInTheDocument()
+  })
+
+  it('입력자와 정보 출처를 갈라서 보낸다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole('button', { name: /다른 분께 들었어요/ }))
+    await user.click(screen.getByRole('button', { name: '보호자' }))
+    await user.click(screen.getByRole('button', { name: /텍스트로 쓰기/ }))
+    await user.type(screen.getByLabelText(/보신 그대로/), '밤사이 잠을 못 주무셨대요.')
+    await user.click(screen.getByRole('button', { name: '다음' }))
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    await screen.findByRole('heading', { name: '저장했습니다' })
+    expect(보낸_요청[0].reporterName).toBe(김하늘.name)
+    expect(보낸_요청[0].proxyInput).toBe(true)
+    expect(보낸_요청[0].infoSource).toBe('GUARDIAN')
+  })
+})
+
+describe('텍스트 입력으로 등록 (n13 → n15 → n16)', () => {
+  it('어르신과 입력 시점을 함께 담아 등록한다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await 직접_본_내용을_텍스트로(user, '점심 드시고 나서 오른쪽 다리를 계속 주무르셨어요.')
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    await screen.findByRole('heading', { name: '저장했습니다' })
+    expect(보낸_요청).toHaveLength(1)
+    expect(보낸_요청[0]).toMatchObject({
+      careRecipientId: 1,
+      rawText: '점심 드시고 나서 오른쪽 다리를 계속 주무르셨어요.',
+      inputMethod: 'TEXT',
+      proxyInput: false,
+    })
+    // 입력 시점은 지금 시각이 채워져 있고, 계약대로 오프셋 없는 지역 시각이다.
+    expect(보낸_요청[0].occurredAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/)
+  })
+
+  it('저장에 성공하면 다음 정리 단계로 넘어갔음을 알린다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await 직접_본_내용을_텍스트로(user, '오후 내내 기침을 하셨어요.')
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    expect(await screen.findByRole('heading', { name: '저장했습니다' })).toBeInTheDocument()
+    expect(screen.getByText(/인계 카드 정리 단계로 넘어갔습니다/)).toBeInTheDocument()
+    expect(screen.getByText(/김말순 어르신/)).toBeInTheDocument()
+  })
+})
+
+describe('보완할 항목 안내', () => {
+  it('내용을 비운 채 다음을 누르면 무엇을 채워야 하는지 알려 준다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
+    await user.click(screen.getByRole('button', { name: /텍스트로 쓰기/ }))
+    await user.click(screen.getByRole('button', { name: '다음' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('입력 내용')
+    expect(screen.getByRole('heading', { name: /무슨 일이 있었나요/ })).toBeInTheDocument()
+  })
+
+  it('어르신을 고르지 않고 저장하면 저장하지 않고 안내한다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await 직접_본_내용을_텍스트로(user, '오후 내내 기침을 하셨어요.')
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('대상 어르신')
+    expect(보낸_요청).toHaveLength(0)
+  })
+
+  it('서버가 돌려준 보완 항목을 그대로 모아서 보여 준다', async () => {
+    저장_응답 = {
+      status: 400,
+      body: {
+        code: 'VALIDATION_FAILED',
+        message: '보완할 항목이 있습니다.',
+        fields: [
+          { field: 'occurredAt', reason: '입력 시점을 입력해 주세요.' },
+          { field: 'rawText', reason: '입력 내용을 남겨 주세요.' },
+        ],
+      },
+    }
+    const user = userEvent.setup()
+    renderApp()
+
+    await 직접_본_내용을_텍스트로(user, '오후 내내 기침을 하셨어요.')
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('입력 시점')
+    expect(alert).toHaveTextContent('입력 내용')
+  })
+
+  it('고른 어르신이 목록에 없으면 다시 고르도록 안내한다', async () => {
+    저장_응답 = {
+      status: 404,
+      body: {
+        code: 'CARE_RECIPIENT_NOT_FOUND',
+        message: '어르신을 찾을 수 없습니다.',
+        fields: [],
+      },
+    }
+    const user = userEvent.setup()
+    renderApp()
+
+    await 직접_본_내용을_텍스트로(user, '오후 내내 기침을 하셨어요.')
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('목록에서 다시 골라 주세요')
+    expect(screen.getByRole('heading', { name: /어느 어르신이신가요/ })).toBeInTheDocument()
+  })
+})
+
+describe('어르신 목록', () => {
+  it('이름으로 좁혀서 찾을 수 있다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await 직접_본_내용을_텍스트로(user, '오후 내내 기침을 하셨어요.')
+    await screen.findByRole('button', { name: /김말순/ })
+    await user.type(screen.getByLabelText(/이름이나 식별번호로 찾기/), '박')
+
+    expect(screen.getByRole('button', { name: /박순자/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /김말순/ })).not.toBeInTheDocument()
+  })
+
+  it('목록을 불러오지 못하면 다시 시도할 수 있다', async () => {
+    목록_응답 = { status: 500, body: { code: 'UNKNOWN', message: '오류', fields: [] } }
+    const user = userEvent.setup()
+    renderApp()
+
+    await 직접_본_내용을_텍스트로(user, '오후 내내 기침을 하셨어요.')
+
+    expect(await screen.findByText(/어르신 목록을 불러오지 못했습니다/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '목록 다시 불러오기' })).toBeInTheDocument()
+  })
+})
