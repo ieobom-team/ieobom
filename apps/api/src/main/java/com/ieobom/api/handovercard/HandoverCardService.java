@@ -5,26 +5,30 @@ import com.ieobom.api.ai.StructuredCardDraft;
 import com.ieobom.api.ai.StructuringInput;
 import com.ieobom.api.common.ConflictException;
 import com.ieobom.api.common.NotFoundException;
+import com.ieobom.api.common.RequestValidationException;
 import com.ieobom.api.handover.Handover;
 import com.ieobom.api.handover.HandoverRepository;
 import com.ieobom.api.handovercard.dto.HandoverCardListResponse;
 import com.ieobom.api.handovercard.dto.HandoverCardListResponse.RecipientCards;
 import com.ieobom.api.handovercard.dto.HandoverCardResponse;
 import com.ieobom.api.handovercard.dto.HandoverCardStructureResponse;
+import com.ieobom.api.handovercard.dto.HandoverCardUpdateRequest;
 import com.ieobom.api.recipient.CareRecipient;
 import com.ieobom.api.recipient.CareRecipientRepository;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 인계 원문을 어르신별 카드로 구조화하고, 하루치 카드를 읽어 준다. */
+/** 인계 원문을 어르신별 카드로 구조화하고, 하루치 카드를 읽어 주고, 직원의 검토 결과를 반영한다. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -32,6 +36,9 @@ public class HandoverCardService {
 
 	static final String HANDOVER_NOT_FOUND = "HANDOVER_NOT_FOUND";
 	static final String ALREADY_STRUCTURED = "HANDOVER_ALREADY_STRUCTURED";
+	static final String CARD_NOT_FOUND = "HANDOVER_CARD_NOT_FOUND";
+	static final String CARE_RECIPIENT_NOT_FOUND = "CARE_RECIPIENT_NOT_FOUND";
+	static final String RECIPIENT_NOT_RESOLVED = "CARE_RECIPIENT_NOT_RESOLVED";
 
 	/** 안전 항목을 앞에 세우고, 같은 무게면 만들어진 순서대로. (Manyfast F-SNBVHR rules) */
 	private static final Comparator<HandoverCard> SAFETY_FIRST =
@@ -115,6 +122,167 @@ public class HandoverCardService {
 						.toList();
 
 		return new HandoverCardListResponse(date, recipients, unresolved);
+	}
+
+	/**
+	 * 직원이 검토하며 고친 내용을 반영한다. (Manyfast F-SNBVHR action)
+	 *
+	 * @throws NotFoundException 카드가 없거나, 지정한 어르신이 목록에 없을 때
+	 * @throws RequestValidationException 담을 내용이 없거나, 다음 행동 없이 제안값만 지정했을 때
+	 * @throws ConflictException 검토 완료 카드에서 대상 어르신을 비우려 할 때
+	 */
+	@Transactional
+	public HandoverCardResponse update(Long cardId, HandoverCardUpdateRequest request) {
+		HandoverCard card = findCard(cardId);
+		verifyContent(request);
+		verifySuggestion(request);
+
+		CareRecipient careRecipient = findRecipient(request.careRecipientId());
+		if (careRecipient == null && card.canGenerateExport()) {
+			throw new ConflictException(
+					RECIPIENT_NOT_RESOLVED, "검토 완료 카드에서는 대상 어르신을 비울 수 없습니다. 검토 상태를 되돌린 뒤 고쳐 주세요.");
+		}
+
+		List<String> changed = changedFields(card, request, careRecipient);
+		card.edit(
+				careRecipient,
+				request.normalizedStatusChange(),
+				request.normalizedActionTaken(),
+				request.normalizedNextAction(),
+				request.suggestedJobRole(),
+				request.suggestedDueTime());
+
+		logReviewed("카드 수정", card, "바뀐항목=" + changed);
+		return HandoverCardResponse.from(card);
+	}
+
+	/**
+	 * 검토 상태를 바꾼다. (Manyfast F-SNBVHR dataSpec)
+	 *
+	 * <p>대상 어르신을 가리지 못한 카드는 검토 완료로 올리지 않는다. Manyfast 는 어르신을 분리할 수 없는 원문을 "확정 카드로 만들지 않는다"고
+	 * 한다. 어르신 없는 카드가 검토 완료가 되면 그 카드로 만든 문구가 누구의 기록인지 말할 수 없게 된다.
+	 *
+	 * @throws NotFoundException 카드가 없을 때
+	 * @throws ConflictException 어르신을 가리지 못한 카드를 검토 완료로 올리려 할 때
+	 */
+	@Transactional
+	public HandoverCardResponse changeReviewStatus(Long cardId, ReviewStatus reviewStatus) {
+		HandoverCard card = findCard(cardId);
+		if (reviewStatus == ReviewStatus.REVIEWED && !card.isRecipientResolved()) {
+			throw new ConflictException(RECIPIENT_NOT_RESOLVED, "대상 어르신을 먼저 지정해 주세요.");
+		}
+
+		ReviewStatus before = card.getReviewStatus();
+		card.changeReviewStatus(reviewStatus);
+
+		logReviewed("카드 검토 상태 전환", card, "%s -> %s".formatted(before, reviewStatus));
+		return HandoverCardResponse.from(card);
+	}
+
+	/**
+	 * 직원이 안전 관련 표시를 켜거나 끈다. (Manyfast F-SNBVHR rules)
+	 *
+	 * @throws NotFoundException 카드가 없을 때
+	 */
+	@Transactional
+	public HandoverCardResponse markSafety(Long cardId, boolean safetyRelated) {
+		HandoverCard card = findCard(cardId);
+		card.markSafety(safetyRelated);
+
+		logReviewed(
+				"카드 안전 표시", card, "safetyRelated=%s, 판정출처=%s".formatted(safetyRelated, card.getSafetyFlagSource()));
+		return HandoverCardResponse.from(card);
+	}
+
+	private HandoverCard findCard(Long cardId) {
+		return cardRepository
+				.findById(cardId)
+				.orElseThrow(() -> new NotFoundException(CARD_NOT_FOUND, "카드를 찾을 수 없습니다."));
+	}
+
+	/** 직원이 지정한 어르신. 아직 가리지 못했다는 뜻으로 비워 보낼 수 있다. */
+	private CareRecipient findRecipient(Long careRecipientId) {
+		if (careRecipientId == null) {
+			return null;
+		}
+		return careRecipientRepository
+				.findById(careRecipientId)
+				.orElseThrow(
+						() ->
+								new NotFoundException(
+										CARE_RECIPIENT_NOT_FOUND, "대상 어르신을 찾을 수 없습니다. 목록에서 다시 선택해 주세요."));
+	}
+
+	/**
+	 * 담을 내용이 남아 있는지.
+	 *
+	 * <p>{@link CardDraftVerifier} 가 AI 초안을 버리는 기준과 같다. 세 칸이 모두 비면 근거만 있고 아무 말도 하지 않는 카드가 되는데,
+	 * 카드 삭제가 없는 지금은 그 카드가 목록에 영원히 남는다.
+	 */
+	private void verifyContent(HandoverCardUpdateRequest request) {
+		if (request.normalizedStatusChange() == null
+				&& request.normalizedActionTaken() == null
+				&& request.normalizedNextAction() == null) {
+			throw new RequestValidationException(
+					"상태 변화 · 조치 · 다음 행동 중 하나는 남겨 주세요.",
+					List.of("statusChange", "actionTaken", "nextAction"));
+		}
+	}
+
+	/**
+	 * 제안 직종·기한은 다음 행동에 붙는 값이다. (Manyfast F-SNBVHR dataSpec)
+	 *
+	 * <p>다음 행동이 없는데 값만 남으면 후속 업무 배정 화면이 "무엇을 할지 없이 담당자와 기한만 있는" 항목을 받게 된다. 서버가 조용히 비우지 않고
+	 * 되돌려 주는 이유는, 직원이 다음 행동을 지운 것과 제안값을 지우려 한 것이 다른 행동이기 때문이다.
+	 */
+	private void verifySuggestion(HandoverCardUpdateRequest request) {
+		if (request.normalizedNextAction() == null
+				&& (request.suggestedJobRole() != null || request.suggestedDueTime() != null)) {
+			throw new RequestValidationException(
+					"nextAction", "제안 직종과 기한은 다음 행동이 있을 때만 지정할 수 있습니다.");
+		}
+	}
+
+	/** 무엇이 바뀌었는지. 반드시 {@code edit} 을 부르기 전에 계산한다. */
+	private List<String> changedFields(
+			HandoverCard card, HandoverCardUpdateRequest request, CareRecipient careRecipient) {
+
+		List<String> changed = new ArrayList<>();
+		addIfChanged(changed, "careRecipientId", idOf(card.getCareRecipient()), idOf(careRecipient));
+		addIfChanged(changed, "statusChange", card.getStatusChange(), request.normalizedStatusChange());
+		addIfChanged(changed, "actionTaken", card.getActionTaken(), request.normalizedActionTaken());
+		addIfChanged(changed, "nextAction", card.getNextAction(), request.normalizedNextAction());
+		addIfChanged(changed, "suggestedJobRole", card.getSuggestedJobRole(), request.suggestedJobRole());
+		addIfChanged(changed, "suggestedDueTime", card.getSuggestedDueTime(), request.suggestedDueTime());
+		return changed;
+	}
+
+	private void addIfChanged(List<String> changed, String field, Object before, Object after) {
+		if (!Objects.equals(before, after)) {
+			changed.add(field);
+		}
+	}
+
+	private Long idOf(CareRecipient careRecipient) {
+		return careRecipient == null ? null : careRecipient.getId();
+	}
+
+	/**
+	 * 카드 검토 및 수정 이벤트. (Manyfast F-SNBVHR outcome)
+	 *
+	 * <p>구조화 이벤트와 같은 이유로 별도 테이블 없이 애플리케이션 로그로 남긴다. 수정 이력 열람과 되돌리기는 이번 범위 밖이라, 지금 이력 테이블을
+	 * 만들면 화면 없이 스키마부터 추측하게 된다.
+	 *
+	 * <p><b>바뀐 내용 자체는 남기지 않고 항목 이름만 남긴다.</b> 어르신의 상태와 투약 이야기가 로그 파일로 새어 나갈 이유가 없다.
+	 */
+	private void logReviewed(String event, HandoverCard card, String detail) {
+		log.info(
+				"{} — cardId={}, careRecipientId={}, reviewStatus={}, {}",
+				event,
+				card.getId(),
+				idOf(card.getCareRecipient()),
+				card.getReviewStatus(),
+				detail);
 	}
 
 	private StructuringInput inputOf(Handover handover, List<CareRecipient> candidates) {
