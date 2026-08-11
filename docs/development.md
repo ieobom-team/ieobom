@@ -66,10 +66,10 @@ MySQL 고유 문법이 필요한 테스트가 생기면 Testcontainers 도입을
 
 ### LLM 실호출 확인
 
-AI 구조화 테스트는 기본적으로 **실제 호출 없이** 돈다. `HandoverStructuringClient`를 stub으로 바꿔 끼우기 때문이다.
-그래서 `./gradlew build`는 키가 없어도 통과하고 크레딧도 쓰지 않는다.
+AI를 쓰는 테스트는 기본적으로 **실제 호출 없이** 돈다. `HandoverStructuringClient`와 `ExportPhraseClient`를
+stub으로 바꿔 끼우기 때문이다. 그래서 `./gradlew build`는 키가 없어도 통과하고 크레딧도 쓰지 않는다.
 
-다만 **스키마가 실제로 걸리는지, 근거가 정말 원문에서 나오는지는 stub으로 확인할 수 없다.**
+다만 **스키마가 실제로 걸리는지, 근거가 정말 원문·카드 안에서 나오는지는 stub으로 확인할 수 없다.**
 그 확인은 별도 태스크로 뗐다.
 
 ```bash
@@ -82,10 +82,11 @@ LLM_API_KEY=... ./gradlew llmLiveTest
 $env:LLM_API_KEY = "..."; .\gradlew.bat llmLiveTest
 ```
 
-- 실행당 호출은 **2회**다. `build`에 매달지 않았으므로 push나 CI에서 저절로 나가지 않는다.
+- 실행당 호출은 **4회**다. 구조화 2회(`OpenAiStructuringLiveTest`) + 문구 생성 2회(`OpenAiExportPhraseLiveTest`).
+  `build`에 매달지 않았으므로 push나 CI에서 저절로 나가지 않는다.
 - `LLM_API_KEY`가 없으면 테스트가 실패가 아니라 **skip**된다.
 - 모델이 만드는 문장은 매번 다르므로 문구를 단정하지 않는다.
-  근거가 원문 안에 있는지, 역할 목록 밖 직종이 나오지 않는지 같은 **계약만** 본다.
+  근거가 원문 안에 있는지, 역할 목록 밖 직종이 나오지 않는지, 카드에 없는 숫자를 지어내지 않는지 같은 **계약만** 본다.
 
 CI에서는 `ai` 라벨이 붙은 PR과 수동 실행(`workflow_dispatch`)에서만 이 태스크가 돈다.
 저장소 Secret `LLM_API_KEY`를 쓰며, 키가 비어 있으면 조용히 skip되지 않도록 잡을 먼저 실패시킨다.
@@ -123,7 +124,7 @@ pwsh ./scripts/verify-before-pr.ps1   # Windows
 |---|---|---|
 | `.github/workflows/ci.yml` | 모든 PR·push | 필수 문서 존재 확인, 비밀값 커밋 검사 |
 | `.github/workflows/api.yml` | `apps/api/**` 변경 시 | JDK 21 + `./gradlew build` (실호출 없음) |
-| `api.yml` 의 `llm-live` 잡 | `ai` 라벨이 붙은 PR · 수동 실행 | `./gradlew llmLiveTest` — 실제 LLM 호출 2회 |
+| `api.yml` 의 `llm-live` 잡 | `ai` 라벨이 붙은 PR · 수동 실행 | `./gradlew llmLiveTest` — 실제 LLM 호출 4회 |
 | `web.yml` | _아직 없음_ | `apps/web` 생성 PR에서 함께 추가 |
 
 CI는 최종 안전망이지 로컬 검증의 대체가 아니다. `main` 병합 전 CI 통과를 사람이 확인한다.

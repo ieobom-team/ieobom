@@ -252,3 +252,21 @@ Manyfast에 올린 뒤 여기를 고친다. 지금 이 표를 근거로 화면 �
 
 근거 원문은 이 테이블에 복사해 두지 않는다. 카드가 들고 있고, 복사해 두면 카드를 고쳤을 때 두 값이
 조용히 갈라진다.
+
+---
+
+## 실호출 확인
+
+**스키마가 실제로 걸리는지, 모델이 카드에 없는 값을 지어내지 않는지는 stub으로 확인할 수 없다.**
+`ExportPhraseSchema`가 잘못 생겼어도 stub 테스트는 전부 통과한다.
+
+```bash
+cd apps/api
+LLM_API_KEY=... ./gradlew llmLiveTest     # 문구 생성 2회 (구조화 2회와 함께 돈다)
+```
+
+`OpenAiExportPhraseLiveTest`가 보는 것은 세 가지다. 두 문구가 함께 오는지, 같은 문장을 돌려 쓰지 않는지,
+그리고 만들어진 문구가 `ExportPhraseVerifier` 판정을 그냥 통과하는지다. 마지막이 핵심이다 —
+**체온을 재지 않은 카드에서 숫자가 나오면 그게 지어낸 것**이고, 그건 실호출에서만 드러난다.
+
+`./gradlew build`에는 포함되지 않는다. 자세한 건 [`docs/development.md`](../development.md#llm-실호출-확인)에 있다.

@@ -329,7 +329,7 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 
 ```bash
 cd apps/api
-LLM_API_KEY=... ./gradlew llmLiveTest     # 호출 2회
+LLM_API_KEY=... ./gradlew llmLiveTest     # 구조화 2회 + 문구 생성 2회
 ```
 
 `./gradlew build`에는 포함되지 않는다. 붙여 두면 push마다 크레딧이 나가고, 키가 없는 CI와
