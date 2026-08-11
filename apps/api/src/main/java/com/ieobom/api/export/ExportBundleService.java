@@ -155,7 +155,14 @@ public class ExportBundleService {
 		List<ExportPhrase> included = ofType.stream().filter(ExportPhrase::isCopyable).toList();
 
 		int skipped = ofType.size() - included.size();
-		long needsReview = included.stream().filter(ExportPhrase::needsReview).count();
+
+		// 저장된 안내만 세면 문구를 만든 뒤 카드가 바뀐 것을 묶음이 놓친다. 단건 응답과 같은 판정을 쓴다.
+		long needsReview =
+				included.stream()
+						.filter(
+								phrase ->
+										ExportPhraseVerifier.reviewNoticeOf(phrase, phrase.getHandoverCard()) != null)
+						.count();
 
 		List<String> notices = new ArrayList<>();
 		if (ofType.isEmpty()) {
