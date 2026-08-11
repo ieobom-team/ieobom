@@ -3,6 +3,7 @@
 AI 구조화 결과의 JSON 스키마와 카드 API.
 
 - Manyfast: `R-ONESTC` 어르신별 인계 정보 정리 / `F-SNBVHR` 어르신별 인계 카드 정리
+- 문구 생성 허용 판정만 `R-TUBGKD` / `F-GUSOFG` preconditions 에서 온다
 - 기준 버전: `v0.1-core-flow`
 
 > 제품이 **왜** 이렇게 동작하는지는 Manyfast가 기준이다. 여기에는 **JSON이 어떻게 생겼는지**만 적는다.
@@ -12,11 +13,17 @@ AI 구조화 결과의 JSON 스키마와 카드 API.
 ## 흐름
 
 ```
-POST /api/handovers            원문 저장 (handover-api.md)
-      ↓                        저장은 즉시 끝난다. LLM을 기다리지 않는다
-POST /api/handovers/{id}/cards AI 구조화 → 검증 → 카드 저장
+POST  /api/handovers                          원문 저장 (handover-api.md)
+      ↓                                       저장은 즉시 끝난다. LLM을 기다리지 않는다
+POST  /api/handovers/{id}/cards               AI 구조화 → 검증 → 카드 저장
       ↓
-GET  /api/handover-cards?date= 어르신별 카드 목록
+GET   /api/handover-cards?date=               어르신별 카드 목록
+      ↓
+PUT   /api/handover-cards/{id}                직원이 검토하며 고친 내용
+PATCH /api/handover-cards/{id}/review-status  검토 필요 ↔ 검토 완료
+PATCH /api/handover-cards/{id}/safety         직원이 직접 하는 안전 표시
+      ↓
+      검토 완료 카드에서만 문구 생성 (별도 Issue)
 ```
 
 구조화를 `POST /api/handovers` 안에서 하지 않는다. 현장 입력 저장이 LLM 응답 시간과 실패에 묶이면
@@ -92,7 +99,7 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 안전 판정은 두 갈래의 **합집합**이다. 서버가 지정 키워드 표기(`낙상` `발열` `식사 저하` `투약 변경`)를
 원문에서 직접 찾는 쪽과, AI가 같은 4개 범주로 분류한 쪽 중 **하나에만 걸려도** 우선 표시 대상이 된다.
 어느 쪽으로 걸렸든 저장되는 판정 출처는 `KEYWORD`다.
-`STAFF`는 직원이 직접 표시할 때 붙으며 구조화 단계에서는 생기지 않는다. (카드 수정 API, 별도 Issue)
+`STAFF`는 직원이 직접 표시할 때 붙으며 구조화 단계에서는 생기지 않는다. ([안전 표시 API](#patch-apihandover-cardsidsafety))
 
 모든 카드는 `reviewStatus: "NEEDS_REVIEW"`로 시작한다. 직원이 아직 보지 않았기 때문이다.
 
@@ -123,11 +130,21 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
       "reviewStatus": "NEEDS_REVIEW",
       "suggestedJobRole": "CAREGIVER",
       "suggestedDueTime": "17:00",
+      "exportAllowed": false,
+      "exportBlockedReason": "검토 완료 후 생성할 수 있습니다.",
       "createdAt": "2026-08-11T13:11:02.401"
     }
   ]
 }
 ```
+
+이 카드 모양은 **모든 카드 API가 함께 쓴다.** 아래 수정 · 검토 상태 전환 · 안전 표시도 같은 형태의 카드 하나를 돌려준다.
+
+`exportAllowed`는 **이 카드로 출력 문구를 만들어도 되는지에 대한 서버의 판정**이다. 화면이 `reviewStatus`를 보고
+직접 계산하지 않는다. 조건이 화면과 서버 두 군데에 있으면 한쪽만 고쳐진 채로 검토되지 않은 내용이 보호자에게 나갈 수 있다.
+판정은 `HandoverCard.canGenerateExport()` 하나뿐이고 문구 생성 API도 같은 것을 쓴다.
+
+`suggestedDueTime`은 `HH:MM`이다. 초를 붙이지 않는다. 이 제품의 기한은 당일 시각 단위다.
 
 `discardedCount`는 **정상 동작의 결과**다. 근거가 없어 사라진 항목 수이고, 이 값이 0이 아닌 것은 오류가 아니다.
 0인 것과 구분되어야 "AI가 아무것도 못 만든 것"과 "만든 것이 전부 걸러진 것"을 나눠 볼 수 있다.
@@ -143,7 +160,7 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 | `LLM_API_KEY` 미설정 · 호출 실패 · 스키마에 맞지 않는 응답 | `503` — `LLM_UNAVAILABLE`. **카드를 하나도 만들지 않는다** |
 
 **재구조화는 제공하지 않는다.** 다시 부르면 `409`다. 결과가 마음에 들지 않아 다시 돌리는 경로를 열면
-직원이 이미 검토·수정한 카드를 덮어쓸 수 있다. 카드 수정 API가 들어온 뒤 별도 Issue로 다룬다.
+직원이 이미 검토·수정한 카드를 덮어쓸 수 있다. 고칠 것은 [카드 수정 API](#put-apihandover-cardsid)로 고친다.
 
 `503`은 부분 실패를 남기지 않는다. 반쯤 만들어진 카드가 남는 것이 가장 나쁘다.
 
@@ -175,14 +192,112 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 
 ---
 
+## `PUT /api/handover-cards/{id}`
+
+직원이 검토하며 고친 내용을 저장한다. (Manyfast F-SNBVHR action)
+
+```json
+{
+  "careRecipientId": 1,
+  "statusChange": "점심과 저녁 식사량 저하",
+  "actionTaken": "죽으로 바꿔 드림",
+  "nextAction": "저녁 식사량 확인",
+  "suggestedJobRole": "NURSE_AIDE",
+  "suggestedDueTime": "17:30"
+}
+```
+
+응답은 `200 OK`와 고쳐진 카드 하나다.
+
+**일부 항목만 보내는 `PATCH`를 쓰지 않는다.** 그 방식으로는 "조치 내용을 지운다"와 "조치 내용은 건드리지 않는다"가
+요청 본문에서 똑같이 보인다. 검토 화면은 어차피 카드 한 장을 통째로 편집하므로 고칠 수 있는 항목 전체를 받는다.
+보내지 않은 항목은 **지운 것으로 본다.**
+
+### 고칠 수 없는 것
+
+| 항목 | 이유 |
+|---|---|
+| `evidenceText` | 원문에서 뽑아 **원문과 대조해 통과시킨 값**이다. 사람이 고칠 수 있으면 근거 대조가 의미를 잃고, 그 카드가 원문의 어디서 나왔는지 더 이상 말할 수 없다. 원문이 잘못됐으면 카드가 아니라 원문을 다시 남긴다 |
+| `observedAt` | 위와 같다. 원문에서 읽은 값이다 |
+| `reviewStatus` · `safetyRelated` | 아래 두 API로 뗐다 |
+| `safetyFlagSource` | 요청으로 받지 않는다. 클라이언트가 보낼 수 있으면 키워드 자동 판정을 사람이 사칭할 수 있다 |
+
+### 규칙
+
+| 규칙 | 결과 |
+|---|---|
+| 카드가 없음 | `404` — `HANDOVER_CARD_NOT_FOUND` |
+| `careRecipientId`가 어르신 목록에 없음 | `404` — `CARE_RECIPIENT_NOT_FOUND` |
+| `statusChange` · `actionTaken` · `nextAction`이 **모두 비었음** | `400` — `VALIDATION_FAILED`. 세 항목을 모두 담아 돌려준다 |
+| `nextAction` 없이 `suggestedJobRole` · `suggestedDueTime`만 지정 | `400` — `VALIDATION_FAILED` |
+| 검토 완료 카드에서 `careRecipientId`를 비움 | `409` — `CARE_RECIPIENT_NOT_RESOLVED` |
+
+`careRecipientId`는 **`null`로 보낼 수 있다.** 아직 누구의 이야기인지 가리지 못했다는 뜻이고, 그 카드는 `unresolved`로 남는다.
+`null`로 보낸 어르신을 지정하는 것이 AI가 가리지 못한 카드를 확정하는 유일한 경로다.
+
+세 항목이 모두 비면 거부하는 기준은 `CardDraftVerifier`가 AI 초안을 버리는 기준과 같다. 근거만 있고 아무 말도 하지 않는
+카드가 되는데, 카드 삭제가 없는 지금은 그 카드가 목록에 영원히 남는다.
+
+제안 직종·기한은 **다음 행동에 붙는 값**이다. 다음 행동이 없는데 값만 남으면 후속 업무 배정 화면이
+"무엇을 할지 없이 담당자와 기한만 있는" 항목을 받게 된다. 서버가 조용히 비우지 않고 되돌려 주는 이유는,
+직원이 다음 행동을 지운 것과 제안값을 지우려 한 것이 서로 다른 행동이기 때문이다.
+
+---
+
+## `PATCH /api/handover-cards/{id}/review-status`
+
+```json
+{ "reviewStatus": "REVIEWED" }
+```
+
+값은 `NEEDS_REVIEW`와 `REVIEWED` **둘뿐이다.** (Manyfast F-SNBVHR dataSpec) 응답은 `200 OK`와 카드 하나다.
+
+| 규칙 | 결과 |
+|---|---|
+| 카드가 없음 | `404` — `HANDOVER_CARD_NOT_FOUND` |
+| 대상 어르신이 없는 카드를 `REVIEWED`로 | `409` — `CARE_RECIPIENT_NOT_RESOLVED` |
+
+**되돌리는 방향은 막지 않는다.** 잘못 눌러 검토 완료가 된 카드에서 빠져나올 길이 없으면 그 카드로 문구가 나가 버린다.
+
+어르신을 가리지 못한 카드는 검토 완료가 되지 못한다. Manyfast는 어르신을 분리할 수 없는 원문을
+"확정 카드로 만들지 않는다"고 한다. 어르신 없는 카드가 검토 완료가 되면 그 카드로 만든 문구가 누구의 기록인지 말할 수 없다.
+그래서 **`exportAllowed`가 참인 카드에는 언제나 어르신이 있다.**
+
+---
+
+## `PATCH /api/handover-cards/{id}/safety`
+
+직원이 직접 하는 안전 관련 표시. (Manyfast F-SNBVHR rules)
+
+```json
+{ "safetyRelated": true }
+```
+
+| 보낸 값 | 저장되는 판정 출처 |
+|---|---|
+| `true` | `STAFF` — 키워드로 이미 잡혀 있던 카드라도 마지막에 켠 사람이 직원이면 출처는 직원이다 |
+| `false` | 비운다 — 안전 항목이 아니게 됐는데 판정 출처가 남아 있을 수 없다 |
+
+끈 사실은 응답에 남지 않고 **이벤트 로그에 남는다.** 카드가 지금 안전 항목인지 아닌지가 화면이 필요로 하는 전부다.
+
+| 규칙 | 결과 |
+|---|---|
+| 카드가 없음 | `404` — `HANDOVER_CARD_NOT_FOUND` |
+
+---
+
 ## 오류 응답
 
 형태는 [`handover-api.md`](handover-api.md#오류-응답)와 같다.
 
 | `code` | 상태 |
 |---|---|
+| `VALIDATION_FAILED` | `400` |
 | `HANDOVER_NOT_FOUND` | `404` |
+| `HANDOVER_CARD_NOT_FOUND` | `404` |
+| `CARE_RECIPIENT_NOT_FOUND` | `404` |
 | `HANDOVER_ALREADY_STRUCTURED` | `409` |
+| `CARE_RECIPIENT_NOT_RESOLVED` | `409` |
 | `LLM_UNAVAILABLE` | `503` |
 
 `LLM_UNAVAILABLE`의 원인은 서버 로그에만 남긴다. 예외 메시지에 요청 본문이나 키가 섞여 나갈 수 있다.
@@ -193,14 +308,18 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 
 | 항목 | 어디서 |
 |---|---|
-| 카드 수정 · 검토 완료 처리 · 직원의 안전 표시 | 별도 Issue |
 | 다음 행동 → 후속 업무(`Task`) 생성 | 별도 Issue. 여기서는 **제안값 부착까지만** 한다 |
-| 전산 기록 문구 · 보호자 전달 문구 생성 | 별도 Issue |
+| 전산 기록 문구 · 보호자 전달 문구 생성 | 별도 Issue. 여기서는 **만들 수 있는지 판정까지만** 한다 |
+| 수정 이력 열람 · 되돌리기 · 버전 비교 | 별도 Issue |
+| 카드 삭제 | 없다. 담을 내용이 없는 카드는 애초에 만들어지지 않는다 |
 | 재구조화 | 위 `409` 참고 |
 
-**구조화 이벤트**는 별도 테이블 없이 애플리케이션 로그로 남긴다. (`HandoverCardService`)
-생성 수와 함께 폐기 수·검토 대상 수를 남긴다. 나중에 "AI가 만든 것 중 무엇이 왜 빠졌는지" 물을 수 있는
+**구조화 이벤트와 검토·수정 이벤트**는 별도 테이블 없이 애플리케이션 로그로 남긴다. (`HandoverCardService`)
+구조화에서는 생성 수와 함께 폐기 수·검토 대상 수를 남긴다. 나중에 "AI가 만든 것 중 무엇이 왜 빠졌는지" 물을 수 있는
 유일한 흔적이다.
+
+검토·수정에서는 **바뀐 내용이 아니라 바뀐 항목 이름만** 남긴다. 어르신의 상태와 투약 이야기가 로그 파일로 새어 나갈
+이유가 없다. 수정 이력 열람과 되돌리기는 범위 밖이라, 지금 이력 테이블을 만들면 화면 없이 스키마부터 추측하게 된다.
 
 ---
 

@@ -27,12 +27,18 @@ import lombok.NoArgsConstructor;
  * 인계 원문을 어르신별로 구조화한 카드.
  *
  * <p>모든 항목은 근거가 된 원문 구간을 함께 갖는다. 근거가 없으면 항목을 만들지 않으므로 {@code evidenceText} 는 필수다.
+ *
+ * <p>AI 가 만든 뒤에는 직원이 검토하고 고친다. 그 변경은 전부 이 클래스의 메서드를 거친다. 서비스가 필드를 직접 바꾸는 경로를 두면 "검토 완료
+ * 카드에는 대상 어르신이 반드시 있다" 같은 규칙이 여러 군데로 흩어진다.
  */
 @Getter
 @Entity
 @Table(name = "handover_card")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class HandoverCard extends BaseTimeEntity {
+
+	/** 직원이 화면에서 그대로 볼 문장이다. 왜 버튼이 눌리지 않는지 알 수 없으면 검토 단계에서 막힌 채로 끝난다. */
+	private static final String EXPORT_BLOCKED_REASON = "검토 완료 후 생성할 수 있습니다.";
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -123,5 +129,67 @@ public class HandoverCard extends BaseTimeEntity {
 		this.reviewStatus = reviewStatus;
 		this.suggestedJobRole = suggestedJobRole;
 		this.suggestedDueTime = suggestedDueTime;
+	}
+
+	/**
+	 * 직원이 검토하며 고친 내용을 반영한다. (Manyfast F-SNBVHR action)
+	 *
+	 * <p><b>근거 원문과 관찰 시각은 여기서 바꾸지 않는다.</b> 근거는 원문에서 뽑아 원문과 대조해 통과시킨 값이다. 사람이 근거를 고칠 수 있으면
+	 * {@link CardDraftVerifier} 의 대조가 의미를 잃고, "이 카드가 원문의 어디서 나왔는지"를 더 이상 말할 수 없게 된다. 원문이 잘못됐으면
+	 * 카드가 아니라 원문을 다시 남기는 것이 맞다.
+	 *
+	 * @param careRecipient 직원이 지정한 어르신. 아직 가릴 수 없으면 {@code null} 이다
+	 */
+	public void edit(
+			CareRecipient careRecipient,
+			String statusChange,
+			String actionTaken,
+			String nextAction,
+			JobRole suggestedJobRole,
+			LocalTime suggestedDueTime) {
+		this.careRecipient = careRecipient;
+		this.statusChange = statusChange;
+		this.actionTaken = actionTaken;
+		this.nextAction = nextAction;
+		this.suggestedJobRole = suggestedJobRole;
+		this.suggestedDueTime = suggestedDueTime;
+	}
+
+	public void changeReviewStatus(ReviewStatus reviewStatus) {
+		this.reviewStatus = reviewStatus;
+	}
+
+	/**
+	 * 직원이 안전 관련 표시를 켜거나 끈다. (Manyfast F-SNBVHR rules)
+	 *
+	 * <p>켜면 판정 출처가 {@link SafetyFlagSource#STAFF} 로 바뀐다. 키워드로 이미 잡혀 있던 카드라도 마지막에 켠 사람이 직원이면 출처는
+	 * 직원이다. 끄면 안전 항목이 아니게 되므로 출처를 비운다. 직원이 껐다는 사실은 이벤트 로그에 남는다.
+	 */
+	public void markSafety(boolean safetyRelated) {
+		this.safetyRelated = safetyRelated;
+		this.safetyFlagSource = safetyRelated ? SafetyFlagSource.STAFF : null;
+	}
+
+	/** 대상 어르신을 가린 카드인지. 아니면 검토 대상으로 남아 있는 카드다. */
+	public boolean isRecipientResolved() {
+		return careRecipient != null;
+	}
+
+	/**
+	 * 이 카드로 출력 문구를 만들어도 되는지. (Manyfast F-GUSOFG preconditions)
+	 *
+	 * <p>판정을 카드 쪽에 두는 이유는 문구 생성 쪽에서 같은 조건을 다시 적지 않게 하기 위해서다. 조건이 두 군데에 있으면 한쪽만 고쳐진 채로
+	 * 검토되지 않은 내용이 보호자에게 나가는 일이 생긴다.
+	 *
+	 * <p>"근거 원문이 연결된 검토 완료 카드"가 조건인데 근거는 저장 시점에 이미 보장되므로, 실제로 볼 것은 검토 상태 하나다. 어르신이 없는 카드는
+	 * 애초에 검토 완료가 되지 못한다.
+	 */
+	public boolean canGenerateExport() {
+		return reviewStatus == ReviewStatus.REVIEWED;
+	}
+
+	/** 문구를 만들 수 없는 이유. 만들 수 있으면 {@code null}. */
+	public String exportBlockedReason() {
+		return canGenerateExport() ? null : EXPORT_BLOCKED_REASON;
 	}
 }

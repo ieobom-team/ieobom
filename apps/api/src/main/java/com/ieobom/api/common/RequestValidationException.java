@@ -13,8 +13,17 @@ public class RequestValidationException extends RuntimeException {
 	private final transient List<FieldError> fields;
 
 	public RequestValidationException(String field, String reason) {
-		super("%s: %s".formatted(field, reason));
-		this.fields = List.of(new FieldError(field, reason));
+		this(reason, List.of(field));
+	}
+
+	/**
+	 * 여러 항목이 함께 걸리는 규칙일 때. (예: 셋 중 하나는 남겨야 한다)
+	 *
+	 * <p>어느 한 항목만 지목하면 화면이 엉뚱한 칸에 안내를 붙인다. 규칙에 걸린 항목을 모두 담아 같은 이유를 붙인다.
+	 */
+	public RequestValidationException(String reason, List<String> fields) {
+		super("%s: %s".formatted(String.join(", ", fields), reason));
+		this.fields = fields.stream().map(field -> new FieldError(field, reason)).toList();
 	}
 
 	public List<FieldError> getFields() {
