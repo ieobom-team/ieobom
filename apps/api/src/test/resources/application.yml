@@ -3,6 +3,9 @@
 # 로컬/배포 DB 는 MySQL 8.4 다. 여기서만 H2 인메모리를 쓴다.
 # 이유: CI 와 개발자 로컬에서 DB 컨테이너 없이도 ./gradlew build 가 돌아야 하기 때문이다.
 # MySQL 고유 문법이 필요한 테스트가 생기면 Testcontainers 도입을 별도 Issue 로 검토한다.
+#
+# 주의: 이 파일은 src/main/resources/application.yml 을 보태는 게 아니라 통째로 대신한다.
+#       테스트 클래스패스가 앞서기 때문이다. 그래서 테스트에서 필요한 설정은 여기에도 적어야 한다.
 spring:
   datasource:
     url: jdbc:h2:mem:ieobom;MODE=MySQL;DB_CLOSE_DELAY=-1
@@ -16,3 +19,12 @@ spring:
 
   flyway:
     enabled: false
+
+# 일반 테스트는 키 없이 돈다. 구조화 클라이언트를 stub 으로 바꿔 끼우기 때문이다.
+# 값이 채워지는 경우는 llmLiveTest 하나뿐이고, 그때만 실제 호출이 나간다.
+ieobom:
+  llm:
+    base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
+    model: ${LLM_MODEL:gpt-4.1-mini}
+    api-key: ${LLM_API_KEY:}
+    timeout: ${LLM_TIMEOUT:60s}

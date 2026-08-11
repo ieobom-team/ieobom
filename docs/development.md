@@ -22,7 +22,7 @@ cp .env.example .env
 | `MYSQL_DATABASE` `MYSQL_USER` `MYSQL_PASSWORD` `MYSQL_ROOT_PASSWORD` | `docker-compose.yml` | 로컬 MySQL 컨테이너 |
 | `DB_URL` `DB_USERNAME` `DB_PASSWORD` | `apps/api` | `application.yml`이 읽는다 |
 | `SERVER_PORT` | `apps/api` | 기본 8080 |
-| `LLM_API_KEY` `LLM_MODEL` | `apps/api` | **백엔드에서만 쓴다.** 프론트로 내려보내지 않는다 |
+| `LLM_API_KEY` `LLM_BASE_URL` `LLM_MODEL` `LLM_TIMEOUT` | `apps/api` | **백엔드에서만 쓴다.** 프론트로 내려보내지 않는다. 비어 있어도 앱은 뜨고 테스트도 통과한다 |
 | `VITE_API_BASE_URL` | `apps/web` | `VITE_` 접두사 값은 브라우저 번들에 그대로 들어간다 |
 
 배포 환경에서는 `.env` 대신 플랫폼의 환경변수 주입 기능을 쓴다.
@@ -64,6 +64,32 @@ $env:JAVA_HOME = "$env:USERPROFILE\.jdks\temurin-21.0.10"
 그래서 CI와 개발자 로컬에서 DB 컨테이너 없이도 `./gradlew build`가 통과한다.
 MySQL 고유 문법이 필요한 테스트가 생기면 Testcontainers 도입을 별도 Issue로 검토한다.
 
+### LLM 실호출 확인
+
+AI 구조화 테스트는 기본적으로 **실제 호출 없이** 돈다. `HandoverStructuringClient`를 stub으로 바꿔 끼우기 때문이다.
+그래서 `./gradlew build`는 키가 없어도 통과하고 크레딧도 쓰지 않는다.
+
+다만 **스키마가 실제로 걸리는지, 근거가 정말 원문에서 나오는지는 stub으로 확인할 수 없다.**
+그 확인은 별도 태스크로 뗐다.
+
+```bash
+cd apps/api
+
+# macOS / Linux
+LLM_API_KEY=... ./gradlew llmLiveTest
+
+# Windows PowerShell
+$env:LLM_API_KEY = "..."; .\gradlew.bat llmLiveTest
+```
+
+- 실행당 호출은 **2회**다. `build`에 매달지 않았으므로 push나 CI에서 저절로 나가지 않는다.
+- `LLM_API_KEY`가 없으면 테스트가 실패가 아니라 **skip**된다.
+- 모델이 만드는 문장은 매번 다르므로 문구를 단정하지 않는다.
+  근거가 원문 안에 있는지, 역할 목록 밖 직종이 나오지 않는지 같은 **계약만** 본다.
+
+CI에서는 `ai` 라벨이 붙은 PR과 수동 실행(`workflow_dispatch`)에서만 이 태스크가 돈다.
+저장소 Secret `LLM_API_KEY`를 쓰며, 키가 비어 있으면 조용히 skip되지 않도록 잡을 먼저 실패시킨다.
+
 ### 스키마 관리
 
 - 개발 초반은 `spring.jpa.hibernate.ddl-auto: update`로 빠르게 간다.
@@ -96,7 +122,8 @@ pwsh ./scripts/verify-before-pr.ps1   # Windows
 | 워크플로 | 언제 | 무엇을 |
 |---|---|---|
 | `.github/workflows/ci.yml` | 모든 PR·push | 필수 문서 존재 확인, 비밀값 커밋 검사 |
-| `.github/workflows/api.yml` | `apps/api/**` 변경 시 | JDK 21 + `./gradlew build` |
+| `.github/workflows/api.yml` | `apps/api/**` 변경 시 | JDK 21 + `./gradlew build` (실호출 없음) |
+| `api.yml` 의 `llm-live` 잡 | `ai` 라벨이 붙은 PR · 수동 실행 | `./gradlew llmLiveTest` — 실제 LLM 호출 2회 |
 | `web.yml` | _아직 없음_ | `apps/web` 생성 PR에서 함께 추가 |
 
 CI는 최종 안전망이지 로컬 검증의 대체가 아니다. `main` 병합 전 CI 통과를 사람이 확인한다.

@@ -37,7 +37,7 @@ ieobom/
 
 | 패키지 | 책임 |
 |---|---|
-| `common` | 도메인이 함께 쓰는 값 — `JobRole`(담당 직종 5종), `BaseTimeEntity`(생성·수정 시각) |
+| `common` | 도메인이 함께 쓰는 값 — `JobRole`(담당 직종 5종), `SafetyKeyword`(지정 키워드 4종), `BaseTimeEntity`(생성·수정 시각) |
 | `recipient` | 어르신(`CareRecipient`) |
 | `handover` | 원본 인계 입력 — 음성·텍스트·체크로 들어온 그대로 |
 | `handovercard` | AI가 구조화한 어르신별 카드 |
@@ -132,6 +132,8 @@ HandoverCard ───┐ N          1 ┌─── Handover      원본 인계 
 담당 직종 선택지는 Manyfast PRD의 역할 목록으로 한정한다. 목록에 없는 직종을 새로 만들지 않는다.
 
 ## AI 구조화 규칙
+
+> 구현된 스키마와 검증 규칙은 [`docs/contracts/handover-card-schema.md`](./contracts/handover-card-schema.md)에 있다.
 
 - LLM 응답은 **Function Calling으로 JSON Schema를 강제**한다. 자유 텍스트 파싱에 의존하지 않는다.
   정해진 필드 외의 값을 애초에 만들 수 없게 하는 것이 목적이다.

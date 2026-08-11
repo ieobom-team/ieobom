@@ -26,6 +26,15 @@ spring:
     baseline-on-migrate: true
     locations: classpath:db/migration
 
+# AI 구조화. 키는 여기 적지 않고 환경변수로만 들어온다. (docs/development.md)
+# 키가 비어 있어도 애플리케이션은 기동되고, 구조화를 호출하는 시점에 503 으로 알린다.
+ieobom:
+  llm:
+    base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
+    model: ${LLM_MODEL:gpt-4.1-mini}
+    api-key: ${LLM_API_KEY:}
+    timeout: ${LLM_TIMEOUT:60s}
+
 server:
   port: ${SERVER_PORT:8080}
 

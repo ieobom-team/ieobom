@@ -11,6 +11,7 @@
 | 파일 | 범위 |
 |---|---|
 | [`handover-api.md`](handover-api.md) | `POST /api/handovers` 현장 특이사항 입력. **모든 API가 공유하는 오류 응답 형태**를 여기서 정의한다 |
+| [`handover-card-schema.md`](handover-card-schema.md) | AI 구조화 결과의 JSON Schema와 카드 API. **무엇이 카드가 되지 못하는지**를 여기서 정의한다 |
 
 ## 채워 나가는 방식
 
@@ -33,7 +34,7 @@ Manyfast에 PRD와 요구사항 5개 · 기능 5개가 올라와 있지만 **Spe
 ```
 docs/contracts/
 ├── handover-api.md          POST /api/handovers 등 (대리 입력·정보 출처 포함)   ← 작성됨
-├── handover-card-schema.md  AI 구조화 결과 JSON Schema (근거 원문 필수 필드)
+├── handover-card-schema.md  AI 구조화 결과 JSON Schema (근거 원문 필수 필드)   ← 작성됨
 ├── task-api.md              후속 업무 배정·완료 — 담당 직종, 당일 HH:MM 기한, 미처리/완료
 ├── export-api.md            전산 기록 문구 · 보호자 전달 문구 생성
 └── db-schema.md             테이블·관계

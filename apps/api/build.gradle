@@ -48,6 +48,35 @@ dependencies {
 	// implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:<boot4-compatible>'
 }
 
+// LLM 실호출 테스트는 기본 빌드에서 제외한다.
+// 붙여 두면 push 마다 크레딧이 나가고, 키가 없는 CI·다른 개발자 로컬에서 빌드가 깨진다.
+def llmLiveTag = 'llm-live'
+
 tasks.named('test') {
-	useJUnitPlatform()
+	useJUnitPlatform {
+		excludeTags llmLiveTag
+	}
+}
+
+// 실제 OpenAI 를 호출해 스키마 강제와 근거 규칙이 살아 있는지 확인한다.
+//
+//   LLM_API_KEY=... ./gradlew llmLiveTest
+//
+// 키가 없으면 테스트가 skip 된다. 호출은 실행당 2회다.
+tasks.register('llmLiveTest', Test) {
+	group = 'verification'
+	description = '실제 LLM 을 호출하는 테스트. 명시적으로 실행할 때만 돈다.'
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	useJUnitPlatform {
+		includeTags llmLiveTag
+	}
+	// 입력이 그대로여도 다시 돌아야 한다. 확인하려고 부른 것이기 때문이다.
+	outputs.upToDateWhen { false }
+	// 실패했을 때 제공자가 뭐라고 거부했는지 콘솔에서 바로 보이게 한다.
+	// 리포트를 내려받아야만 이유를 알 수 있으면 CI 에서 확인하기 어렵다.
+	testLogging {
+		showStandardStreams = true
+		exceptionFormat = 'full'
+	}
 }
