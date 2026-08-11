@@ -37,6 +37,7 @@ ieobom/
 
 | 패키지 | 책임 |
 |---|---|
+| `common` | 도메인이 함께 쓰는 값 — `JobRole`(담당 직종 5종), `BaseTimeEntity`(생성·수정 시각) |
 | `recipient` | 어르신(`CareRecipient`) |
 | `handover` | 원본 인계 입력 — 음성·텍스트·체크로 들어온 그대로 |
 | `handovercard` | AI가 구조화한 어르신별 카드 |
@@ -47,7 +48,7 @@ ieobom/
 AI 호출은 추상화 라이브러리를 쓰지 않고 `RestClient`로 직접 호출한다.
 해커톤 기간에는 디버깅과 JSON 검증이 단순한 쪽이 낫다.
 
-## 엔티티 (초안 4개)
+## 엔티티 (4개)
 
 ```
 CareRecipient   어르신
@@ -62,12 +63,22 @@ HandoverCard ───┐ N          1 ┌─── Handover      원본 인계 
     Task        후속 업무 (담당자 · 미처리/완료)
 ```
 
-| 엔티티 | 핵심 필드(예정) |
+네 엔티티 모두 `BaseTimeEntity`를 상속해 `createdAt` · `updatedAt`을 갖는다.
+아래에서 *(선택)* 표시가 없는 필드는 `nullable = false`다.
+
+| 엔티티 | 필드 |
 |---|---|
-| `CareRecipient` | 이름, 식별번호 |
-| `Handover` | 원문 텍스트, 입력 방식(음성/텍스트/체크), 입력 시각, 입력자 이름, **대리 입력 여부**, **정보 출처**(보호자·운전원·동료 근무자 등) |
-| `HandoverCard` | 어르신, 시간, 변화, 조치, 다음 행동, **근거 원문 문장**, 안전 관련 여부, **판정 출처**, **검토 상태** |
-| `Task` | 카드, 담당 직종, 담당자 이름, **기한(당일 HH:MM)**, 상태(미처리/완료), 완료 시각, 완료 기록자 |
+| `CareRecipient` | `name` 이름, `code` 식별번호(unique) |
+| `Handover` | `careRecipient`, `rawText` 원문, `inputMethod`(`VOICE`/`TEXT`/`CHECK`), `occurredAt` 입력 시점, `reporterName` 입력자 이름, **`proxyInput` 대리 입력 여부**, **`infoSource` 정보 출처**(`GUARDIAN`/`DRIVER`/`COLLEAGUE`/`OTHER`, 선택) |
+| `HandoverCard` | `handover`, `careRecipient`(선택), `observedAt` 시각(선택), `statusChange` 변화(선택), `actionTaken` 조치(선택), `nextAction` 다음 행동(선택), **`evidenceText` 근거 원문 문장**, `safetyRelated` 안전 관련 여부, **`safetyFlagSource` 판정 출처**(`KEYWORD`/`STAFF`, 선택), **`reviewStatus` 검토 상태**(`NEEDS_REVIEW`/`REVIEWED`), `suggestedJobRole` 제안 직종(선택), `suggestedDueTime` 제안 기한(선택) |
+| `Task` | `handoverCard`, `content` 업무 내용, `assigneeJobRole` 담당 직종(선택), `assigneeName` 담당자 이름(선택), **`dueTime` 기한(`LocalTime`, 당일 HH:MM)**, `status`(`PENDING`/`DONE`), `completedAt` 완료 시각(선택), `completedByName` 완료 기록자(선택) |
+
+**어르신 시드.** `CareRecipientSeeder`가 기동 시 데모용 어르신 20명(`IB-001`~`IB-020`)을 채운다.
+식별번호 단위로 확인하고 넣으므로 여러 번 기동해도 중복이 쌓이지 않는다. 이름은 모두 가상 인물이다.
+
+**`HandoverCard.careRecipient`가 비어 있을 수 있는 이유.** 대상 어르신을 분리할 수 없는 원문은
+확정 카드로 만들지 않고 사람에게 넘긴다. 이때 어르신 없이 `검토 필요` 상태로 남는다.
+반면 `Handover.careRecipient`는 입력 시 반드시 고르므로 필수다.
 
 **대리 입력.** `Handover.대리 입력 여부`와 `정보 출처`는 입력자와 별개로 저장한다.
 운전원이 등원 시 보호자에게 들은 내용을 데스크 근무자가 대신 남기는 것이 기본 경로다.
