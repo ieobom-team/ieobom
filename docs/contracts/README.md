@@ -6,13 +6,19 @@
 - AI 구조화 결과의 JSON Schema
 - DB 스키마 / Flyway 마이그레이션 설계
 
-## 아직 비어 있는 이유
+## 지금 있는 것
+
+| 파일 | 범위 |
+|---|---|
+| [`handover-api.md`](handover-api.md) | `POST /api/handovers` 현장 특이사항 입력. **모든 API가 공유하는 오류 응답 형태**를 여기서 정의한다 |
+
+## 채워 나가는 방식
 
 Manyfast에 PRD와 요구사항 5개 · 기능 5개가 올라와 있지만 **Spec은 아직 0개다.**
-그래서 화면 단위 동작은 정해졌어도 엔드포인트를 확정할 근거가 부족하다.
-계약을 지금 추측해서 적으면 곧 틀린 문서가 되고, 틀린 문서는 없는 문서보다 나쁘다.
+그래서 화면 단위 동작은 정해졌어도 아직 구현하지 않은 엔드포인트를 확정할 근거가 부족하다.
+계약을 미리 추측해서 적으면 곧 틀린 문서가 되고, 틀린 문서는 없는 문서보다 나쁘다.
 
-**첫 API를 구현하는 PR에서 그 API의 계약을 이 디렉터리에 함께 추가한다.**
+**API를 구현하는 PR에서 그 API의 계약을 이 디렉터리에 함께 추가한다.**
 계약이 바뀌는 PR은 코드와 이 문서를 같은 PR에서 고친다.
 
 ## 여기 두지 않는 것
@@ -22,11 +28,11 @@ Manyfast에 PRD와 요구사항 5개 · 기능 5개가 올라와 있지만 **Spe
 - 회의록·결정 배경 — Notion
 - 실행 방법·환경변수 — [`docs/development.md`](../development.md)
 
-## 파일 이름 예시
+## 앞으로 채울 파일
 
 ```
 docs/contracts/
-├── handover-api.md          POST /api/handovers 등 (대리 입력·정보 출처 포함)
+├── handover-api.md          POST /api/handovers 등 (대리 입력·정보 출처 포함)   ← 작성됨
 ├── handover-card-schema.md  AI 구조화 결과 JSON Schema (근거 원문 필수 필드)
 ├── task-api.md              후속 업무 배정·완료 — 담당 직종, 당일 HH:MM 기한, 미처리/완료
 ├── export-api.md            전산 기록 문구 · 보호자 전달 문구 생성
