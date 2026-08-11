@@ -9,7 +9,7 @@
 ```
 ieobom/
 ├── apps/
-│   ├── web/                  React + TypeScript + Vite (생성 전)
+│   ├── web/                  React 19 + TypeScript + Vite + Tailwind v4
 │   └── api/                  Spring Boot 4.1.0 / Java 21
 ├── docs/
 │   ├── development.md        로컬 실행·환경변수·검증
@@ -22,7 +22,7 @@ ieobom/
 ├── .github/
 │   ├── ISSUE_TEMPLATE/       feature · bug · chore
 │   ├── pull_request_template.md
-│   └── workflows/            ci.yml (가드) · api.yml (백엔드 빌드)
+│   └── workflows/            ci.yml (가드) · api.yml (백엔드 빌드) · web.yml (프론트 검증)
 ├── scripts/                  verify-before-pr.sh / .ps1
 ├── docker-compose.yml        MySQL 8.4
 ├── AGENTS.md                 에이전트 공통 규칙
@@ -47,6 +47,23 @@ ieobom/
 
 AI 호출은 추상화 라이브러리를 쓰지 않고 `RestClient`로 직접 호출한다.
 해커톤 기간에는 디버깅과 JSON 검증이 단순한 쪽이 낫다.
+
+## 프론트엔드 구조
+
+백엔드와 같은 기준으로 **도메인별로** 나눈다. 계층이 아니라 도메인이 1차다.
+
+```
+apps/web/src/
+├── features/session/      진입 역할·본인 식별, 진입 선택값 보관
+├── features/field/        현장 근무자 홈 (모바일)
+├── features/admin/        관리자 홈 (웹)
+├── routes/                라우트 정의(`AppRoutes`)와 진입 가드(`RequireSession`)
+├── shared/ui/             여러 화면이 함께 쓰는 UI 조각
+└── test/setup.ts          vitest 공통 설정
+```
+
+화면 전환은 `react-router`의 선언형 `BrowserRouter`를 쓴다.
+검증은 `oxlint` · `vitest`(+ `@testing-library/react`, `jsdom`) · `tsc -b && vite build` 세 가지다.
 
 ## 엔티티 (4개)
 
@@ -130,6 +147,19 @@ HandoverCard ───┐ N          1 ┌─── Handover      원본 인계 
 
 본인 식별은 **직원 이름 또는 사번 선택**으로 하고 비밀번호를 요구하지 않는다.
 담당 직종 선택지는 Manyfast PRD의 역할 목록으로 한정한다. 목록에 없는 직종을 새로 만들지 않는다.
+
+### 구현 (`features/session`)
+
+- 고른 값은 **사번만** 브라우저에 저장하고 이름은 명단에서 다시 찾는다.
+  명단이나 역할 값이 바뀌어 더는 맞지 않는 저장값은 **버리고 다시 고르게 한다.**
+- `RequireSession`이 진입 전 화면 접근을 막고, 진입 역할과 다른 홈을 주소로 열면 자기 홈으로 되돌린다.
+  **권한 검사가 아니다.** 권한 모델은 없고 어떤 화면을 보여줄지만 정한다.
+- 기기 하나를 여러 직원이 돌려 쓰므로 홈 헤더에 **본인 바꾸기**를 둔다.
+  이게 없으면 앞사람 이름으로 입력이 남는다.
+
+**직원 명단은 프론트 상수(mock)다.** (`features/session/staffDirectory.ts`)
+서버에 직원 엔티티가 없고, API는 직원을 `reporterName` · `assigneeName` · `completedByName`
+같은 **이름 문자열**로만 받는다. 명단을 서버가 관리해야 하면 별도 Issue로 뺀다.
 
 ## AI 구조화 규칙
 

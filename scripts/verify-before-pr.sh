@@ -26,6 +26,7 @@ fi
 section "frontend (apps/web)"
 if [ -f "$ROOT/apps/web/package.json" ]; then
   (cd "$ROOT/apps/web" && npm run lint) && ok "npm run lint" || fail "npm run lint"
+  (cd "$ROOT/apps/web" && npm test) && ok "npm test" || fail "npm test"
   (cd "$ROOT/apps/web" && npm run build) && ok "npm run build" || fail "npm run build"
 else
   skip "apps/web 이 아직 없습니다 (apps/web/README.md 참고)"

@@ -5,7 +5,7 @@
 | 도구 | 버전 | 비고 |
 |---|---|---|
 | JDK | **21** (Temurin 권장) | `apps/api`. Gradle toolchain이 21로 고정돼 있다 |
-| Node.js | 20 이상 | `apps/web` (아직 생성 전) |
+| Node.js | 20 이상 | `apps/web`. CI 도 20 으로 돈다 |
 | Docker | Desktop 또는 Engine | 로컬 MySQL 8.4 |
 | GitHub CLI | 최신 | `gh auth status`로 인증 확인 |
 
@@ -107,7 +107,52 @@ Springdoc(Swagger UI)은 아직 넣지 않았다.
 
 ## 4. 프론트엔드 (apps/web)
 
-**아직 생성 전이다.** 생성 명령과 체크리스트는 [`apps/web/README.md`](../apps/web/README.md)에 있다.
+React 19 + TypeScript + Vite. 스타일은 Tailwind CSS v4, 서버 상태는 TanStack Query,
+화면 전환은 `react-router`(선언형 `BrowserRouter`)를 쓴다.
+
+```bash
+cd apps/web
+
+npm install           # 처음 한 번
+npm run dev           # 실행 (http://localhost:5173)
+npm run lint          # oxlint
+npm test              # vitest 1회 실행
+npm run test:watch    # vitest watch
+npm run build         # tsc -b + vite build
+```
+
+`VITE_API_BASE_URL`로 백엔드 주소를 넘긴다. **`VITE_` 접두사 값은 브라우저 번들에 그대로 들어가므로
+API 키나 비밀값을 넣지 않는다.**
+
+### 디렉터리
+
+```
+apps/web/src/
+├── features/<도메인>/     화면과 그 도메인 전용 로직 (session, handover, ...)
+├── routes/                라우트 정의와 진입 가드
+├── shared/ui/             여러 화면이 함께 쓰는 UI 조각
+└── test/setup.ts          vitest 공통 설정
+```
+
+### 테스트
+
+`vitest` + `@testing-library/react` + `jsdom`이다. 테스트 파일은 대상 파일 옆에 `*.test.ts(x)`로 둔다.
+
+```bash
+npm test -- src/routes            # 경로로 좁혀 실행
+npm test -- -t "본인 바꾸기"       # 이름으로 좁혀 실행
+```
+
+브라우저 저장소를 쓰는 코드가 있으므로 `src/test/setup.ts`가 매 테스트 뒤에 DOM 과 `localStorage`를 비운다.
+**진입 선택값이 테스트 사이에 새면 다음 테스트가 이미 로그인된 것처럼 보이므로** 이 정리를 지운 채로 테스트를 늘리지 않는다.
+
+### 진입 역할과 담당 직종
+
+로그인이 없다. 진입 시 **역할 2종과 본인**을 고르고 그 값을 이후 화면의 입력자 식별로 쓴다.
+업무 배정에 쓰는 **담당 직종 5종은 다른 개념이며 섞지 않는다.** ([architecture.md 인증](./architecture.md#인증))
+
+직원 명단(`features/session/staffDirectory.ts`)은 **프론트 상수(mock)다.**
+서버에 직원 엔티티가 없고 API 는 직원을 `reporterName` 같은 문자열로만 받는다.
 
 ## 5. PR 전 검증
 
@@ -116,6 +161,7 @@ Springdoc(Swagger UI)은 아직 넣지 않았다.
 pwsh ./scripts/verify-before-pr.ps1   # Windows
 ```
 
+백엔드는 `gradlew build`, 프론트엔드는 `lint` · `test` · `build`를 돌리고 비밀 파일이 추적되는지 본다.
 아직 없는 앱은 SKIP으로 넘어간다. **검증이 실패한 상태로 PR을 만들지 않는다.**
 
 ## 6. CI
@@ -125,6 +171,6 @@ pwsh ./scripts/verify-before-pr.ps1   # Windows
 | `.github/workflows/ci.yml` | 모든 PR·push | 필수 문서 존재 확인, 비밀값 커밋 검사 |
 | `.github/workflows/api.yml` | `apps/api/**` 변경 시 | JDK 21 + `./gradlew build` (실호출 없음) |
 | `api.yml` 의 `llm-live` 잡 | `ai` 라벨이 붙은 PR · 수동 실행 | `./gradlew llmLiveTest` — 실제 LLM 호출 4회 |
-| `web.yml` | _아직 없음_ | `apps/web` 생성 PR에서 함께 추가 |
+| `web.yml` | `apps/web/**` 변경 시 | Node 20 + `npm run lint` · `npm test` · `npm run build` |
 
 CI는 최종 안전망이지 로컬 검증의 대체가 아니다. `main` 병합 전 CI 통과를 사람이 확인한다.
