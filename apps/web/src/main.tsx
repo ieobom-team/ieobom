@@ -1,10 +1,16 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { BrowserRouter } from 'react-router'
 import './index.css'
-import App from './App.tsx'
+import { SessionProvider } from './features/session/SessionProvider'
+import { AppRoutes } from './routes/AppRoutes'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <SessionProvider>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </SessionProvider>
   </StrictMode>,
 )
