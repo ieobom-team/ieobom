@@ -13,6 +13,7 @@
 | [`handover-api.md`](handover-api.md) | `POST /api/handovers` 현장 특이사항 입력. **모든 API가 공유하는 오류 응답 형태**를 여기서 정의한다 |
 | [`handover-card-schema.md`](handover-card-schema.md) | AI 구조화 결과의 JSON Schema와 카드 API. **무엇이 카드가 되지 못하는지**를 여기서 정의한다 |
 | [`export-api.md`](export-api.md) | 전산 기록 문구 · 보호자 전달 문구 API. **근거 없는 내용을 문구에서 어떻게 막는지**를 여기서 정의한다 |
+| [`task-api.md`](task-api.md) | 후속 업무 배정 · 완료 처리 API. **기한이 왜 당일 시각인지**를 여기서 정의한다 |
 
 ## 채워 나가는 방식
 
@@ -37,6 +38,6 @@ docs/contracts/
 ├── handover-api.md          POST /api/handovers 등 (대리 입력·정보 출처 포함)   ← 작성됨
 ├── handover-card-schema.md  AI 구조화 결과 JSON Schema (근거 원문 필수 필드)   ← 작성됨
 ├── export-api.md            전산 기록 문구 · 보호자 전달 문구 생성                  ← 작성됨
-├── task-api.md              후속 업무 배정·완료 — 담당 직종, 당일 HH:MM 기한, 미처리/완료
+├── task-api.md              후속 업무 배정·완료 — 담당 직종, 당일 HH:MM 기한, 미처리/완료  ← 작성됨
 └── db-schema.md             테이블·관계
 ```

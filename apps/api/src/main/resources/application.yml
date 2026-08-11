@@ -29,6 +29,12 @@ spring:
 # AI 구조화. 키는 여기 적지 않고 환경변수로만 들어온다. (docs/development.md)
 # 키가 비어 있어도 애플리케이션은 기동되고, 구조화를 호출하는 시점에 503 으로 알린다.
 ieobom:
+  # 시설 운영 시각. 후속 업무 기한의 상한이 여기서 나온다. (Manyfast F-IVFNPC rules)
+  # 하원 시각은 시설마다 다르지만 지금은 값 하나로 둔다. 시설별 설정이 필요해지면 별도 Issue 다. (#13)
+  # 값을 직접 적을 때는 따옴표로 감싼다. YAML 은 따옴표 없는 18:00 을 시각이 아니라 60진수 정수(1080)로 읽는다.
+  facility:
+    dismissal-time: ${FACILITY_DISMISSAL_TIME:18:00}
+
   llm:
     base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
     model: ${LLM_MODEL:gpt-4.1-mini}
