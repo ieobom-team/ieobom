@@ -1,8 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError, type ApiFieldError } from '../../shared/api/client'
 import { BigButton } from '../../shared/ui/BigButton'
+import {
+  structureHandover,
+  type HandoverCardStructureResult,
+} from '../handover-card/handoverCardApi'
+import { HANDOVER_CARDS_KEY } from '../handover-card/useHandoverCards'
 import { useSession } from '../session/sessionContext'
 import { createHandover, fetchCareRecipients, type CareRecipient } from './handoverApi'
 import { INFO_SOURCES, infoSourceLabel, type InfoSource } from './infoSource'
@@ -27,6 +32,10 @@ import {
  *
  * 이번 Issue(#6)는 텍스트 방식만 만든다. 음성(#8)·체크(#7)는 n11 분기 자리만 두었고,
  * 저장 실패 시 임시 저장(n17)은 #9 범위다.
+ *
+ * 저장이 끝나면 이어서 구조화를 부른다(#11). 저장 안에서 하지 않는 이유는
+ * `docs/contracts/handover-card-schema.md` 에 있다. 구조화가 실패해도 **저장은 이미 끝나 있고**,
+ * 그 사실이 안내에서 흐려지면 안 된다.
  */
 
 type Step = 'proxy' | 'source' | 'method' | 'text' | 'target' | 'done'
@@ -43,6 +52,13 @@ export function HandoverCreatePage() {
   const [savedName, setSavedName] = useState<string>('')
 
   const recipients = useQuery({ queryKey: ['care-recipients'], queryFn: fetchCareRecipients })
+  const queryClient = useQueryClient()
+
+  /** n16 저장 성공 → 인계 카드 정리. 결과는 안내에만 쓰고 입력 흐름을 막지 않는다. */
+  const structure = useMutation({
+    mutationFn: structureHandover,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: HANDOVER_CARDS_KEY }),
+  })
 
   const save = useMutation({
     mutationFn: () => createHandover(toCreateRequest(draft, reporterName)),
@@ -51,6 +67,7 @@ export function HandoverCreatePage() {
       setErrors([])
       setNotice(null)
       setStep('done')
+      structure.mutate(handover.id)
     },
     onError: (error: unknown) => {
       if (!(error instanceof ApiError)) {
@@ -143,11 +160,20 @@ export function HandoverCreatePage() {
     setErrors([])
     setNotice(null)
     setSavedName('')
+    structure.reset()
     setStep('proxy')
   }
 
   if (step === 'done') {
-    return <SavedNotice careRecipientName={savedName} onAnother={startAnother} />
+    return (
+      <SavedNotice
+        careRecipientName={savedName}
+        organizing={structure.isPending}
+        organized={structure.data ?? null}
+        organizeFailed={structure.isError}
+        onAnother={startAnother}
+      />
+    )
   }
 
   return (
@@ -448,15 +474,22 @@ function TargetStep({
 }
 
 /**
- * n16 저장 성공 — 다음 정리 단계로 연결되었음을 짧게 안내한다.
+ * n16 저장 성공 — 정리 단계로 넘어갔음을 알린다.
  *
- * 정리 결과를 보여 주는 인계 카드 화면은 #11 범위라 아직 없다. 여기서는 넘어갔다는 사실만 알린다.
+ * 정리가 어떻게 됐는지는 저장 성공 안내 **아래에** 붙인다. 정리에 실패해도 남긴 내용은
+ * 서버에 있고, 돌봄 중인 근무자가 그걸 오해해 같은 내용을 다시 남기게 만들면 안 된다.
  */
 function SavedNotice({
   careRecipientName,
+  organizing,
+  organized,
+  organizeFailed,
   onAnother,
 }: {
   careRecipientName: string
+  organizing: boolean
+  organized: HandoverCardStructureResult | null
+  organizeFailed: boolean
   onAnother: () => void
 }) {
   const navigate = useNavigate()
@@ -468,10 +501,36 @@ function SavedNotice({
         <p className="mt-3 text-2xl text-teal-900">
           {careRecipientName} 어르신 특이사항으로 남겼습니다.
         </p>
-        <p className="mt-2 text-xl text-teal-800">인계 카드 정리 단계로 넘어갔습니다.</p>
+
+        {organizing && <p className="mt-2 text-xl text-teal-800">인계 카드로 정리하는 중입니다…</p>}
+
+        {organized !== null && (
+          <>
+            <p className="mt-2 text-xl text-teal-800">
+              인계 카드 {organized.createdCount}건으로 정리했습니다.
+            </p>
+            {/* 근거가 없어 빠진 항목이 있다는 사실을 감추지 않는다. 정상 동작의 결과다. */}
+            {organized.discardedCount > 0 && (
+              <p className="mt-1 text-lg text-teal-800">
+                남긴 글에서 근거를 찾지 못한 {organized.discardedCount}건은 카드로 만들지
+                않았습니다.
+              </p>
+            )}
+          </>
+        )}
+
+        {organizeFailed && (
+          <p className="mt-2 text-xl text-teal-800">
+            지금은 자동 정리가 되지 않았습니다. 남기신 내용은 저장돼 있으니 다시 쓰지 않으셔도
+            됩니다.
+          </p>
+        )}
       </section>
 
-      <BigButton onClick={onAnother}>하나 더 남기기</BigButton>
+      <BigButton onClick={() => navigate('/handover-cards')}>인계 카드 보기</BigButton>
+      <BigButton tone="plain" onClick={onAnother}>
+        하나 더 남기기
+      </BigButton>
       <BigButton tone="plain" onClick={() => navigate('/field')}>
         현장 홈으로
       </BigButton>
