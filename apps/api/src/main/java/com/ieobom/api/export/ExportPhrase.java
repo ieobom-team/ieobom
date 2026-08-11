@@ -80,6 +80,17 @@ public class ExportPhrase extends BaseTimeEntity {
 	/** 직원이 복사한 시점. 복사한 적이 없으면 비어 있다. (Manyfast F-GUSOFG outcome) */
 	private LocalDateTime copiedAt;
 
+	/**
+	 * 이 문구를 카드와 대조한 시점. 그 뒤에 카드가 바뀌었으면 문구는 더 이상 그 카드를 말하고 있지 않다.
+	 *
+	 * <p><b>{@code updatedAt} 을 쓰지 않는 이유가 있다.</b> {@link #markCopied()} 도 {@code updatedAt} 을
+	 * 올리므로, 그것을 기준으로 삼으면 직원이 복사하는 순간 "카드가 바뀌었다"는 안내가 조용히 사라진다. 여기는 문구 본문을 쓸 때만 움직인다.
+	 *
+	 * <p>옛 행에는 이 값이 없을 수 있어 {@code nullable} 이다. {@code ddl-auto: update} 로 굴러가는 로컬 DB 에 값이 있는
+	 * 행을 두고 {@code NOT NULL} 컬럼을 밀어 넣으면 기동부터 깨진다. 비어 있으면 만든 시점을 기준으로 본다.
+	 */
+	private LocalDateTime verifiedAt;
+
 	@Builder
 	private ExportPhrase(
 			HandoverCard handoverCard,
@@ -90,6 +101,7 @@ public class ExportPhrase extends BaseTimeEntity {
 		this.phraseType = phraseType;
 		this.generatedText = generatedText;
 		this.reviewNotice = reviewNotice;
+		this.verifiedAt = LocalDateTime.now();
 	}
 
 	/** 지금 화면에 나가고 복사될 문구. 고친 것이 있으면 그것이다. */
@@ -101,8 +113,29 @@ public class ExportPhrase extends BaseTimeEntity {
 		return editedText != null;
 	}
 
+	/**
+	 * <b>저장된 안내가 있는지만 본다.</b> 카드가 그 뒤에 바뀌었는지는 여기서 알 수 없다.
+	 *
+	 * <p>응답에 나가는 값은 이것이 아니라 {@link ExportPhraseVerifier#reviewNoticeOf} 가 만든 것이다. 카드와 어긋났는지는
+	 * 저장할 수 없고 읽는 시점에만 말할 수 있기 때문이다.
+	 */
 	public boolean needsReview() {
 		return reviewNotice != null;
+	}
+
+	/**
+	 * 이 문구를 만들거나 고친 뒤에 카드가 바뀌었는지.
+	 *
+	 * <p>바뀌었다면 문구는 얼어붙은 옛 내용이고 근거({@code evidenceText})는 카드에서 실시간으로 오므로, 화면에서 둘이 어긋난다. 그 상태가
+	 * "검토를 거친 것"처럼 보이면 안 된다. (Manyfast F-GUSOFG exceptions)
+	 *
+	 * <p>카드의 {@code updatedAt} 은 검토 상태 전환과 안전 표시로도 움직인다. 내용이 그대로인데 안내가 붙을 수 있다는 뜻이지만, <b>한 번 더
+	 * 확인하는 값과 어긋난 문구가 보호자에게 나가는 값이 같지 않으므로</b> 넓은 쪽으로 둔다.
+	 */
+	public boolean isStaleAgainst(HandoverCard card) {
+		LocalDateTime cardChangedAt = card.getUpdatedAt();
+		LocalDateTime baseline = verifiedAt == null ? getCreatedAt() : verifiedAt;
+		return cardChangedAt != null && baseline != null && cardChangedAt.isAfter(baseline);
 	}
 
 	/** 복사할 문구가 있는지. AI 가 아무것도 만들지 못했고 직원도 아직 쓰지 않았으면 없다. */
@@ -119,6 +152,8 @@ public class ExportPhrase extends BaseTimeEntity {
 	public void edit(String editedText, String reviewNotice) {
 		this.editedText = editedText;
 		this.reviewNotice = reviewNotice;
+		// 방금 카드와 다시 대조했다. 그전에 카드가 바뀌어 붙어 있던 안내는 여기서 해소된다.
+		this.verifiedAt = LocalDateTime.now();
 	}
 
 	/** 직원이 복사했다. 유형과 시점이 기록으로 남는다. */

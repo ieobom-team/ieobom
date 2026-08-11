@@ -10,6 +10,7 @@ import com.ieobom.api.recipient.CareRecipient;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * 문구를 복사해도 되는지 판정하는 규칙. <b>LLM 도 DB 도 없이 직접 증명한다.</b>
@@ -99,6 +100,71 @@ class ExportPhraseVerifierTest {
 		PhraseVerification 결과 = verifier.verify("점심 식사량 저하 보이심.", 카드, 다른_어르신);
 
 		assertThat(결과.needsReview()).isFalse();
+	}
+
+	/**
+	 * 문구를 만든 뒤 카드가 바뀌면, 문구는 옛 내용으로 얼어붙은 채 근거만 새것으로 바뀐다.
+	 *
+	 * <p>이 판정만 만드는 시점이 아니라 <b>읽는 시점</b>에 돈다. 그래서 저장된 안내와 합쳐서 나가는 모양을 여기서 본다.
+	 */
+	@Test
+	void 문구를_만든_뒤_카드가_바뀌면_안내가_붙는다() {
+		HandoverCard 카드 = 카드();
+		ExportPhrase 문구 = 문구(카드, null);
+
+		시각(문구, "verifiedAt", LocalDateTime.of(2026, 8, 12, 9, 0));
+		시각(카드, "updatedAt", LocalDateTime.of(2026, 8, 12, 9, 30));
+
+		assertThat(ExportPhraseVerifier.reviewNoticeOf(문구, 카드)).contains("카드가 바뀌었습니다");
+	}
+
+	@Test
+	void 카드가_바뀌지_않았으면_안내가_붙지_않는다() {
+		HandoverCard 카드 = 카드();
+		ExportPhrase 문구 = 문구(카드, null);
+
+		시각(카드, "updatedAt", LocalDateTime.of(2026, 8, 12, 9, 0));
+		시각(문구, "verifiedAt", LocalDateTime.of(2026, 8, 12, 9, 30));
+
+		assertThat(ExportPhraseVerifier.reviewNoticeOf(문구, 카드)).isNull();
+	}
+
+	/** 두 안내는 서로 다른 것을 말한다. 하나가 다른 하나를 덮으면 직원이 확인할 것 하나를 잃는다. */
+	@Test
+	void 만들_때_붙은_안내와_카드_변경_안내가_함께_나온다() {
+		HandoverCard 카드 = 카드();
+		ExportPhrase 문구 = 문구(카드, "카드에 없는 숫자(38)가 있습니다. 근거를 확인한 뒤 복사해 주세요.");
+
+		시각(문구, "verifiedAt", LocalDateTime.of(2026, 8, 12, 9, 0));
+		시각(카드, "updatedAt", LocalDateTime.of(2026, 8, 12, 9, 30));
+
+		assertThat(ExportPhraseVerifier.reviewNoticeOf(문구, 카드)).contains("38").contains("카드가 바뀌었습니다");
+	}
+
+	/** 저장 전 엔티티에는 시각이 없다. 그래도 판정이 터지지 않고 "바뀌지 않았다"로 떨어져야 한다. */
+	@Test
+	void 시각을_알_수_없으면_바뀌지_않은_것으로_본다() {
+		HandoverCard 카드 = 카드();
+
+		assertThat(ExportPhraseVerifier.reviewNoticeOf(문구(카드, null), 카드)).isNull();
+	}
+
+	private ExportPhrase 문구(HandoverCard 카드, String 저장된_안내) {
+		return ExportPhrase.builder()
+				.handoverCard(카드)
+				.phraseType(ExportPhraseType.RECORD)
+				.generatedText("점심 식사량 저하 보이심.")
+				.reviewNotice(저장된_안내)
+				.build();
+	}
+
+	/**
+	 * 생성·수정 시각은 JPA 라이프사이클 콜백이 채운다. DB 없이 판정만 보려면 여기서 직접 넣는 수밖에 없다.
+	 *
+	 * <p>{@code updatedAt} 은 {@code BaseTimeEntity} 에 있어 상위 타입까지 훑어야 찾힌다.
+	 */
+	private void 시각(Object 대상, String 필드, LocalDateTime 값) {
+		ReflectionTestUtils.setField(대상, 필드, 값);
 	}
 
 	private HandoverCard 카드() {

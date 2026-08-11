@@ -328,6 +328,108 @@ class ExportApiTest {
 				.andExpect(jsonPath("$.code").value("EXPORT_PHRASE_NOT_FOUND"));
 	}
 
+	/**
+	 * 문구를 만든 뒤 카드가 바뀌는 경로. (Issue #27)
+	 *
+	 * <p>검토 완료 카드도 고칠 수 있는데 {@code generatedText} 는 만든 시점에 얼어붙는다. 그러면 응답의 {@code evidenceText} 는
+	 * 카드에서 실시간으로 오고 {@code text} 만 옛것이라, <b>직원이 근거와 어긋난 문구를 아무 경고 없이 복사하게 된다.</b>
+	 */
+	@Test
+	void 문구를_만든_뒤_카드를_고치면_복사_전_검토를_안내한다() throws Exception {
+		HandoverCard card = 카드(ReviewStatus.REVIEWED);
+		문구생성.willReturn("점심 식사량 저하 보이심.", "점심 식사량이 줄었습니다.");
+		mockMvc.perform(post("/api/handover-cards/{id}/exports", card.getId()))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.needsReview").value(false));
+
+		카드수정(card, "점심을 전혀 못 드심");
+
+		mockMvc
+				.perform(post("/api/handover-cards/{id}/exports", card.getId()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.needsReview").value(true))
+				.andExpect(jsonPath("$.phrases[0].needsReview").value(true))
+				.andExpect(jsonPath("$.phrases[0].reviewNotice").value(containsString("카드가 바뀌었습니다")))
+				// 옛 문구가 사라지지는 않는다. 확인하고 고치라는 안내이지 지우라는 말이 아니다.
+				.andExpect(jsonPath("$.phrases[0].text").value("점심 식사량 저하 보이심."))
+				.andExpect(jsonPath("$.phrases[1].needsReview").value(true));
+	}
+
+	@Test
+	void 직원이_문구를_고치면_카드_변경_안내가_해소된다() throws Exception {
+		HandoverCard card = 카드(ReviewStatus.REVIEWED);
+		문구생성.willReturn("점심 식사량 저하 보이심.", "점심 식사량이 줄었습니다.");
+		mockMvc.perform(post("/api/handover-cards/{id}/exports", card.getId()));
+		ExportPhrase 문구 = phrases.findByHandoverCardIdOrderByIdAsc(card.getId()).get(0);
+
+		카드수정(card, "점심을 전혀 못 드심");
+
+		mockMvc
+				.perform(
+						put("/api/exports/{id}", 문구.getId())
+								.contentType(MediaType.APPLICATION_JSON)
+								.content("""
+										{"text": "점심을 전혀 못 드심."}
+										"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.needsReview").value(false))
+				.andExpect(jsonPath("$.reviewNotice").value(nullValue()));
+	}
+
+	/**
+	 * 복사는 안내를 해소하지 않는다.
+	 *
+	 * <p>기준 시각을 {@code updatedAt} 으로 잡으면 {@code markCopied} 가 그것을 올리므로, <b>복사하는 순간 경고가 조용히
+	 * 사라진다.</b> 그 함정을 직접 막는 테스트다.
+	 */
+	@Test
+	void 복사해도_카드_변경_안내는_남는다() throws Exception {
+		HandoverCard card = 카드(ReviewStatus.REVIEWED);
+		문구생성.willReturn("점심 식사량 저하 보이심.", "점심 식사량이 줄었습니다.");
+		mockMvc.perform(post("/api/handover-cards/{id}/exports", card.getId()));
+		ExportPhrase 문구 = phrases.findByHandoverCardIdOrderByIdAsc(card.getId()).get(0);
+
+		카드수정(card, "점심을 전혀 못 드심");
+
+		mockMvc
+				.perform(post("/api/exports/{id}/copy", 문구.getId()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.copiedAt").isNotEmpty())
+				.andExpect(jsonPath("$.needsReview").value(true));
+
+		mockMvc
+				.perform(post("/api/handover-cards/{id}/exports", card.getId()))
+				.andExpect(jsonPath("$.phrases[0].reviewNotice").value(containsString("카드가 바뀌었습니다")));
+	}
+
+	@Test
+	void 카드가_바뀌지_않았으면_안내가_붙지_않는다() throws Exception {
+		HandoverCard card = 카드(ReviewStatus.REVIEWED);
+		문구생성.willReturn("점심 식사량 저하 보이심.", "점심 식사량이 줄었습니다.");
+		mockMvc.perform(post("/api/handover-cards/{id}/exports", card.getId()));
+
+		mockMvc
+				.perform(post("/api/handover-cards/{id}/exports", card.getId()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.needsReview").value(false))
+				.andExpect(jsonPath("$.phrases[0].reviewNotice").value(nullValue()))
+				.andExpect(jsonPath("$.phrases[1].reviewNotice").value(nullValue()));
+	}
+
+	/** 검토 화면과 같은 경로로 카드를 고친다. 검토 완료 카드도 고칠 수 있다. */
+	private void 카드수정(HandoverCard card, String 상태변화) throws Exception {
+		mockMvc
+				.perform(
+						put("/api/handover-cards/{id}", card.getId())
+								.contentType(MediaType.APPLICATION_JSON)
+								.content(
+										"""
+										{"careRecipientId": %d, "statusChange": "%s", "actionTaken": "죽으로 바꿔 드림"}
+										"""
+												.formatted(김말순.getId(), 상태변화)))
+				.andExpect(status().isOk());
+	}
+
 	/** 검토 완료 카드에서 문구를 만들어 두고 저장된 것을 돌려준다. 순서는 기록 문구, 보호자 문구다. */
 	private List<ExportPhrase> 생성된_문구(String 기록, String 보호자) throws Exception {
 		HandoverCard card = 카드(ReviewStatus.REVIEWED);

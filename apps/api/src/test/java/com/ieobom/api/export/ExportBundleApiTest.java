@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -180,6 +181,36 @@ class ExportBundleApiTest {
 				.andExpect(jsonPath("$.bundles[0].notice").value(containsString("확인이 필요한 문구")))
 				.andExpect(jsonPath("$.bundles[0].phraseCount").value(2))
 				.andExpect(jsonPath("$.bundles[1].needsReview").value(false));
+	}
+
+	/**
+	 * 문구를 만든 뒤 카드가 바뀐 것을 묶음도 센다. (Issue #27)
+	 *
+	 * <p>저장된 안내만 세면 묶음이 이것을 놓친다. 그러면 카드별 화면에는 안내가 뜨는데 묶음 화면에서는 <b>같은 문구가 아무 표시 없이 복사</b>된다.
+	 */
+	@Test
+	void 문구를_만든_뒤_바뀐_카드가_있으면_묶음도_검토_필요로_표시한다() throws Exception {
+		문구있는_카드(김말순, LocalTime.of(9, 0), false, "아침 기침.", "아침에 기침이 있으셨습니다.");
+		HandoverCard 바뀐_카드 = 문구있는_카드(김말순, LocalTime.of(14, 0), false, "오후 산책.", "오후에 산책하셨습니다.");
+
+		mockMvc
+				.perform(
+						put("/api/handover-cards/{id}", 바뀐_카드.getId())
+								.contentType(MediaType.APPLICATION_JSON)
+								.content(
+										"""
+										{"careRecipientId": %d, "statusChange": "오후 산책 중 다리 불편해하심"}
+										"""
+												.formatted(김말순.getId())))
+				.andExpect(status().isOk());
+
+		mockMvc
+				.perform(get("/api/care-recipients/{id}/export-bundles", 김말순.getId()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.bundles[0].needsReview").value(true))
+				.andExpect(jsonPath("$.bundles[0].notice").value(containsString("확인이 필요한 문구")))
+				// 이어 붙인 결과에서 빠지지는 않는다. 확인하고 고치라는 안내다.
+				.andExpect(jsonPath("$.bundles[0].phraseCount").value(2));
 	}
 
 	/** 이어 붙일 글자가 없는 문구는 묶음에서 빼고, 빠졌다는 사실을 알린다. */

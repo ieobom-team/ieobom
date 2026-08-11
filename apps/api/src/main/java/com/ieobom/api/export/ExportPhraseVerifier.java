@@ -25,6 +25,9 @@ import org.springframework.stereotype.Component;
  *
  * <p>걸렸다고 문구를 버리지 않는다. <b>안내를 붙여 직원에게 넘긴다.</b> 이 제품의 출력은 직원 검토와 직접 복사를 전제로 하므로, 서버가 조용히 지우면
  * 직원은 무엇을 확인해야 하는지 모른 채 문구만 사라진 화면을 본다.
+ *
+ * <p>위 셋은 <b>만드는 시점</b>의 판정이라 저장된다. 여기에 <b>읽는 시점</b>의 판정이 하나 더 있다. 문구를 만든 뒤에도 카드는 고쳐질 수 있고, 그러면
+ * 문구만 옛 내용으로 얼어붙는다. ({@link #reviewNoticeOf})
  */
 @Slf4j
 @Component
@@ -37,6 +40,8 @@ public class ExportPhraseVerifier {
 	private static final String CUT_NOTICE = "문구가 길어 뒷부분이 잘렸습니다. 확인한 뒤 복사해 주세요.";
 	private static final String UNKNOWN_NUMBER_NOTICE = "카드에 없는 숫자(%s)가 있습니다. 근거를 확인한 뒤 복사해 주세요.";
 	private static final String OTHER_RECIPIENT_NOTICE = "다른 어르신 이름(%s)이 있습니다. 근거를 확인한 뒤 복사해 주세요.";
+
+	static final String STALE_NOTICE = "문구를 만든 뒤 카드가 바뀌었습니다. 카드 내용과 맞는지 확인하고 고친 뒤 복사해 주세요.";
 
 	private static final Pattern NUMBER = Pattern.compile("\\d+");
 	private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
@@ -78,6 +83,30 @@ public class ExportPhraseVerifier {
 			log.warn("문구 검토 안내 — cardId={}, 사유 {}개", card.getId(), notices.size());
 		}
 		return new PhraseVerification(text, notices.isEmpty() ? null : String.join(" ", notices));
+	}
+
+	/**
+	 * 지금 이 문구에 붙어야 할 검토 안내 전부. 붙을 것이 없으면 {@code null}.
+	 *
+	 * <p>저장된 안내({@link ExportPhrase#getReviewNotice()})에 <b>"만든 뒤 카드가 바뀌었다"를 더한 값</b>이다. 응답에
+	 * 나가는 것은 언제나 이것이고, 저장된 값을 그대로 내보내는 경로를 두지 않는다.
+	 *
+	 * <p><b>이 판정만 저장하지 않고 읽을 때 하는 이유가 있다.</b> 카드는 문구가 만들어진 뒤에도 고칠 수 있고({@code PUT
+	 * /api/handover-cards/{id}}), 그때 문구 쪽에 안내를 써 넣으려면 카드 수정이 문구 테이블까지 건드려야 한다. 게다가 응답의 {@code
+	 * evidenceText} 는 이미 카드에서 실시간으로 온다. 같은 자리에서 함께 판정해야 근거와 안내가 갈라지지 않는다.
+	 *
+	 * <p>{@code static} 인 것은 판단에 필요한 것이 인자 둘뿐이기 때문이다. 응답을 만드는 자리는 DTO 이고, 거기에 스프링 빈을 끌고 들어가지 않으려면
+	 * 판정이 스스로 서 있어야 한다. 그래도 <b>안내 문구와 규칙은 이 클래스 밖으로 나가지 않는다.</b>
+	 *
+	 * @param phrase 판정할 문구
+	 * @param card 이 문구가 나온 카드. 지금 읽어 온 상태 그대로여야 한다
+	 */
+	public static String reviewNoticeOf(ExportPhrase phrase, HandoverCard card) {
+		String stored = phrase.getReviewNotice();
+		if (!phrase.isStaleAgainst(card)) {
+			return stored;
+		}
+		return stored == null ? STALE_NOTICE : stored + " " + STALE_NOTICE;
 	}
 
 	/**

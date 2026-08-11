@@ -2,6 +2,7 @@ package com.ieobom.api.export.dto;
 
 import com.ieobom.api.export.ExportPhrase;
 import com.ieobom.api.export.ExportPhraseType;
+import com.ieobom.api.export.ExportPhraseVerifier;
 import com.ieobom.api.handovercard.HandoverCard;
 import java.time.LocalDateTime;
 
@@ -14,7 +15,8 @@ import java.time.LocalDateTime;
  * @param text 지금 복사될 문구. 직원이 고쳤으면 고친 것이다. 아직 만들어지지 못했으면 {@code null}
  * @param generatedText AI 가 만든 원래 문구. 직원이 무엇을 고쳤는지 화면이 견줄 수 있다
  * @param needsReview 복사 전에 확인할 것이 있는지. 화면은 이 값으로 안내를 띄운다
- * @param reviewNotice 확인할 내용. 없으면 {@code null}
+ * @param reviewNotice 확인할 내용. 없으면 {@code null}. <b>저장된 안내가 전부가 아니다</b> — 문구를 만든 뒤 카드가 바뀌었다는
+ *     안내가 여기서 더해진다
  * @param copiedAt 직원이 복사한 시점. 복사한 적이 없으면 {@code null}
  */
 public record ExportPhraseResponse(
@@ -41,6 +43,9 @@ public record ExportPhraseResponse(
 	 * 그대로 넘기게 해서 여기서 지연 로딩을 건드리지 않는다.
 	 */
 	public static ExportPhraseResponse of(HandoverCard card, ExportPhrase phrase) {
+		// 저장된 안내를 그대로 쓰지 않는다. 문구를 만든 뒤 카드가 바뀌었는지는 읽는 지금에만 알 수 있다.
+		String reviewNotice = ExportPhraseVerifier.reviewNoticeOf(phrase, card);
+
 		return new ExportPhraseResponse(
 				phrase.getId(),
 				card.getId(),
@@ -52,8 +57,8 @@ public record ExportPhraseResponse(
 				phrase.text(),
 				phrase.getGeneratedText(),
 				phrase.isEdited(),
-				phrase.needsReview(),
-				phrase.getReviewNotice(),
+				reviewNotice != null,
+				reviewNotice,
 				card.getEvidenceText(),
 				phrase.getCopiedAt(),
 				phrase.getCreatedAt());
