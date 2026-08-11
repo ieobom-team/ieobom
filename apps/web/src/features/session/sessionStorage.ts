@@ -10,7 +10,8 @@ export type EntrySession = {
   staff: Staff
 }
 
-const STORAGE_KEY = 'ieobom.entry-session.v1'
+/** 저장 형식이 바뀌면 뒤의 번호를 올려 옛 값과 섞이지 않게 한다. */
+export const STORAGE_KEY = 'ieobom.entry-session.v1'
 
 /** 저장은 사번만 한다. 이름은 명단에서 다시 찾아 쓴다. */
 type StoredSession = {

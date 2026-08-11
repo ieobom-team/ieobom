@@ -29,6 +29,8 @@ if (Test-Path "$root\apps\web\package.json") {
     Push-Location "$root\apps\web"
     npm run lint
     if ($LASTEXITCODE -eq 0) { Ok "npm run lint" } else { Fail "npm run lint" }
+    npm test
+    if ($LASTEXITCODE -eq 0) { Ok "npm test" } else { Fail "npm test" }
     npm run build
     if ($LASTEXITCODE -eq 0) { Ok "npm run build" } else { Fail "npm run build" }
     Pop-Location
