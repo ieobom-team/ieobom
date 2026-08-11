@@ -1,0 +1,480 @@
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { ApiError, type ApiFieldError } from '../../shared/api/client'
+import { BigButton } from '../../shared/ui/BigButton'
+import { useSession } from '../session/sessionContext'
+import { createHandover, fetchCareRecipients, type CareRecipient } from './handoverApi'
+import { INFO_SOURCES, infoSourceLabel, type InfoSource } from './infoSource'
+import { INPUT_METHODS, type InputMethod } from './inputMethod'
+import {
+  emptyDraft,
+  fieldLabel,
+  RAW_TEXT_MAX_LENGTH,
+  toCreateRequest,
+  validateDraft,
+  type HandoverDraft,
+} from './handoverForm'
+
+/**
+ * 유저플로우 n7~n16 — 현장 특이사항 입력.
+ *
+ *   n7 입력 화면 → n8 대리 입력 여부? → n9 정보 출처 → n11 입력 방식? → n13 텍스트 입력
+ *   → n15 어르신·입력 시점 선택 → n16 저장 성공?
+ *
+ * 유저플로우는 n7 · n9 · n13 을 각각 page 노드로 그렸지만 **라우트는 하나**로 두고 단계만 넘긴다.
+ * 큰 버튼 기준으로 주소를 다섯 개로 쪼개면 뒤로가기가 단계마다 걸려 한 손 입력이 되지 않는다.
+ *
+ * 이번 Issue(#6)는 텍스트 방식만 만든다. 음성(#8)·체크(#7)는 n11 분기 자리만 두었고,
+ * 저장 실패 시 임시 저장(n17)은 #9 범위다.
+ */
+
+type Step = 'proxy' | 'source' | 'method' | 'text' | 'target' | 'done'
+
+export function HandoverCreatePage() {
+  const { session } = useSession()
+  const navigate = useNavigate()
+  const reporterName = session?.staff.name ?? ''
+
+  const [step, setStep] = useState<Step>('proxy')
+  const [draft, setDraft] = useState<HandoverDraft>(() => emptyDraft(new Date()))
+  const [errors, setErrors] = useState<ApiFieldError[]>([])
+  const [notice, setNotice] = useState<string | null>(null)
+  const [savedName, setSavedName] = useState<string>('')
+
+  const recipients = useQuery({ queryKey: ['care-recipients'], queryFn: fetchCareRecipients })
+
+  const save = useMutation({
+    mutationFn: () => createHandover(toCreateRequest(draft, reporterName)),
+    onSuccess: (handover) => {
+      setSavedName(handover.careRecipientName)
+      setErrors([])
+      setNotice(null)
+      setStep('done')
+    },
+    onError: (error: unknown) => {
+      if (!(error instanceof ApiError)) {
+        setErrors([])
+        setNotice('저장하지 못했습니다. 입력한 내용은 그대로 있으니 다시 눌러 주세요.')
+        return
+      }
+      if (error.fields.length > 0) {
+        setErrors([...error.fields])
+        setNotice(null)
+        return
+      }
+      setErrors([])
+      // 고른 어르신이 목록에서 사라진 경우. 다시 고르게 목록을 새로 받아 온다.
+      if (error.code === 'CARE_RECIPIENT_NOT_FOUND') {
+        setDraft((current) => ({ ...current, careRecipientId: null }))
+        void recipients.refetch()
+        setNotice('고르신 어르신을 목록에서 찾지 못했습니다. 목록에서 다시 골라 주세요.')
+        return
+      }
+      setNotice(error.message)
+    },
+  })
+
+  const update = (patch: Partial<HandoverDraft>) => {
+    setDraft((current) => ({ ...current, ...patch }))
+    setErrors([])
+    setNotice(null)
+  }
+
+  const pickProxy = (proxyInput: boolean) => {
+    // 직접 관찰로 되돌리면 앞서 고른 출처를 지운다. 남겨 두면 둘 중 어느 쪽이 사실인지 알 수 없다.
+    update({ proxyInput, infoSource: proxyInput ? draft.infoSource : null })
+    setStep(proxyInput ? 'source' : 'method')
+  }
+
+  const pickSource = (infoSource: InfoSource) => {
+    update({ infoSource })
+    setStep('method')
+  }
+
+  const pickMethod = (inputMethod: InputMethod) => {
+    update({ inputMethod })
+    setStep('text')
+  }
+
+  const goBack = () => {
+    setErrors([])
+    setNotice(null)
+    if (step === 'source' || step === 'proxy') {
+      navigate('/field')
+      return
+    }
+    if (step === 'method') {
+      setStep(draft.proxyInput ? 'source' : 'proxy')
+      return
+    }
+    if (step === 'text') {
+      setStep('method')
+      return
+    }
+    if (step === 'target') {
+      setStep('text')
+    }
+  }
+
+  const goToTarget = () => {
+    if (draft.rawText.trim() === '') {
+      setErrors([{ field: 'rawText', reason: '입력 내용을 남겨 주세요.' }])
+      return
+    }
+    setErrors([])
+    setStep('target')
+  }
+
+  const submit = () => {
+    const found = validateDraft(draft, reporterName)
+    if (found.length > 0) {
+      setErrors(found)
+      setNotice(null)
+      return
+    }
+    setErrors([])
+    setNotice(null)
+    save.mutate()
+  }
+
+  const startAnother = () => {
+    setDraft(emptyDraft(new Date()))
+    setErrors([])
+    setNotice(null)
+    setSavedName('')
+    setStep('proxy')
+  }
+
+  if (step === 'done') {
+    return <SavedNotice careRecipientName={savedName} onAnother={startAnother} />
+  }
+
+  return (
+    <main className="mx-auto flex min-h-svh w-full max-w-2xl flex-col gap-7 px-5 py-8">
+      <header>
+        <button
+          type="button"
+          onClick={goBack}
+          className="rounded-xl px-2 py-2 text-xl font-semibold text-teal-800 underline underline-offset-4"
+        >
+          이전
+        </button>
+        <h1 className="mt-3 text-3xl font-bold text-slate-900">특이사항 남기기</h1>
+        <p className="mt-2 text-xl text-slate-600">
+          입력자 <span className="font-semibold text-slate-900">{reporterName}</span>
+        </p>
+      </header>
+
+      <Problems errors={errors} notice={notice} />
+
+      {step === 'proxy' && <ProxyStep onPick={pickProxy} />}
+      {step === 'source' && <SourceStep picked={draft.infoSource} onPick={pickSource} />}
+      {step === 'method' && <MethodStep picked={draft.inputMethod} onPick={pickMethod} />}
+      {step === 'text' && (
+        <TextStep
+          value={draft.rawText}
+          onChange={(rawText) => update({ rawText })}
+          onNext={goToTarget}
+        />
+      )}
+      {step === 'target' && (
+        <TargetStep
+          draft={draft}
+          recipients={recipients.data ?? []}
+          loading={recipients.isPending}
+          loadFailed={recipients.isError}
+          onRetryLoad={() => void recipients.refetch()}
+          onChange={update}
+          onSubmit={submit}
+          saving={save.isPending}
+        />
+      )}
+    </main>
+  )
+}
+
+/** 보완할 항목을 한 번에 모아 보여 준다. (Manyfast F-YJJJUX exceptions) */
+function Problems({ errors, notice }: { errors: ApiFieldError[]; notice: string | null }) {
+  if (errors.length === 0 && notice === null) {
+    return null
+  }
+
+  return (
+    <section
+      role="alert"
+      className="rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4 text-xl text-amber-900"
+    >
+      {errors.length > 0 && (
+        <>
+          <p className="text-2xl font-bold">보완할 항목이 있습니다</p>
+          <ul className="mt-3 flex flex-col gap-2">
+            {errors.map((error) => (
+              <li key={`${error.field}-${error.reason}`}>
+                <span className="font-semibold">{fieldLabel(error.field)}</span> — {error.reason}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {notice !== null && <p className={errors.length > 0 ? 'mt-3' : ''}>{notice}</p>}
+    </section>
+  )
+}
+
+/** n8 — 대리 입력 여부. */
+function ProxyStep({ onPick }: { onPick: (proxyInput: boolean) => void }) {
+  return (
+    <section aria-labelledby="proxy-heading" className="flex flex-col gap-5">
+      <h2 id="proxy-heading" className="text-2xl font-bold text-slate-900">
+        어떻게 아신 내용인가요?
+      </h2>
+      <BigButton tone="plain" onClick={() => onPick(false)}>
+        <span className="block">제가 직접 봤어요</span>
+        <span className="mt-1 block text-lg font-normal text-slate-500">직접 관찰한 내용입니다</span>
+      </BigButton>
+      <BigButton tone="plain" onClick={() => onPick(true)}>
+        <span className="block">다른 분께 들었어요</span>
+        <span className="mt-1 block text-lg font-normal text-slate-500">
+          대신 남깁니다. 들은 곳을 다음에 고릅니다
+        </span>
+      </BigButton>
+    </section>
+  )
+}
+
+/** n9 · n10 — 정보 출처. 대리 입력일 때만 지난다. */
+function SourceStep({
+  picked,
+  onPick,
+}: {
+  picked: InfoSource | null
+  onPick: (value: InfoSource) => void
+}) {
+  return (
+    <section aria-labelledby="source-heading" className="flex flex-col gap-5">
+      <h2 id="source-heading" className="text-2xl font-bold text-slate-900">
+        어느 분께 들으셨나요?
+      </h2>
+      <p className="text-xl text-slate-600">
+        남기는 사람과 들은 곳을 따로 적어 두면 나중에 누구에게 확인해야 할지 알 수 있습니다.
+      </p>
+      {INFO_SOURCES.map((source) => (
+        <BigButton
+          key={source.value}
+          tone="plain"
+          selected={picked === source.value}
+          onClick={() => onPick(source.value)}
+        >
+          {source.label}
+        </BigButton>
+      ))}
+    </section>
+  )
+}
+
+/** n11 — 입력 방식. 아직 없는 방식도 자리를 지키되 고를 수 없게 둔다. */
+function MethodStep({
+  picked,
+  onPick,
+}: {
+  picked: InputMethod | null
+  onPick: (value: InputMethod) => void
+}) {
+  return (
+    <section aria-labelledby="method-heading" className="flex flex-col gap-5">
+      <h2 id="method-heading" className="text-2xl font-bold text-slate-900">
+        어떻게 남기시겠어요?
+      </h2>
+      {INPUT_METHODS.map((method) =>
+        method.ready ? (
+          <BigButton
+            key={method.value}
+            selected={picked === method.value}
+            onClick={() => onPick(method.value)}
+          >
+            <span className="block">{method.label}</span>
+            <span className="mt-1 block text-lg font-normal opacity-90">{method.summary}</span>
+          </BigButton>
+        ) : (
+          <button
+            key={method.value}
+            type="button"
+            disabled
+            className="w-full min-h-20 cursor-not-allowed rounded-2xl border-2 border-dashed border-slate-300 bg-slate-100 px-6 py-5 text-left text-2xl font-semibold text-slate-400"
+          >
+            <span className="block">{method.label}</span>
+            <span className="mt-1 block text-lg font-normal">준비 중입니다 ({method.plannedIn})</span>
+          </button>
+        ),
+      )}
+    </section>
+  )
+}
+
+/** n13 — 텍스트 입력. */
+function TextStep({
+  value,
+  onChange,
+  onNext,
+}: {
+  value: string
+  onChange: (value: string) => void
+  onNext: () => void
+}) {
+  return (
+    <section aria-labelledby="text-heading" className="flex flex-col gap-5">
+      <h2 id="text-heading" className="text-2xl font-bold text-slate-900">
+        무슨 일이 있었나요?
+      </h2>
+      <label htmlFor="rawText" className="text-xl text-slate-600">
+        보신 그대로 짧게 남겨 주세요. 다듬지 않아도 됩니다.
+      </label>
+      <textarea
+        id="rawText"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        rows={6}
+        maxLength={RAW_TEXT_MAX_LENGTH}
+        className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
+      />
+      <p className="text-lg text-slate-500">
+        {value.length} / {RAW_TEXT_MAX_LENGTH}자
+      </p>
+      <BigButton onClick={onNext}>다음</BigButton>
+    </section>
+  )
+}
+
+/** n15 — 어르신과 입력 시점. 저장은 여기서 한다. */
+function TargetStep({
+  draft,
+  recipients,
+  loading,
+  loadFailed,
+  onRetryLoad,
+  onChange,
+  onSubmit,
+  saving,
+}: {
+  draft: HandoverDraft
+  recipients: CareRecipient[]
+  loading: boolean
+  loadFailed: boolean
+  onRetryLoad: () => void
+  onChange: (patch: Partial<HandoverDraft>) => void
+  onSubmit: () => void
+  saving: boolean
+}) {
+  const [keyword, setKeyword] = useState('')
+  const shown = useMemo(() => {
+    const trimmed = keyword.trim()
+    if (trimmed === '') {
+      return recipients
+    }
+    return recipients.filter(
+      (recipient) => recipient.name.includes(trimmed) || recipient.code.includes(trimmed),
+    )
+  }, [keyword, recipients])
+
+  return (
+    <section aria-labelledby="target-heading" className="flex flex-col gap-5">
+      <h2 id="target-heading" className="text-2xl font-bold text-slate-900">
+        어느 어르신이신가요?
+      </h2>
+
+      {draft.proxyInput && draft.infoSource !== null && (
+        <p className="text-xl text-slate-600">
+          정보 출처{' '}
+          <span className="font-semibold text-slate-900">{infoSourceLabel(draft.infoSource)}</span>
+        </p>
+      )}
+
+      <label htmlFor="recipientKeyword" className="text-xl text-slate-600">
+        이름이나 식별번호로 찾기
+      </label>
+      <input
+        id="recipientKeyword"
+        value={keyword}
+        onChange={(event) => setKeyword(event.target.value)}
+        className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
+      />
+
+      {loading && <p className="text-xl text-slate-600">어르신 목록을 불러오는 중입니다…</p>}
+      {loadFailed && (
+        <div className="flex flex-col gap-4 rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4">
+          <p className="text-xl text-amber-900">어르신 목록을 불러오지 못했습니다.</p>
+          <BigButton tone="plain" onClick={onRetryLoad}>
+            목록 다시 불러오기
+          </BigButton>
+        </div>
+      )}
+      {!loading && !loadFailed && shown.length === 0 && (
+        <p className="text-xl text-slate-600">찾으시는 어르신이 목록에 없습니다.</p>
+      )}
+
+      <ul className="flex flex-col gap-4">
+        {shown.map((recipient) => (
+          <li key={recipient.id}>
+            <BigButton
+              tone="plain"
+              selected={draft.careRecipientId === recipient.id}
+              onClick={() => onChange({ careRecipientId: recipient.id })}
+            >
+              <span className="flex flex-wrap items-baseline gap-x-3">
+                <span>{recipient.name}</span>
+                <span className="text-lg font-normal text-slate-500">{recipient.code}</span>
+              </span>
+            </BigButton>
+          </li>
+        ))}
+      </ul>
+
+      <label htmlFor="occurredAt" className="text-2xl font-bold text-slate-900">
+        언제 있었던 일인가요?
+      </label>
+      <p className="text-xl text-slate-600">지금 시각이 채워져 있습니다. 다르면 고쳐 주세요.</p>
+      <input
+        id="occurredAt"
+        type="datetime-local"
+        value={draft.occurredAt}
+        onChange={(event) => onChange({ occurredAt: event.target.value })}
+        className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
+      />
+
+      <BigButton onClick={onSubmit}>{saving ? '저장하는 중…' : '저장하기'}</BigButton>
+    </section>
+  )
+}
+
+/**
+ * n16 저장 성공 — 다음 정리 단계로 연결되었음을 짧게 안내한다.
+ *
+ * 정리 결과를 보여 주는 인계 카드 화면은 #11 범위라 아직 없다. 여기서는 넘어갔다는 사실만 알린다.
+ */
+function SavedNotice({
+  careRecipientName,
+  onAnother,
+}: {
+  careRecipientName: string
+  onAnother: () => void
+}) {
+  const navigate = useNavigate()
+
+  return (
+    <main className="mx-auto flex min-h-svh w-full max-w-2xl flex-col gap-6 px-5 py-8">
+      <section role="status" className="rounded-2xl border-2 border-teal-600 bg-teal-50 px-5 py-6">
+        <h1 className="text-3xl font-bold text-teal-900">저장했습니다</h1>
+        <p className="mt-3 text-2xl text-teal-900">
+          {careRecipientName} 어르신 특이사항으로 남겼습니다.
+        </p>
+        <p className="mt-2 text-xl text-teal-800">인계 카드 정리 단계로 넘어갔습니다.</p>
+      </section>
+
+      <BigButton onClick={onAnother}>하나 더 남기기</BigButton>
+      <BigButton tone="plain" onClick={() => navigate('/field')}>
+        현장 홈으로
+      </BigButton>
+    </main>
+  )
+}
