@@ -81,10 +81,10 @@ pwsh ./scripts/verify-before-pr.ps1  # Windows
 
 # 백엔드만
 cd apps/api && ./gradlew build
-```
 
-`apps/web`은 아직 생성 전이라 검증 명령이 없다.
-Vite 프로젝트를 만드는 PR에서 `lint` · `build` 명령을 이 문단과 `scripts/`, `.github/workflows/ci.yml`에 함께 추가한다.
+# 프론트엔드만
+cd apps/web && npm run lint && npm run build
+```
 
 ## 금지
 
