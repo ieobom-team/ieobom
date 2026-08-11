@@ -23,7 +23,7 @@ PUT   /api/handover-cards/{id}                직원이 검토하며 고친 내�
 PATCH /api/handover-cards/{id}/review-status  검토 필요 ↔ 검토 완료
 PATCH /api/handover-cards/{id}/safety         직원이 직접 하는 안전 표시
       ↓
-      검토 완료 카드에서만 문구 생성 (별도 Issue)
+      검토 완료 카드에서만 문구 생성 (export-api.md)
 ```
 
 구조화를 `POST /api/handovers` 안에서 하지 않는다. 현장 입력 저장이 LLM 응답 시간과 실패에 묶이면
@@ -309,7 +309,7 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 | 항목 | 어디서 |
 |---|---|
 | 다음 행동 → 후속 업무(`Task`) 생성 | 별도 Issue. 여기서는 **제안값 부착까지만** 한다 |
-| 전산 기록 문구 · 보호자 전달 문구 생성 | 별도 Issue. 여기서는 **만들 수 있는지 판정까지만** 한다 |
+| 전산 기록 문구 · 보호자 전달 문구 생성 | [`export-api.md`](export-api.md). 여기서는 **만들 수 있는지 판정까지만** 한다 |
 | 수정 이력 열람 · 되돌리기 · 버전 비교 | 별도 Issue |
 | 카드 삭제 | 없다. 담을 내용이 없는 카드는 애초에 만들어지지 않는다 |
 | 재구조화 | 위 `409` 참고 |
@@ -329,7 +329,7 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 
 ```bash
 cd apps/api
-LLM_API_KEY=... ./gradlew llmLiveTest     # 호출 2회
+LLM_API_KEY=... ./gradlew llmLiveTest     # 구조화 2회 + 문구 생성 2회
 ```
 
 `./gradlew build`에는 포함되지 않는다. 붙여 두면 push마다 크레딧이 나가고, 키가 없는 CI와
