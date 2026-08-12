@@ -85,6 +85,17 @@ describe('진입 전 화면 접근', () => {
     expect(screen.getByRole('heading', { name: '관리자 홈' })).toBeInTheDocument()
   })
 
+  it('관리자 홈에서 당일 운영 현황으로 들어간다', async () => {
+    const user = userEvent.setup()
+    saveSession({ entryRole: 'MANAGER', staff: 김하늘 })
+    renderApp('/admin')
+
+    await user.click(screen.getByRole('link', { name: '당일 운영 현황 보기' }))
+
+    // n5 → n44. 화면이 무엇을 그리는지는 features/dashboard 테스트가 본다.
+    expect(await screen.findByRole('heading', { name: '당일 운영 현황' })).toBeInTheDocument()
+  })
+
   it('다른 역할의 홈을 주소로 열면 자기 홈으로 되돌린다', () => {
     saveSession({ entryRole: 'FIELD_WORKER', staff: 김하늘 })
 
