@@ -1,4 +1,5 @@
 import type { ApiFieldError } from '../../shared/api/client'
+import { buildCheckedText } from './checkItems'
 import type { HandoverCreateRequest } from './handoverApi'
 import type { InfoSource } from './infoSource'
 import type { InputMethod } from './inputMethod'
@@ -23,6 +24,8 @@ export type HandoverDraft = {
   infoSource: InfoSource | null
   inputMethod: InputMethod | null
   rawText: string
+  /** 체크 방식일 때 고른 항목들. `checkItems.ts`의 `value`. 텍스트 방식이면 항상 빈 배열이다 */
+  checkedItems: readonly string[]
   /** `<input type="datetime-local">` 값. `YYYY-MM-DDTHH:mm` */
   occurredAt: string
 }
@@ -49,6 +52,7 @@ export function emptyDraft(now: Date): HandoverDraft {
     infoSource: null,
     inputMethod: null,
     rawText: '',
+    checkedItems: [],
     occurredAt: toDateTimeLocal(now),
   }
 }
@@ -95,7 +99,11 @@ export function validateDraft(draft: HandoverDraft, reporterName: string): ApiFi
     errors.push({ field: 'inputMethod', reason: '입력 방식을 선택해 주세요.' })
   }
 
-  if (draft.rawText.trim() === '') {
+  if (draft.inputMethod === 'CHECK') {
+    if (draft.checkedItems.length === 0) {
+      errors.push({ field: 'rawText', reason: '체크할 항목을 하나 이상 선택해 주세요.' })
+    }
+  } else if (draft.rawText.trim() === '') {
     errors.push({ field: 'rawText', reason: '입력 내용을 남겨 주세요.' })
   } else if (draft.rawText.length > RAW_TEXT_MAX_LENGTH) {
     errors.push({
@@ -130,9 +138,12 @@ export function toCreateRequest(draft: HandoverDraft, reporterName: string): Han
     throw new Error('검증을 통과하지 않은 입력을 보내려 했습니다.')
   }
 
+  const rawText =
+    draft.inputMethod === 'CHECK' ? buildCheckedText(draft.checkedItems) : draft.rawText.trim()
+
   const request: HandoverCreateRequest = {
     careRecipientId: draft.careRecipientId,
-    rawText: draft.rawText.trim(),
+    rawText,
     inputMethod: draft.inputMethod,
     occurredAt: withSeconds(draft.occurredAt),
     reporterName,
