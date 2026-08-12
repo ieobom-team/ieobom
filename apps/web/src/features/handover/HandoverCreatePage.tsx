@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError, type ApiFieldError } from '../../shared/api/client'
@@ -9,10 +9,15 @@ import {
 } from '../handover-card/handoverCardApi'
 import { HANDOVER_CARDS_KEY } from '../handover-card/useHandoverCards'
 import { useSession } from '../session/sessionContext'
-import { CHECK_ITEMS } from './checkItems'
 import { createHandover, fetchCareRecipients, type CareRecipient } from './handoverApi'
 import { INFO_SOURCES, infoSourceLabel, type InfoSource } from './infoSource'
+import { CHECK_ITEMS } from './checkItems'
 import { INPUT_METHODS, type InputMethod } from './inputMethod'
+import {
+  createSpeechRecognizer,
+  isSpeechRecognitionSupported,
+  type SpeechRecognizer,
+} from './speechRecognition'
 import {
   emptyDraft,
   fieldLabel,
@@ -25,13 +30,13 @@ import {
 /**
  * 유저플로우 n7~n16 — 현장 특이사항 입력.
  *
- *   n7 입력 화면 → n8 대리 입력 여부? → n9 정보 출처 → n11 입력 방식? → n13 텍스트 입력 / n14 체크 입력
+ *   n7 입력 화면 → n8 대리 입력 여부? → n9 정보 출처 → n11 입력 방식? → n12 음성 입력 / n13 텍스트 입력
  *   → n15 어르신·입력 시점 선택 → n16 저장 성공?
  *
  * 유저플로우는 n7 · n9 · n13 을 각각 page 노드로 그렸지만 **라우트는 하나**로 두고 단계만 넘긴다.
  * 큰 버튼 기준으로 주소를 다섯 개로 쪼개면 뒤로가기가 단계마다 걸려 한 손 입력이 되지 않는다.
  *
- * 텍스트(#6)·체크(#7) 방식을 만든다. 음성(#8)은 n11 분기 자리만 두었고,
+ * 텍스트(#6)·음성(#8)·체크(#7) 방식을 만들었다.
  * 저장 실패 시 임시 저장(n17)은 #9 범위다.
  *
  * 저장이 끝나면 이어서 구조화를 부른다(#11). 저장 안에서 하지 않는 이유는
@@ -39,7 +44,7 @@ import {
  * 그 사실이 안내에서 흐려지면 안 된다.
  */
 
-type Step = 'proxy' | 'source' | 'method' | 'text' | 'check' | 'target' | 'done'
+type Step = 'proxy' | 'source' | 'method' | 'text' | 'voice' | 'check' | 'target' | 'done'
 
 export function HandoverCreatePage() {
   const { session } = useSession()
@@ -111,8 +116,14 @@ export function HandoverCreatePage() {
   }
 
   const pickMethod = (inputMethod: InputMethod) => {
+    // 완료 조건 — 음성 인식 미지원 브라우저에서는 텍스트로 대체 안내한다.
+    if (inputMethod === 'VOICE' && !isSpeechRecognitionSupported()) {
+      setErrors([])
+      setNotice('이 브라우저는 음성 인식을 지원하지 않습니다. 텍스트로 남겨 주세요.')
+      return
+    }
     update({ inputMethod })
-    setStep(inputMethod === 'CHECK' ? 'check' : 'text')
+    setStep(inputMethod === 'VOICE' ? 'voice' : inputMethod === 'CHECK' ? 'check' : 'text')
   }
 
   const goBack = () => {
@@ -126,12 +137,12 @@ export function HandoverCreatePage() {
       setStep(draft.proxyInput ? 'source' : 'proxy')
       return
     }
-    if (step === 'text' || step === 'check') {
+    if (step === 'text' || step === 'voice' || step === 'check') {
       setStep('method')
       return
     }
     if (step === 'target') {
-      setStep(draft.inputMethod === 'CHECK' ? 'check' : 'text')
+      setStep(draft.inputMethod === 'VOICE' ? 'voice' : draft.inputMethod === 'CHECK' ? 'check' : 'text')
     }
   }
 
@@ -209,6 +220,13 @@ export function HandoverCreatePage() {
       {step === 'method' && <MethodStep picked={draft.inputMethod} onPick={pickMethod} />}
       {step === 'text' && (
         <TextStep
+          value={draft.rawText}
+          onChange={(rawText) => update({ rawText })}
+          onNext={goToTarget}
+        />
+      )}
+      {step === 'voice' && (
+        <VoiceStep
           value={draft.rawText}
           onChange={(rawText) => update({ rawText })}
           onNext={goToTarget}
@@ -390,47 +408,84 @@ function TextStep({
 }
 
 /**
- * n14 — 체크 입력. 항목은 Manyfast 와이어프레임 "체크 입력 화면" 그대로다(`checkItems.ts`).
- * 타이핑도 말하기도 없이 자주 쓰는 항목만 눌러서 남기는, 세 방식 중 가장 저부담 경로다.
+ * n12 — 음성 입력. 이 화면에 있는 동안만 듣는다.
+ *
+ * **상시 녹음 금지**(Manyfast F-YJJJUX rules)를 이 컴포넌트가 직접 지킨다 — 언마운트되면
+ * (뒤로가기·다음 스텝 이동 어느 쪽이든) `useEffect` cleanup에서 반드시 `stop()`을 부른다.
+ * 지원 여부는 `pickMethod`에서 이미 걸러 이 화면은 지원하는 브라우저에서만 뜬다.
  */
-function CheckStep({
-  checkedItems,
+function VoiceStep({
+  value,
   onChange,
   onNext,
 }: {
-  checkedItems: readonly string[]
-  onChange: (checkedItems: string[]) => void
+  value: string
+  onChange: (value: string) => void
   onNext: () => void
 }) {
-  const toggle = (value: string) => {
-    onChange(
-      checkedItems.includes(value)
-        ? checkedItems.filter((item) => item !== value)
-        : [...checkedItems, value],
+  const [listening, setListening] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+  const recognizerRef = useRef<SpeechRecognizer | null>(null)
+
+  useEffect(() => {
+    return () => {
+      recognizerRef.current?.stop()
+    }
+  }, [])
+
+  const toggleListening = () => {
+    if (listening) {
+      recognizerRef.current?.stop()
+      setListening(false)
+      return
+    }
+    const recognizer = createSpeechRecognizer(
+      (transcript) => onChange(transcript),
+      () => setListening(false),
+      (message) => {
+        setNotice(message)
+        setListening(false)
+      },
     )
+    recognizerRef.current = recognizer
+    recognizer?.start()
+    setListening(true)
+    setNotice(null)
   }
 
   return (
-    <section aria-labelledby="check-heading" className="flex flex-col gap-5">
-      <h2 id="check-heading" className="text-2xl font-bold text-slate-900">
-        해당하는 항목을 골라 주세요
+    <section aria-labelledby="voice-heading" className="flex flex-col gap-5">
+      <h2 id="voice-heading" className="text-2xl font-bold text-slate-900">
+        말씀해 주세요
       </h2>
-      <p className="text-xl text-slate-600">여러 개를 고를 수 있습니다.</p>
-      <ul className="flex flex-col gap-3">
-        {CHECK_ITEMS.map((item) => (
-          <li key={item.value}>
-            <label className="flex min-h-16 cursor-pointer items-center gap-4 rounded-2xl border-2 border-slate-300 bg-white px-5 py-4 text-2xl font-semibold text-slate-900 has-[:checked]:border-teal-700 has-[:checked]:bg-teal-50">
-              <input
-                type="checkbox"
-                checked={checkedItems.includes(item.value)}
-                onChange={() => toggle(item.value)}
-                className="h-6 w-6 accent-teal-700"
-              />
-              {item.label}
-            </label>
-          </li>
-        ))}
-      </ul>
+      <p className="text-xl text-slate-600">
+        마이크를 누르고 말씀하시면 아래에 글로 남습니다. 다시 누르면 멈춥니다.
+      </p>
+
+      <BigButton tone={listening ? 'primary' : 'plain'} onClick={toggleListening}>
+        {listening ? '듣고 있어요 · 눌러서 멈추기' : '눌러서 말하기'}
+      </BigButton>
+
+      {notice !== null && (
+        <p className="rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4 text-xl text-amber-900">
+          {notice}
+        </p>
+      )}
+
+      <label htmlFor="voiceText" className="text-xl text-slate-600">
+        인식된 내용입니다. 다르면 고쳐 주세요.
+      </label>
+      <textarea
+        id="voiceText"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        rows={6}
+        maxLength={RAW_TEXT_MAX_LENGTH}
+        className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
+      />
+      <p className="text-lg text-slate-500">
+        {value.length} / {RAW_TEXT_MAX_LENGTH}자
+      </p>
       <BigButton onClick={onNext}>다음</BigButton>
     </section>
   )
@@ -599,5 +654,52 @@ function SavedNotice({
         현장 홈으로
       </BigButton>
     </main>
+  )
+}
+
+/**
+ * n14 — 체크 입력. 항목은 Manyfast 와이어프레임 "체크 입력 화면" 그대로다(`checkItems.ts`).
+ * 타이핑도 말하기도 없이 자주 쓰는 항목만 눌러서 남기는, 세 방식 중 가장 저부담 경로다.
+ */
+function CheckStep({
+  checkedItems,
+  onChange,
+  onNext,
+}: {
+  checkedItems: readonly string[]
+  onChange: (checkedItems: string[]) => void
+  onNext: () => void
+}) {
+  const toggle = (value: string) => {
+    onChange(
+      checkedItems.includes(value)
+        ? checkedItems.filter((item) => item !== value)
+        : [...checkedItems, value],
+    )
+  }
+
+  return (
+    <section aria-labelledby="check-heading" className="flex flex-col gap-5">
+      <h2 id="check-heading" className="text-2xl font-bold text-slate-900">
+        해당하는 항목을 골라 주세요
+      </h2>
+      <p className="text-xl text-slate-600">여러 개를 고를 수 있습니다.</p>
+      <ul className="flex flex-col gap-3">
+        {CHECK_ITEMS.map((item) => (
+          <li key={item.value}>
+            <label className="flex min-h-16 cursor-pointer items-center gap-4 rounded-2xl border-2 border-slate-300 bg-white px-5 py-4 text-2xl font-semibold text-slate-900 has-[:checked]:border-teal-700 has-[:checked]:bg-teal-50">
+              <input
+                type="checkbox"
+                checked={checkedItems.includes(item.value)}
+                onChange={() => toggle(item.value)}
+                className="h-6 w-6 accent-teal-700"
+              />
+              {item.label}
+            </label>
+          </li>
+        ))}
+      </ul>
+      <BigButton onClick={onNext}>다음</BigButton>
+    </section>
   )
 }
