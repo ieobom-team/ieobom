@@ -22,7 +22,10 @@ type PostOutcome = { status: number; body: unknown }
 
 let 저장_응답: PostOutcome
 let 목록_응답: PostOutcome
+let 구조화_응답: PostOutcome
 let 보낸_요청: HandoverCreateRequest[]
+/** 구조화를 요청한 인계 id. LLM 은 서버 뒤에 있으므로 여기서는 호출만 본다. */
+let 구조화_호출: number[]
 
 function json({ status, body }: PostOutcome) {
   return new Response(JSON.stringify(body), {
@@ -33,7 +36,12 @@ function json({ status, body }: PostOutcome) {
 
 beforeEach(() => {
   보낸_요청 = []
+  구조화_호출 = []
   목록_응답 = { status: 200, body: { careRecipients: 어르신들 } }
+  구조화_응답 = {
+    status: 201,
+    body: { handoverId: 12, createdCount: 2, discardedCount: 1, cards: [] },
+  }
   저장_응답 = {
     status: 201,
     body: {
@@ -55,6 +63,18 @@ beforeEach(() => {
     vi.fn((input: string, init?: RequestInit) => {
       if (input.includes('/api/care-recipients')) {
         return Promise.resolve(json(목록_응답))
+      }
+      // 정리 결과에서 목록 화면으로 넘어가는 경로만 본다. 목록 화면 자체는 #11 테스트가 본다.
+      if (input.includes('/api/handover-cards')) {
+        return Promise.resolve(
+          json({ status: 200, body: { date: '2026-08-11', recipients: [], unresolved: [] } }),
+        )
+      }
+      // `/api/handovers/{id}/cards` 가 저장 경로보다 먼저 걸려야 한다.
+      const 구조화 = /\/api\/handovers\/(\d+)\/cards$/.exec(input)
+      if (구조화 !== null) {
+        구조화_호출.push(Number(구조화[1]))
+        return Promise.resolve(json(구조화_응답))
       }
       if (input.includes('/api/handovers')) {
         보낸_요청.push(JSON.parse(String(init?.body)) as HandoverCreateRequest)
@@ -184,8 +204,66 @@ describe('텍스트 입력으로 등록 (n13 → n15 → n16)', () => {
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
     expect(await screen.findByRole('heading', { name: '저장했습니다' })).toBeInTheDocument()
-    expect(screen.getByText(/인계 카드 정리 단계로 넘어갔습니다/)).toBeInTheDocument()
+    expect(await screen.findByText(/인계 카드 2건으로 정리했습니다/)).toBeInTheDocument()
     expect(screen.getByText(/김말순 어르신/)).toBeInTheDocument()
+  })
+})
+
+/**
+ * 저장 뒤 구조화 호출. LLM 은 서버 뒤에 있어 여기서는 호출과 안내만 본다.
+ * 실제 스키마 강제와 근거 대조는 백엔드 테스트와 `./gradlew llmLiveTest` 가 본다.
+ */
+describe('인계 카드 정리로 넘기기 (n16 → n18)', () => {
+  it('저장한 인계 하나에 대해 구조화를 한 번만 부른다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await 직접_본_내용을_텍스트로(user, '점심을 거의 안 드셨어요.')
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    await screen.findByText(/인계 카드 2건으로 정리했습니다/)
+    expect(구조화_호출).toEqual([12])
+  })
+
+  it('근거를 찾지 못해 빠진 항목이 있으면 그 사실을 감추지 않는다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await 직접_본_내용을_텍스트로(user, '점심을 거의 안 드셨어요.')
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    expect(await screen.findByText(/1건은 카드로 만들지 않았습니다/)).toBeInTheDocument()
+  })
+
+  it('정리가 실패해도 저장됐다는 사실은 그대로 알린다', async () => {
+    구조화_응답 = {
+      status: 503,
+      body: { code: 'LLM_UNAVAILABLE', message: '정리에 실패했습니다.', fields: [] },
+    }
+    const user = userEvent.setup()
+    renderApp()
+
+    await 직접_본_내용을_텍스트로(user, '점심을 거의 안 드셨어요.')
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    expect(await screen.findByRole('heading', { name: '저장했습니다' })).toBeInTheDocument()
+    expect(await screen.findByText(/다시 쓰지 않으셔도 됩니다/)).toBeInTheDocument()
+  })
+
+  it('정리 결과에서 인계 카드 목록으로 갈 수 있다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await 직접_본_내용을_텍스트로(user, '점심을 거의 안 드셨어요.')
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    await user.click(await screen.findByRole('button', { name: '인계 카드 보기' }))
+
+    expect(await screen.findByRole('heading', { name: '인계 카드' })).toBeInTheDocument()
   })
 })
 

@@ -1,6 +1,9 @@
 import { Navigate, Route, Routes } from 'react-router'
 import { AdminHomePage } from '../features/admin/AdminHomePage'
 import { FieldHomePage } from '../features/field/FieldHomePage'
+import { HandoverCardDetailPage } from '../features/handover-card/HandoverCardDetailPage'
+import { HandoverCardListPage } from '../features/handover-card/HandoverCardListPage'
+import { UnresolvedCardsPage } from '../features/handover-card/UnresolvedCardsPage'
 import { HandoverCreatePage } from '../features/handover/HandoverCreatePage'
 import { EntrySelectPage } from '../features/session/EntrySelectPage'
 import { RequireSession } from './RequireSession'
@@ -11,6 +14,11 @@ import { RequireSession } from './RequireSession'
  *   n1 앱 최초 실행 → n2 역할·본인 식별 선택(`/`)
  *   → n3 선택 역할? → n4 현장 근무자 홈(`/field`) / n5 관리자 홈(`/admin`)
  *   → n6 특이사항 남기기 → n7~n16 입력(`/field/handovers/new`)
+ *   → n18 인계 카드 목록(`/handover-cards`) → n21 상세 / n24 검토 필요 항목
+ *
+ * 인계 카드는 `/field` 밑에 두지 않는다. 현장 근무자 홈(n4 → n18)에서도 들어오지만
+ * 관리자 하원 미처리 브리핑(n49 → n21)에서도 같은 상세로 들어오기 때문이다.
+ * 진입 선택은 요구하되 역할로 가르지 않는다. (Manyfast F-SNBVHR permissions)
  */
 export function AppRoutes() {
   return (
@@ -24,6 +32,12 @@ export function AppRoutes() {
 
       <Route element={<RequireSession role="MANAGER" />}>
         <Route path="/admin" element={<AdminHomePage />} />
+      </Route>
+
+      <Route element={<RequireSession />}>
+        <Route path="/handover-cards" element={<HandoverCardListPage />} />
+        <Route path="/handover-cards/unresolved" element={<UnresolvedCardsPage />} />
+        <Route path="/handover-cards/:cardId" element={<HandoverCardDetailPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
