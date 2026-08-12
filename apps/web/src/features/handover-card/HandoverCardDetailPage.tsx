@@ -65,8 +65,17 @@ export function HandoverCardDetailPage() {
               </p>
             )}
 
+            {card.careRecipientId !== null && card.nextAction !== null && (
+              <Link
+                to={`/handover-cards/${card.id}/tasks/new`}
+                className="block rounded-2xl bg-teal-700 px-6 py-5 text-center text-2xl font-semibold text-white hover:bg-teal-800"
+              >
+                다음 행동을 후속 업무로 배정하기
+              </Link>
+            )}
+
             <p className="text-lg text-slate-500">
-              카드 수정과 검토 완료 처리, 후속 업무 배정, 문구 복사는 다음 화면에서 붙습니다.
+              카드 수정과 검토 완료 처리, 문구 복사는 다음 화면에서 붙습니다.
             </p>
           </>
         )}
