@@ -31,6 +31,42 @@ ieobom/
 
 모노레포 하나로 간다. 제출 시 프론트/백 두 칸에 같은 URL을 넣는다. ([submission.md](./submission.md))
 
+## 배포 배치
+
+**프론트와 API 를 같은 출처(same-origin)에 둔다.** 리버스 프록시 하나가 앞에 서고,
+그 뒤에 정적 산출물과 API 가 붙는다. 브라우저 기준으로는 주소가 하나다.
+
+```
+사용자 → https://<서브도메인>.duckdns.org
+           ↓
+        Caddy (HTTPS 자동 발급·갱신)
+        ├─ /      → apps/web 빌드 산출물 (정적)
+        └─ /api   → Spring Boot :8080
+                      ↓
+                   MySQL 8.4 (같은 compose, 볼륨)
+```
+
+VM 한 대에 `docker compose` 로 Caddy · API · MySQL 을 함께 올린다.
+배포 구성 파일(Dockerfile · compose · Caddyfile)은 [#19](https://github.com/ieobom-team/ieobom/issues/19)에서 만든다.
+
+### 왜 같은 출처인가
+
+- **CORS 설정이 필요 없다.** 백엔드에 CORS 코드가 한 줄도 없고([#37](https://github.com/ieobom-team/ieobom/issues/37)),
+  그 상태 그대로 배포된다. 개발 편의로 열어 둔 와일드카드가 배포까지 따라갈 위험 자체가 없다.
+- **개발과 배포의 모양이 같다.** 개발은 `apps/web/vite.config.ts` 의 `/api` 프록시가,
+  배포는 Caddy 가 같은 일을 한다. 양쪽 다 브라우저에서 같은 출처다.
+- **`VITE_API_BASE_URL` 을 배포에서 주입하지 않는다.** 값이 비면 `shared/api/client.ts` 가
+  상대경로 `/api` 로 호출한다. 배포 주소를 번들에 굳혀 넣지 않아도 된다. ([development.md](./development.md#1-환경변수))
+- **HTTPS 가 필요하다.** 음성 입력(`features/handover/speechRecognition.ts` 의 `webkitSpeechRecognition`)은
+  secure context 에서만 동작한다. 공인 IP 에 `http://` 로 붙이면 배포에서 음성 입력이 그냥 실패한다.
+  Caddy 가 Let's Encrypt 인증서를 자동으로 처리한다.
+- **제출 링크가 서버에 묶이지 않는다.** 도메인을 우리가 통제하므로 서버를 옮기거나 IP 가 바뀌어도
+  README 의 링크는 그대로다. 코드 수정이 아니라 DNS 변경으로 대응한다.
+  (제출 마감 후 코드 수정은 탈락 사유다. [submission.md](./submission.md))
+
+다른 출처에 두고 백엔드에 CORS 를 여는 안은 채택하지 않았다.
+허용 출처 환경변수 · 프리플라이트 · 와일드카드 관리가 따라붙는데, 남은 기간에 늘릴 표면이 아니다.
+
 ## 백엔드 패키지
 
 `com.ieobom.api` 아래 **도메인별로** 나눈다. 계층(controller/service/repository)이 아니라 도메인이 1차 기준이다.
