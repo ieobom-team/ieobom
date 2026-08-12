@@ -1,7 +1,9 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
+import { createQueryClient } from '../shared/api/queryClient'
 import { SessionProvider } from '../features/session/SessionProvider'
 import { loadSession, saveSession } from '../features/session/sessionStorage'
 import { STAFF_DIRECTORY } from '../features/session/staffDirectory'
@@ -11,11 +13,13 @@ const 김하늘 = STAFF_DIRECTORY[0]
 
 function renderApp(initialPath = '/') {
   return render(
-    <SessionProvider>
-      <MemoryRouter initialEntries={[initialPath]}>
-        <AppRoutes />
-      </MemoryRouter>
-    </SessionProvider>,
+    <QueryClientProvider client={createQueryClient()}>
+      <SessionProvider>
+        <MemoryRouter initialEntries={[initialPath]}>
+          <AppRoutes />
+        </MemoryRouter>
+      </SessionProvider>
+    </QueryClientProvider>,
   )
 }
 

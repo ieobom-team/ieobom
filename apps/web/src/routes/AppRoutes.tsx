@@ -5,6 +5,7 @@ import { HandoverCardDetailPage } from '../features/handover-card/HandoverCardDe
 import { HandoverCardListPage } from '../features/handover-card/HandoverCardListPage'
 import { UnresolvedCardsPage } from '../features/handover-card/UnresolvedCardsPage'
 import { HandoverCreatePage } from '../features/handover/HandoverCreatePage'
+import { OfflineQueueSync } from '../features/handover/OfflineQueueSync'
 import { EntrySelectPage } from '../features/session/EntrySelectPage'
 import { TaskAssignPage } from '../features/task/TaskAssignPage'
 import { RequireSession } from './RequireSession'
@@ -23,26 +24,30 @@ import { RequireSession } from './RequireSession'
  */
 export function AppRoutes() {
   return (
-    <Routes>
-      <Route path="/" element={<EntrySelectPage />} />
+    <>
+      {/* 화면과 무관하게 한 번만 떠서 대기 중인 인계를 연결 회복 시 다시 보낸다. (#9) */}
+      <OfflineQueueSync />
+      <Routes>
+        <Route path="/" element={<EntrySelectPage />} />
 
-      <Route element={<RequireSession role="FIELD_WORKER" />}>
-        <Route path="/field" element={<FieldHomePage />} />
-        <Route path="/field/handovers/new" element={<HandoverCreatePage />} />
-      </Route>
+        <Route element={<RequireSession role="FIELD_WORKER" />}>
+          <Route path="/field" element={<FieldHomePage />} />
+          <Route path="/field/handovers/new" element={<HandoverCreatePage />} />
+        </Route>
 
-      <Route element={<RequireSession role="MANAGER" />}>
-        <Route path="/admin" element={<AdminHomePage />} />
-      </Route>
+        <Route element={<RequireSession role="MANAGER" />}>
+          <Route path="/admin" element={<AdminHomePage />} />
+        </Route>
 
-      <Route element={<RequireSession />}>
-        <Route path="/handover-cards" element={<HandoverCardListPage />} />
-        <Route path="/handover-cards/unresolved" element={<UnresolvedCardsPage />} />
-        <Route path="/handover-cards/:cardId" element={<HandoverCardDetailPage />} />
-        <Route path="/handover-cards/:cardId/tasks/new" element={<TaskAssignPage />} />
-      </Route>
+        <Route element={<RequireSession />}>
+          <Route path="/handover-cards" element={<HandoverCardListPage />} />
+          <Route path="/handover-cards/unresolved" element={<UnresolvedCardsPage />} />
+          <Route path="/handover-cards/:cardId" element={<HandoverCardDetailPage />} />
+          <Route path="/handover-cards/:cardId/tasks/new" element={<TaskAssignPage />} />
+        </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   )
 }

@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router'
 import { BigButton } from '../../shared/ui/BigButton'
+import { useOfflineQueue } from '../handover/useOfflineQueue'
 import { SessionHeader } from '../session/SessionHeader'
 
 /**
@@ -9,12 +10,21 @@ import { SessionHeader } from '../session/SessionHeader'
  */
 export function FieldHomePage() {
   const navigate = useNavigate()
+  const offlineQueue = useOfflineQueue()
+  const queuedCount = offlineQueue.data?.length ?? 0
 
   return (
     <div className="min-h-svh bg-slate-50">
       <SessionHeader />
       <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-5 py-8">
         <h1 className="text-3xl font-bold text-slate-900">현장 홈</h1>
+
+        {/* n17 — 재전송 대기 중임을 다른 화면에서도 잊히지 않게 보여 준다. (Manyfast F-YJJJUX exceptions) */}
+        {queuedCount > 0 && (
+          <p className="rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4 text-xl text-amber-900">
+            연결을 기다리는 인계 {queuedCount}건이 있습니다. 연결되면 자동으로 보냅니다.
+          </p>
+        )}
 
         <BigButton onClick={() => navigate('/field/handovers/new')}>
           <span className="block">특이사항 남기기</span>
