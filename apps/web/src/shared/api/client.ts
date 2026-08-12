@@ -30,8 +30,9 @@ export class ApiError extends Error {
 /**
  * 연결 자체가 실패했을 때 쓰는 코드.
  *
- * 오프라인 임시 저장·자동 재전송은 아직 없다(#9). 지금은 입력한 내용을 화면에 남긴 채
- * 다시 시도할 수 있다고만 알린다. 돌봄 중인 근무자에게 재입력을 요구하지 않기 위해서다.
+ * 인계 저장 화면은 이 코드를 보면 오류로 끝내지 않고 대기열에 넣은 뒤 연결이 회복되면
+ * 자동으로 다시 보낸다(`features/handover/offlineQueue.ts`, `OfflineQueueSync.tsx`).
+ * 돌봄 중인 근무자에게 재입력을 요구하지 않기 위해서다.
  */
 export const NETWORK_UNAVAILABLE = 'NETWORK_UNAVAILABLE'
 

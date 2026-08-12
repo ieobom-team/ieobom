@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ApiError, type ApiFieldError } from '../../shared/api/client'
+import { ApiError, NETWORK_UNAVAILABLE, type ApiFieldError } from '../../shared/api/client'
 import { BigButton } from '../../shared/ui/BigButton'
 import {
   structureHandover,
@@ -13,6 +13,7 @@ import { createHandover, fetchCareRecipients, type CareRecipient } from './hando
 import { INFO_SOURCES, infoSourceLabel, type InfoSource } from './infoSource'
 import { CHECK_ITEMS } from './checkItems'
 import { INPUT_METHODS, type InputMethod } from './inputMethod'
+import { enqueue, OFFLINE_QUEUE_KEY } from './offlineQueue'
 import {
   createSpeechRecognizer,
   isSpeechRecognitionSupported,
@@ -36,15 +37,15 @@ import {
  * 유저플로우는 n7 · n9 · n13 을 각각 page 노드로 그렸지만 **라우트는 하나**로 두고 단계만 넘긴다.
  * 큰 버튼 기준으로 주소를 다섯 개로 쪼개면 뒤로가기가 단계마다 걸려 한 손 입력이 되지 않는다.
  *
- * 텍스트(#6)·음성(#8)·체크(#7) 방식을 만들었다.
- * 저장 실패 시 임시 저장(n17)은 #9 범위다.
+ * 텍스트(#6)·음성(#8)·체크(#7) 방식을 만들었다. 저장 중 연결이 끊기면 대기열에 넣고
+ * 연결이 회복되면 자동으로 다시 보낸다(n17, #9) — `offlineQueue.ts` · `OfflineQueueSync.tsx`.
  *
  * 저장이 끝나면 이어서 구조화를 부른다(#11). 저장 안에서 하지 않는 이유는
  * `docs/contracts/handover-card-schema.md` 에 있다. 구조화가 실패해도 **저장은 이미 끝나 있고**,
  * 그 사실이 안내에서 흐려지면 안 된다.
  */
 
-type Step = 'proxy' | 'source' | 'method' | 'text' | 'voice' | 'check' | 'target' | 'done'
+type Step = 'proxy' | 'source' | 'method' | 'text' | 'voice' | 'check' | 'target' | 'done' | 'queued'
 
 export function HandoverCreatePage() {
   const { session } = useSession()
@@ -79,6 +80,16 @@ export function HandoverCreatePage() {
       if (!(error instanceof ApiError)) {
         setErrors([])
         setNotice('저장하지 못했습니다. 입력한 내용은 그대로 있으니 다시 눌러 주세요.')
+        return
+      }
+      // 연결이 끊긴 것뿐이면 실패로 끝내지 않는다. 대기열에 넣고 회복되면 자동으로 다시 보낸다.
+      // (Manyfast F-YJJJUX exceptions — 재입력을 요구하지 않는다)
+      if (error.code === NETWORK_UNAVAILABLE) {
+        enqueue(toCreateRequest(draft, reporterName))
+        queryClient.invalidateQueries({ queryKey: OFFLINE_QUEUE_KEY })
+        setErrors([])
+        setNotice(null)
+        setStep('queued')
         return
       }
       if (error.fields.length > 0) {
@@ -195,6 +206,10 @@ export function HandoverCreatePage() {
         onAnother={startAnother}
       />
     )
+  }
+
+  if (step === 'queued') {
+    return <QueuedNotice onAnother={startAnother} />
   }
 
   return (
@@ -652,6 +667,36 @@ function SavedNotice({
       </BigButton>
       <BigButton tone="plain" onClick={() => navigate('/field')}>
         현장 홈으로
+      </BigButton>
+    </main>
+  )
+}
+
+/**
+ * n17 — 저장 실패가 아니라 임시 저장 안내다. (Manyfast F-YJJJUX exceptions)
+ *
+ * **재입력을 요구하지 않는다.** 그래서 "다시 시도" 버튼을 두지 않는다 — 이미 대기열에
+ * 들어갔고, 연결이 회복되면 `OfflineQueueSync`가 알아서 다시 보낸다. 여기서 할 일은
+ * 그 사실을 안심시키고 다음으로 넘어가게 하는 것뿐이다.
+ */
+function QueuedNotice({ onAnother }: { onAnother: () => void }) {
+  const navigate = useNavigate()
+
+  return (
+    <main className="mx-auto flex min-h-svh w-full max-w-2xl flex-col gap-6 px-5 py-8">
+      <section role="status" className="rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-6">
+        <h1 className="text-3xl font-bold text-amber-900">기기에 임시 저장했습니다</h1>
+        <p className="mt-3 text-2xl text-amber-900">
+          지금은 연결이 안 돼 보내지 못했지만, 입력하신 내용은 안전하게 남아 있습니다.
+        </p>
+        <p className="mt-2 text-xl text-amber-800">
+          연결이 회복되면 자동으로 다시 보내 드립니다. 다시 입력하지 않으셔도 됩니다.
+        </p>
+      </section>
+
+      <BigButton onClick={() => navigate('/field')}>현장 홈으로</BigButton>
+      <BigButton tone="plain" onClick={onAnother}>
+        하나 더 남기기
       </BigButton>
     </main>
   )

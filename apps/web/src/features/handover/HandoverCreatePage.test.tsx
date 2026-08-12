@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { QueryClientProvider } from '@tanstack/react-query'
@@ -26,6 +26,8 @@ let 구조화_응답: PostOutcome
 let 보낸_요청: HandoverCreateRequest[]
 /** 구조화를 요청한 인계 id. LLM 은 서버 뒤에 있으므로 여기서는 호출만 본다. */
 let 구조화_호출: number[]
+/** 저장 호출 자체가 연결 실패로 끝나야 하는 테스트에서 켠다. (#9) */
+let 네트워크_끊김: boolean
 
 function json({ status, body }: PostOutcome) {
   return new Response(JSON.stringify(body), {
@@ -37,6 +39,7 @@ function json({ status, body }: PostOutcome) {
 beforeEach(() => {
   보낸_요청 = []
   구조화_호출 = []
+  네트워크_끊김 = false
   목록_응답 = { status: 200, body: { careRecipients: 어르신들 } }
   구조화_응답 = {
     status: 201,
@@ -77,6 +80,9 @@ beforeEach(() => {
         return Promise.resolve(json(구조화_응답))
       }
       if (input.includes('/api/handovers')) {
+        if (네트워크_끊김) {
+          return Promise.reject(new TypeError('Failed to fetch'))
+        }
         보낸_요청.push(JSON.parse(String(init?.body)) as HandoverCreateRequest)
         return Promise.resolve(json(저장_응답))
       }
@@ -206,6 +212,57 @@ describe('텍스트 입력으로 등록 (n13 → n15 → n16)', () => {
     expect(await screen.findByRole('heading', { name: '저장했습니다' })).toBeInTheDocument()
     expect(await screen.findByText(/인계 카드 2건으로 정리했습니다/)).toBeInTheDocument()
     expect(screen.getByText(/김말순 어르신/)).toBeInTheDocument()
+  })
+})
+
+describe('저장 중 연결 끊김 — 임시 저장과 자동 재전송 (n16 → n17, #9)', () => {
+  it('연결이 안 되면 실패로 끝내지 않고 기기에 임시 저장했다고 안내한다', async () => {
+    네트워크_끊김 = true
+    const user = userEvent.setup()
+    renderApp()
+
+    await 직접_본_내용을_텍스트로(user, '점심을 거의 안 드셨어요.')
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    expect(await screen.findByRole('heading', { name: '기기에 임시 저장했습니다' })).toBeInTheDocument()
+    expect(screen.getByText(/다시 입력하지 않으셔도 됩니다/)).toBeInTheDocument()
+    // 실패로 끝나지 않았으므로 재입력을 요구하는 오류 화면(보완할 항목)은 뜨지 않는다.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    // 서버에는 실제로 닿지 않았다.
+    expect(보낸_요청).toHaveLength(0)
+  })
+
+  it('현장 홈으로 돌아가면 대기 중인 건수가 보인다', async () => {
+    네트워크_끊김 = true
+    const user = userEvent.setup()
+    renderApp()
+
+    await 직접_본_내용을_텍스트로(user, '점심을 거의 안 드셨어요.')
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+    await screen.findByRole('heading', { name: '기기에 임시 저장했습니다' })
+
+    await user.click(screen.getByRole('button', { name: '현장 홈으로' }))
+
+    expect(await screen.findByText(/연결을 기다리는 인계 1건/)).toBeInTheDocument()
+  })
+
+  it('연결이 회복되면 다시 저장하지 않아도 자동으로 전송된다', async () => {
+    네트워크_끊김 = true
+    const user = userEvent.setup()
+    renderApp()
+
+    await 직접_본_내용을_텍스트로(user, '점심을 거의 안 드셨어요.')
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+    await screen.findByRole('heading', { name: '기기에 임시 저장했습니다' })
+
+    네트워크_끊김 = false
+    window.dispatchEvent(new Event('online'))
+
+    await waitFor(() => expect(보낸_요청).toHaveLength(1))
+    expect(보낸_요청[0].rawText).toBe('점심을 거의 안 드셨어요.')
   })
 })
 
