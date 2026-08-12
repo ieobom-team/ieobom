@@ -122,14 +122,14 @@ describe('현장 홈에서 들어오기', () => {
 })
 
 describe('입력 방식 선택 (n11)', () => {
-  it('세 가지 방식이 모두 보이고 지금 쓸 수 있는 것은 텍스트뿐이다', async () => {
+  it('세 가지 방식이 모두 보이고 체크만 아직 쓸 수 없다', async () => {
     const user = userEvent.setup()
     renderApp()
 
     await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
 
     expect(screen.getByRole('button', { name: /텍스트로 쓰기/ })).toBeEnabled()
-    expect(screen.getByRole('button', { name: /말로 남기기/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /말로 남기기/ })).toBeEnabled()
     expect(screen.getByRole('button', { name: /체크로 고르기/ })).toBeDisabled()
   })
 })
@@ -206,6 +206,89 @@ describe('텍스트 입력으로 등록 (n13 → n15 → n16)', () => {
     expect(await screen.findByRole('heading', { name: '저장했습니다' })).toBeInTheDocument()
     expect(await screen.findByText(/인계 카드 2건으로 정리했습니다/)).toBeInTheDocument()
     expect(screen.getByText(/김말순 어르신/)).toBeInTheDocument()
+  })
+})
+
+describe('음성 입력으로 등록 (n12 → n15 → n16)', () => {
+  class 가짜_인식기 {
+    onresult: ((event: unknown) => void) | null = null
+    onend: (() => void) | null = null
+    onerror: ((event: unknown) => void) | null = null
+    lang = ''
+    continuous = false
+    interimResults = false
+    start = vi.fn()
+    stop = vi.fn()
+  }
+  let 인식기: 가짜_인식기
+
+  beforeEach(() => {
+    인식기 = new 가짜_인식기()
+    // 화살표 함수는 `new`로 부를 수 없어 생성자 자리에는 일반 함수를 쓴다.
+    vi.stubGlobal('webkitSpeechRecognition', function FakeCtor() {
+      return 인식기
+    })
+  })
+
+  it('마이크를 눌러 말하면 인식된 내용이 글로 남고, 고쳐서 음성 방식으로 저장된다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
+    await user.click(screen.getByRole('button', { name: /말로 남기기/ }))
+    await user.click(screen.getByRole('button', { name: /눌러서 말하기/ }))
+
+    인식기.onresult?.({
+      results: [[{ transcript: '점심을 거의 안 드셨어요' }]],
+    })
+
+    const textarea = await screen.findByLabelText(/인식된 내용/)
+    expect(textarea).toHaveValue('점심을 거의 안 드셨어요')
+
+    await user.click(screen.getByRole('button', { name: '다음' }))
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    await screen.findByRole('heading', { name: '저장했습니다' })
+    expect(보낸_요청[0]).toMatchObject({ inputMethod: 'VOICE', rawText: '점심을 거의 안 드셨어요' })
+  })
+
+  it('화면을 벗어나면(뒤로가기) 인식을 멈춘다 — 상시 녹음 금지', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
+    await user.click(screen.getByRole('button', { name: /말로 남기기/ }))
+    await user.click(screen.getByRole('button', { name: /눌러서 말하기/ }))
+    await user.click(screen.getByRole('button', { name: '이전' }))
+
+    expect(인식기.stop).toHaveBeenCalled()
+  })
+
+  it('마이크 권한이 없으면 안내하고 듣기를 멈춘 상태로 둔다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
+    await user.click(screen.getByRole('button', { name: /말로 남기기/ }))
+    await user.click(screen.getByRole('button', { name: /눌러서 말하기/ }))
+    인식기.onerror?.({ error: 'not-allowed' })
+
+    expect(await screen.findByText(/마이크 권한/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /눌러서 말하기/ })).toBeInTheDocument()
+  })
+})
+
+describe('음성 인식 미지원 브라우저 (n11)', () => {
+  it('말로 남기기를 눌러도 화면을 옮기지 않고 텍스트로 남기라고 안내한다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
+    await user.click(screen.getByRole('button', { name: /말로 남기기/ }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('텍스트로 남겨')
+    expect(screen.getByRole('heading', { name: /어떻게 남기시겠어요/ })).toBeInTheDocument()
   })
 })
 
