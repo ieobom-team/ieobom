@@ -1,9 +1,9 @@
 /**
  * 입력 방식 — 유저플로우 n11 분기.
  *
- * 세 방식을 **모두 화면에 보여 준다.** 이번 Issue(#6)에서 만드는 것은 텍스트뿐이지만,
- * 나머지 둘을 목록에서 빼 버리면 "입력 방식을 시각적으로 명확히 구분한다"는 display 슬롯이 사라지고
- * 나중에 붙일 때 화면 구조가 통째로 바뀐다. 그래서 자리만 두고 아직 못 쓴다고 알린다.
+ * 세 방식을 **모두 화면에 보여 준다.** #6(텍스트)·#7(체크)은 만들었고, 음성(#8)만 아직 자리만
+ * 두고 있다. 목록에서 빼 버리면 "입력 방식을 시각적으로 명확히 구분한다"는 display 슬롯이
+ * 사라지고 나중에 붙일 때 화면 구조가 통째로 바뀐다.
  */
 export type InputMethod = 'VOICE' | 'TEXT' | 'CHECK'
 
@@ -34,8 +34,7 @@ export const INPUT_METHODS: readonly InputMethodOption[] = [
     value: 'CHECK',
     label: '체크로 고르기',
     summary: '자주 쓰는 항목을 눌러서 고릅니다',
-    ready: false,
-    plannedIn: '#7',
+    ready: true,
   },
 ]
 

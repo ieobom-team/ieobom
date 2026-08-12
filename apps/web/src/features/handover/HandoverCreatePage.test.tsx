@@ -122,15 +122,15 @@ describe('현장 홈에서 들어오기', () => {
 })
 
 describe('입력 방식 선택 (n11)', () => {
-  it('세 가지 방식이 모두 보이고 지금 쓸 수 있는 것은 텍스트뿐이다', async () => {
+  it('세 가지 방식이 모두 보이고 음성만 아직 쓸 수 없다', async () => {
     const user = userEvent.setup()
     renderApp()
 
     await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
 
     expect(screen.getByRole('button', { name: /텍스트로 쓰기/ })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /체크로 고르기/ })).toBeEnabled()
     expect(screen.getByRole('button', { name: /말로 남기기/ })).toBeDisabled()
-    expect(screen.getByRole('button', { name: /체크로 고르기/ })).toBeDisabled()
   })
 })
 
@@ -206,6 +206,55 @@ describe('텍스트 입력으로 등록 (n13 → n15 → n16)', () => {
     expect(await screen.findByRole('heading', { name: '저장했습니다' })).toBeInTheDocument()
     expect(await screen.findByText(/인계 카드 2건으로 정리했습니다/)).toBeInTheDocument()
     expect(screen.getByText(/김말순 어르신/)).toBeInTheDocument()
+  })
+})
+
+describe('체크 입력으로 등록 (n14 → n15 → n16)', () => {
+  it('고른 항목이 문장으로 합쳐져 체크 방식으로 저장된다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
+    await user.click(screen.getByRole('button', { name: /체크로 고르기/ }))
+    await user.click(screen.getByRole('checkbox', { name: /낙상 위험 행동 관찰/ }))
+    await user.click(screen.getByRole('checkbox', { name: /투약 거부 또는 누락/ }))
+    await user.click(screen.getByRole('button', { name: '다음' }))
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    await screen.findByRole('heading', { name: '저장했습니다' })
+    expect(보낸_요청[0]).toMatchObject({
+      inputMethod: 'CHECK',
+      rawText: '체크 항목: 낙상 위험 행동 관찰, 투약 거부 또는 누락',
+    })
+  })
+
+  it('고른 순서와 상관없이 화면에 보이는 순서로 문장을 만든다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
+    await user.click(screen.getByRole('button', { name: /체크로 고르기/ }))
+    await user.click(screen.getByRole('checkbox', { name: /투약 거부 또는 누락/ }))
+    await user.click(screen.getByRole('checkbox', { name: /낙상 위험 행동 관찰/ }))
+    await user.click(screen.getByRole('button', { name: '다음' }))
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    await screen.findByRole('heading', { name: '저장했습니다' })
+    expect(보낸_요청[0].rawText).toBe('체크 항목: 낙상 위험 행동 관찰, 투약 거부 또는 누락')
+  })
+
+  it('아무것도 고르지 않고 다음을 누르면 하나 이상 고르라고 안내한다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
+    await user.click(screen.getByRole('button', { name: /체크로 고르기/ }))
+    await user.click(screen.getByRole('button', { name: '다음' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('하나 이상 선택')
+    expect(보낸_요청).toHaveLength(0)
   })
 })
 
