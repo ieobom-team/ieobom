@@ -11,6 +11,7 @@ import { HANDOVER_CARDS_KEY } from '../handover-card/useHandoverCards'
 import { useSession } from '../session/sessionContext'
 import { createHandover, fetchCareRecipients, type CareRecipient } from './handoverApi'
 import { INFO_SOURCES, infoSourceLabel, type InfoSource } from './infoSource'
+import { CHECK_ITEMS } from './checkItems'
 import { INPUT_METHODS, type InputMethod } from './inputMethod'
 import {
   createSpeechRecognizer,
@@ -35,7 +36,7 @@ import {
  * 유저플로우는 n7 · n9 · n13 을 각각 page 노드로 그렸지만 **라우트는 하나**로 두고 단계만 넘긴다.
  * 큰 버튼 기준으로 주소를 다섯 개로 쪼개면 뒤로가기가 단계마다 걸려 한 손 입력이 되지 않는다.
  *
- * 텍스트(#6)·음성(#8) 방식을 만든다. 체크(#7)는 n11 분기 자리만 두었고,
+ * 텍스트(#6)·음성(#8)·체크(#7) 방식을 만들었다.
  * 저장 실패 시 임시 저장(n17)은 #9 범위다.
  *
  * 저장이 끝나면 이어서 구조화를 부른다(#11). 저장 안에서 하지 않는 이유는
@@ -43,7 +44,7 @@ import {
  * 그 사실이 안내에서 흐려지면 안 된다.
  */
 
-type Step = 'proxy' | 'source' | 'method' | 'text' | 'voice' | 'target' | 'done'
+type Step = 'proxy' | 'source' | 'method' | 'text' | 'voice' | 'check' | 'target' | 'done'
 
 export function HandoverCreatePage() {
   const { session } = useSession()
@@ -122,7 +123,7 @@ export function HandoverCreatePage() {
       return
     }
     update({ inputMethod })
-    setStep(inputMethod === 'VOICE' ? 'voice' : 'text')
+    setStep(inputMethod === 'VOICE' ? 'voice' : inputMethod === 'CHECK' ? 'check' : 'text')
   }
 
   const goBack = () => {
@@ -136,18 +137,27 @@ export function HandoverCreatePage() {
       setStep(draft.proxyInput ? 'source' : 'proxy')
       return
     }
-    if (step === 'text' || step === 'voice') {
+    if (step === 'text' || step === 'voice' || step === 'check') {
       setStep('method')
       return
     }
     if (step === 'target') {
-      setStep(draft.inputMethod === 'VOICE' ? 'voice' : 'text')
+      setStep(draft.inputMethod === 'VOICE' ? 'voice' : draft.inputMethod === 'CHECK' ? 'check' : 'text')
     }
   }
 
   const goToTarget = () => {
     if (draft.rawText.trim() === '') {
       setErrors([{ field: 'rawText', reason: '입력 내용을 남겨 주세요.' }])
+      return
+    }
+    setErrors([])
+    setStep('target')
+  }
+
+  const goToTargetFromCheck = () => {
+    if (draft.checkedItems.length === 0) {
+      setErrors([{ field: 'rawText', reason: '체크할 항목을 하나 이상 선택해 주세요.' }])
       return
     }
     setErrors([])
@@ -220,6 +230,13 @@ export function HandoverCreatePage() {
           value={draft.rawText}
           onChange={(rawText) => update({ rawText })}
           onNext={goToTarget}
+        />
+      )}
+      {step === 'check' && (
+        <CheckStep
+          checkedItems={draft.checkedItems}
+          onChange={(checkedItems) => update({ checkedItems })}
+          onNext={goToTargetFromCheck}
         />
       )}
       {step === 'target' && (
@@ -637,5 +654,52 @@ function SavedNotice({
         현장 홈으로
       </BigButton>
     </main>
+  )
+}
+
+/**
+ * n14 — 체크 입력. 항목은 Manyfast 와이어프레임 "체크 입력 화면" 그대로다(`checkItems.ts`).
+ * 타이핑도 말하기도 없이 자주 쓰는 항목만 눌러서 남기는, 세 방식 중 가장 저부담 경로다.
+ */
+function CheckStep({
+  checkedItems,
+  onChange,
+  onNext,
+}: {
+  checkedItems: readonly string[]
+  onChange: (checkedItems: string[]) => void
+  onNext: () => void
+}) {
+  const toggle = (value: string) => {
+    onChange(
+      checkedItems.includes(value)
+        ? checkedItems.filter((item) => item !== value)
+        : [...checkedItems, value],
+    )
+  }
+
+  return (
+    <section aria-labelledby="check-heading" className="flex flex-col gap-5">
+      <h2 id="check-heading" className="text-2xl font-bold text-slate-900">
+        해당하는 항목을 골라 주세요
+      </h2>
+      <p className="text-xl text-slate-600">여러 개를 고를 수 있습니다.</p>
+      <ul className="flex flex-col gap-3">
+        {CHECK_ITEMS.map((item) => (
+          <li key={item.value}>
+            <label className="flex min-h-16 cursor-pointer items-center gap-4 rounded-2xl border-2 border-slate-300 bg-white px-5 py-4 text-2xl font-semibold text-slate-900 has-[:checked]:border-teal-700 has-[:checked]:bg-teal-50">
+              <input
+                type="checkbox"
+                checked={checkedItems.includes(item.value)}
+                onChange={() => toggle(item.value)}
+                className="h-6 w-6 accent-teal-700"
+              />
+              {item.label}
+            </label>
+          </li>
+        ))}
+      </ul>
+      <BigButton onClick={onNext}>다음</BigButton>
+    </section>
   )
 }

@@ -17,6 +17,7 @@ function 채운_폼(patch: Partial<HandoverDraft> = {}): HandoverDraft {
     infoSource: null,
     inputMethod: 'TEXT',
     rawText: '점심 드시고 나서 오른쪽 다리를 계속 주무르셨어요.',
+    checkedItems: [],
     occurredAt: '2026-08-11T13:10',
     ...patch,
   }
@@ -71,6 +72,15 @@ describe('제출 전 검증', () => {
     expect(항목들(채운_폼({ occurredAt: '' }))).toContain('occurredAt')
     expect(항목들(채운_폼({ occurredAt: '어제 오후' }))).toContain('occurredAt')
   })
+
+  it('체크 방식은 원문 대신 고른 항목이 있는지를 본다', () => {
+    expect(
+      항목들(채운_폼({ inputMethod: 'CHECK', rawText: '', checkedItems: [] })),
+    ).toContain('rawText')
+    expect(
+      항목들(채운_폼({ inputMethod: 'CHECK', rawText: '', checkedItems: ['FALL_RISK'] })),
+    ).not.toContain('rawText')
+  })
 })
 
 describe('요청으로 바꾸기', () => {
@@ -103,6 +113,16 @@ describe('요청으로 바꾸기', () => {
 
   it('검증을 통과하지 않은 폼은 보내지 않는다', () => {
     expect(() => toCreateRequest(채운_폼({ careRecipientId: null }), 입력자)).toThrow()
+  })
+
+  it('체크 방식은 고른 항목을 문장으로 합쳐서 원문 자리에 보낸다', () => {
+    const request = toCreateRequest(
+      채운_폼({ inputMethod: 'CHECK', rawText: '', checkedItems: ['PAIN_COMPLAINT', 'OTHER'] }),
+      입력자,
+    )
+
+    expect(request.inputMethod).toBe('CHECK')
+    expect(request.rawText).toBe('체크 항목: 통증 호소 또는 불편 표현, 기타 특이사항')
   })
 })
 
