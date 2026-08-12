@@ -6,6 +6,7 @@ import { HandoverCardListPage } from '../features/handover-card/HandoverCardList
 import { UnresolvedCardsPage } from '../features/handover-card/UnresolvedCardsPage'
 import { HandoverCreatePage } from '../features/handover/HandoverCreatePage'
 import { EntrySelectPage } from '../features/session/EntrySelectPage'
+import { TaskAssignPage } from '../features/task/TaskAssignPage'
 import { RequireSession } from './RequireSession'
 
 /**
@@ -38,6 +39,7 @@ export function AppRoutes() {
         <Route path="/handover-cards" element={<HandoverCardListPage />} />
         <Route path="/handover-cards/unresolved" element={<UnresolvedCardsPage />} />
         <Route path="/handover-cards/:cardId" element={<HandoverCardDetailPage />} />
+        <Route path="/handover-cards/:cardId/tasks/new" element={<TaskAssignPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
