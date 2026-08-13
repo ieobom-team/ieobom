@@ -9,6 +9,9 @@
 | Docker | Desktop 또는 Engine | 로컬 MySQL 8.4 |
 | GitHub CLI | 최신 | `gh auth status`로 인증 확인 |
 
+> 💡 **빠른 로컬 실행 (DB + 백엔드 + 프론트엔드)**  
+> `./scripts/dev-run.sh` (Git Bash / Linux / macOS) 또는 `pwsh ./scripts/dev-run.ps1` (Windows)를 실행하면 한 번에 뜹니다. 접속은 `http://localhost:5173` 입니다.
+
 ## 1. 환경변수
 
 ```bash

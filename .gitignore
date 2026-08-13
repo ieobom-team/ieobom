@@ -26,6 +26,7 @@ out/
 # --- 에이전트 세션 파일 (개인 파일이므로 추적하지 않는다) ---
 .agent/current-task.md
 .claude/settings.local.json
+scratch/
 
 # --- IDE / OS ---
 .idea/
