@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ApiError, NETWORK_UNAVAILABLE, type ApiFieldError } from '../../shared/api/client'
 import { BigButton } from '../../shared/ui/BigButton'
 import {
@@ -8,8 +8,10 @@ import {
   type HandoverCardStructureResult,
 } from '../handover-card/handoverCardApi'
 import { HANDOVER_CARDS_KEY } from '../handover-card/useHandoverCards'
+import type { CareRecipient } from '../recipient/recipientApi'
+import { useActiveRecipients } from '../recipient/useRecipients'
 import { useSession } from '../session/sessionContext'
-import { createHandover, fetchCareRecipients, type CareRecipient } from './handoverApi'
+import { createHandover } from './handoverApi'
 import { INFO_SOURCES, infoSourceLabel, type InfoSource } from './infoSource'
 import { CHECK_ITEMS } from './checkItems'
 import { INPUT_METHODS, type InputMethod } from './inputMethod'
@@ -58,7 +60,8 @@ export function HandoverCreatePage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [savedName, setSavedName] = useState<string>('')
 
-  const recipients = useQuery({ queryKey: ['care-recipients'], queryFn: fetchCareRecipients })
+  // 새 입력의 대상 목록이므로 이용 종료한 어르신은 빠진다. (Manyfast F-LUDCWW rules)
+  const recipients = useActiveRecipients()
   const queryClient = useQueryClient()
 
   /** n16 저장 성공 → 인계 카드 정리. 결과는 안내에만 쓰고 입력 흐름을 막지 않는다. */

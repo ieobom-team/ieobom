@@ -4,12 +4,6 @@ import type { InputMethod } from './inputMethod'
 
 /** 계약은 `docs/contracts/handover-api.md` 에 있다. */
 
-export type CareRecipient = {
-  id: number
-  name: string
-  code: string
-}
-
 export type HandoverCreateRequest = {
   careRecipientId: number
   rawText: string
@@ -33,15 +27,6 @@ export type HandoverResponse = {
   proxyInput: boolean
   infoSource: InfoSource | null
   createdAt: string
-}
-
-type CareRecipientListResponse = {
-  careRecipients: CareRecipient[]
-}
-
-export async function fetchCareRecipients(): Promise<CareRecipient[]> {
-  const response = await apiFetch<CareRecipientListResponse>('/api/care-recipients')
-  return response.careRecipients
 }
 
 export function createHandover(request: HandoverCreateRequest): Promise<HandoverResponse> {

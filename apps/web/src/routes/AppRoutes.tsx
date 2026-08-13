@@ -8,6 +8,7 @@ import { HandoverCardListPage } from '../features/handover-card/HandoverCardList
 import { UnresolvedCardsPage } from '../features/handover-card/UnresolvedCardsPage'
 import { HandoverCreatePage } from '../features/handover/HandoverCreatePage'
 import { OfflineQueueSync } from '../features/handover/OfflineQueueSync'
+import { RecipientListPage } from '../features/recipient/RecipientListPage'
 import { EntrySelectPage } from '../features/session/EntrySelectPage'
 import { TaskAssignPage } from '../features/task/TaskAssignPage'
 import { TaskDetailPage } from '../features/task/TaskDetailPage'
@@ -42,6 +43,8 @@ export function AppRoutes() {
 
         <Route element={<RequireSession role="MANAGER" />}>
           <Route path="/admin" element={<AdminHomePage />} />
+          {/* 유저플로우 "AI 인계 도구 내비게이션 맵" n42 → n58 → n49 어르신 명단 화면 */}
+          <Route path="/admin/care-recipients" element={<RecipientListPage />} />
         </Route>
 
         <Route element={<RequireSession />}>
