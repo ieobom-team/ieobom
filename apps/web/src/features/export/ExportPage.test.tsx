@@ -84,12 +84,20 @@ function 묶음(patch: Partial<ExportBundle> = {}): ExportBundle {
 
 type Outcome = { status: number; body: unknown }
 
+/** 파일 응답은 JSON 이 아니다. 본문과 헤더를 그대로 두고 흉내 낸다. */
+type FileOutcome = { status: number; body: string; headers: Record<string, string> }
+
+const 파일이름 = '이어봄_전산기록문구_김말순_2026-08-11.txt'
+
 let 목록_응답: Outcome
 let 문구생성_응답: Outcome
 let 문구수정_응답: (text: string) => Outcome
 let 문구복사_응답: Outcome
 let 묶음목록_응답: Outcome
 let 묶음복사_응답: Outcome
+let 파일_응답: FileOutcome
+let 파일요청: string[]
+let 저장된파일: string[]
 
 beforeEach(() => {
   목록_응답 = {
@@ -119,6 +127,28 @@ beforeEach(() => {
     } satisfies ExportBundleList,
   }
   묶음복사_응답 = { status: 200, body: 묶음({ phrases: [기록문구({ copiedAt: '2026-08-11T15:12:00' })] }) }
+  파일_응답 = {
+    status: 200,
+    body: '12시 40분경 점심 식사량 저하 보이심. 죽으로 바꿔 드림.',
+    headers: {
+      'Content-Type': 'text/plain;charset=UTF-8',
+      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(파일이름)}`,
+    },
+  }
+  파일요청 = []
+
+  // 브라우저가 파일을 저장하는 자리. jsdom 에는 `createObjectURL` 이 없어 직접 채운다.
+  저장된파일 = []
+  Object.defineProperty(URL, 'createObjectURL', {
+    value: vi.fn(() => 'blob:test'),
+    configurable: true,
+  })
+  Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true })
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+    this: HTMLAnchorElement,
+  ) {
+    저장된파일.push(this.download)
+  })
 
   vi.stubGlobal(
     'fetch',
@@ -132,6 +162,18 @@ beforeEach(() => {
           }),
         )
 
+      // 묶음 파일 경로가 `/export-bundles` 를 품고 있어 묶음 조회보다 먼저 본다.
+      if (input.includes('/file?')) {
+        파일요청.push(input)
+        return Promise.resolve(
+          파일_응답.status === 200
+            ? new Response(파일_응답.body, { status: 200, headers: 파일_응답.headers })
+            : new Response(파일_응답.body, {
+                status: 파일_응답.status,
+                headers: { 'Content-Type': 'application/json' },
+              }),
+        )
+      }
       if (input.includes('/export-bundles/copy')) {
         return respond(묶음복사_응답)
       }
@@ -158,6 +200,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 /**
@@ -304,6 +347,74 @@ describe('기록·보호자 전달 문구 화면 (n36~n40)', () => {
     await user.click(within(bundleSection).getByRole('button', { name: '묶음 복사하기' }))
 
     expect(await within(bundleSection).findByText('묶음을 복사했습니다.')).toBeInTheDocument()
+  })
+
+  it('복사 옆에서 형식을 골라 파일로 내려받는다 (n41)', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    const recordHeading = await screen.findByRole('heading', { name: '전산 기록 문구' })
+    const section = recordHeading.closest('article') as HTMLElement
+
+    // 복사가 기본 동작으로 남아 있다.
+    expect(within(section).getByRole('button', { name: '복사하기' })).toBeInTheDocument()
+
+    await user.click(within(section).getByRole('button', { name: '텍스트 파일(.txt)' }))
+
+    await vi.waitFor(() => expect(저장된파일).toEqual([파일이름]))
+    expect(파일요청).toEqual(['/api/exports/7/file?format=txt'])
+  })
+
+  it('저장하지 않은 편집이 있으면 내려받지 못한다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    const recordHeading = await screen.findByRole('heading', { name: '전산 기록 문구' })
+    const section = recordHeading.closest('article') as HTMLElement
+
+    await user.type(within(section).getByRole('textbox'), '덧붙인 말')
+
+    expect(within(section).getByText('저장한 뒤 내려받을 수 있습니다')).toBeInTheDocument()
+    expect(within(section).getByRole('button', { name: '텍스트 파일(.txt)' })).toBeDisabled()
+    expect(파일요청).toEqual([])
+  })
+
+  it('어르신 당일 묶음도 유형별로 파일이 된다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    const bundleHeading = await screen.findByRole('heading', { name: '전산 기록 문구 묶음' })
+    const bundleSection = bundleHeading.closest('article') as HTMLElement
+
+    await user.click(within(bundleSection).getByRole('button', { name: '마크다운 파일(.md)' }))
+
+    await vi.waitFor(() =>
+      expect(파일요청).toEqual([
+        '/api/care-recipients/1/export-bundles/file?phraseType=RECORD&format=md',
+      ]),
+    )
+  })
+
+  it('서버가 내려받기를 거절하면 그 이유를 보여 준다', async () => {
+    파일_응답 = {
+      status: 409,
+      body: JSON.stringify({
+        code: 'EXPORT_BUNDLE_EMPTY',
+        message: '내려받을 문구가 없습니다. 카드를 검토 완료로 올린 뒤 다시 확인해 주세요.',
+        fields: [],
+      }),
+      headers: {},
+    }
+    const user = userEvent.setup()
+    renderApp()
+
+    const bundleHeading = await screen.findByRole('heading', { name: '전산 기록 문구 묶음' })
+    const bundleSection = bundleHeading.closest('article') as HTMLElement
+
+    await user.click(within(bundleSection).getByRole('button', { name: '텍스트 파일(.txt)' }))
+
+    expect(await within(bundleSection).findByText(/내려받을 문구가 없습니다/)).toBeInTheDocument()
+    expect(저장된파일).toEqual([])
   })
 
   it('문구를 만들 수 없는 카드는 안내만 보여 준다', async () => {

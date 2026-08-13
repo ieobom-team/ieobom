@@ -9,18 +9,24 @@ import type { HandoverCard } from '../handover-card/handoverCardApi'
 import { useHandoverCards } from '../handover-card/useHandoverCards'
 import { SessionHeader } from '../session/SessionHeader'
 import { writeToClipboard } from './clipboard'
+import { saveFile } from './download'
 import {
   copyExportBundle,
   copyExportPhrase,
+  downloadBundleFile,
+  downloadPhraseFile,
   fetchExportBundles,
   generateExportPhrases,
   updateExportPhrase,
+  EXPORT_FILE_FORMATS,
   type ExportBundle,
   type ExportBundleList,
+  type ExportFileFormat,
   type ExportPhrase,
   type ExportPhraseGroup,
   type PhraseType,
 } from './exportApi'
+import type { DownloadedFile } from '../../shared/api/client'
 
 /** Manyfast `F-GUSOFG` display — 전산 기록 문구는 300자, 보호자 전달 문구는 200자를 상한으로 한다. */
 const MAX_LENGTH: Record<PhraseType, number> = { RECORD: 300, GUARDIAN: 200 }
@@ -187,6 +193,71 @@ function ExportContent({
 }
 
 /**
+ * 복사 옆에 붙는 파일 내려받기. (Manyfast `F-GUSOFG` display)
+ *
+ * **복사가 기본 동작으로 남는다.** 여기 있는 것은 같은 내용을 다른 형식으로 받는 길이고, 새 기능이 아니다.
+ * 그래서 큰 버튼(`BigButton`)을 쓰지 않고 복사 버튼 아래 한 줄로 둔다.
+ *
+ * `blocked`가 있으면 그 이유를 그대로 보여 주고 누르지 못하게 한다. 저장하지 않은 편집을 서버는 알 수 없으므로
+ * 복사와 똑같이 화면이 막는다 — 막지 않으면 화면에 보이는 글자와 파일 속 글자가 갈린다.
+ */
+function DownloadRow({
+  request,
+  blocked,
+}: {
+  request: (format: ExportFileFormat) => Promise<DownloadedFile>
+  blocked: string | null
+}) {
+  const [pending, setPending] = useState<ExportFileFormat | null>(null)
+  const [failed, setFailed] = useState<string | null>(null)
+
+  const handleDownload = async (format: ExportFileFormat) => {
+    if (blocked !== null) {
+      return
+    }
+    setPending(format)
+    setFailed(null)
+    try {
+      const file = await request(format)
+      const saved = saveFile(file.blob, file.fileName ?? `이어봄.${format}`)
+      if (!saved) {
+        setFailed('파일을 저장하지 못했습니다. 브라우저에서 다운로드를 허용한 뒤 다시 눌러 주세요.')
+      }
+    } catch (error) {
+      setFailed(error instanceof ApiError ? error.message : '파일을 내려받지 못했습니다.')
+    } finally {
+      setPending(null)
+    }
+  }
+
+  return (
+    <div className="mt-4">
+      <p className="text-lg font-semibold text-slate-500">
+        {blocked ?? '파일로 내려받기'}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-3">
+        {EXPORT_FILE_FORMATS.map(({ format, label }) => (
+          <button
+            key={format}
+            type="button"
+            disabled={blocked !== null}
+            onClick={() => void handleDownload(format)}
+            className="rounded-2xl border-2 border-slate-300 bg-white px-5 py-3 text-xl font-semibold text-slate-900 hover:border-teal-600 hover:bg-teal-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300 disabled:border-slate-200 disabled:text-slate-400"
+          >
+            {pending === format ? '내려받는 중…' : `${label} 파일(.${format})`}
+          </button>
+        ))}
+      </div>
+      {failed !== null && (
+        <p role="alert" className="mt-3 text-lg text-amber-900">
+          {failed}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/**
  * 카드 한 장의 문구 하나. 검토 안내는 복사를 막지 않는다 — 계약대로 "확인하고 쓰라"는 말이지
  * "쓰지 말라"는 말이 아니다. 막는 것은 만들지 못한 문구(`text: null`)와 저장하지 않은 편집뿐이다.
  */
@@ -301,6 +372,11 @@ function PhraseCard({
             </BigButton>
           </div>
 
+          <DownloadRow
+            request={(format) => downloadPhraseFile(phrase.id, format)}
+            blocked={dirty ? '저장한 뒤 내려받을 수 있습니다' : null}
+          />
+
           {copyNotice !== null && (
             <p role="status" className="mt-3 text-lg text-teal-800">
               {copyNotice}
@@ -398,6 +474,11 @@ function BundleCard({
               {copy.isPending ? '복사하는 중…' : '묶음 복사하기'}
             </BigButton>
           </div>
+
+          <DownloadRow
+            request={(format) => downloadBundleFile(careRecipientId, bundle.phraseType, format)}
+            blocked={null}
+          />
 
           {copyNotice !== null && (
             <p role="status" className="mt-3 text-lg text-teal-800">
