@@ -10,6 +10,7 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.nullValue;
 
 import com.ieobom.api.ai.StructuredCardDraft;
+import com.ieobom.api.ai.StructuringInput;
 import com.ieobom.api.handover.Handover;
 import com.ieobom.api.handover.HandoverRepository;
 import com.ieobom.api.handover.InputMethod;
@@ -63,8 +64,8 @@ class HandoverCardApiTest {
 		Handover handover = 인계("점심을 거의 안 드셨어요. 오후에는 산책을 도와 드렸습니다.");
 		구조화.willReturn(
 				List.of(
-						초안(첫번째.getName(), null, "산책을 도와 드림", null, "오후에는 산책을 도와 드렸습니다", "NONE"),
-						초안(첫번째.getName(), "점심 식사량 저하", null, "저녁 식사량 확인", "점심을 거의 안 드셨어요",
+						초안(첫번째.getCode(), null, "산책을 도와 드림", null, "오후에는 산책을 도와 드렸습니다", "NONE"),
+						초안(첫번째.getCode(), "점심 식사량 저하", null, "저녁 식사량 확인", "점심을 거의 안 드셨어요",
 								"POOR_INTAKE")));
 
 		mockMvc
@@ -89,9 +90,9 @@ class HandoverCardApiTest {
 		Handover handover = 인계("오늘 컨디션이 좋아 보이셨어요.");
 		구조화.willReturn(
 				List.of(
-						초안(첫번째.getName(), "컨디션 양호", null, null, "오늘 컨디션이 좋아 보이셨어요", "NONE"),
-						초안(첫번째.getName(), "혈압이 높음", null, "혈압약 확인", null, "NONE"),
-						초안(첫번째.getName(), "열이 남", null, "체온 재확인", "밤사이 열이 났다고 하셨어요", "FEVER")));
+						초안(첫번째.getCode(), "컨디션 양호", null, null, "오늘 컨디션이 좋아 보이셨어요", "NONE"),
+						초안(첫번째.getCode(), "혈압이 높음", null, "혈압약 확인", null, "NONE"),
+						초안(첫번째.getCode(), "열이 남", null, "체온 재확인", "밤사이 열이 났다고 하셨어요", "FEVER")));
 
 		mockMvc
 				.perform(post("/api/handovers/{id}/cards", handover.getId()))
@@ -126,11 +127,11 @@ class HandoverCardApiTest {
 	@Test
 	void 날짜로_조회하면_어르신별로_묶여_나온다() throws Exception {
 		Handover 첫_인계 = 인계("점심을 거의 안 드셨어요.");
-		구조화.willReturn(List.of(초안(첫번째.getName(), "점심 식사량 저하", null, null, "점심을 거의 안 드셨어요", "POOR_INTAKE")));
+		구조화.willReturn(List.of(초안(첫번째.getCode(), "점심 식사량 저하", null, null, "점심을 거의 안 드셨어요", "POOR_INTAKE")));
 		mockMvc.perform(post("/api/handovers/{id}/cards", 첫_인계.getId())).andExpect(status().isCreated());
 
 		Handover 두번째_인계 = 인계("오늘 걸음이 많이 불안하셨어요.");
-		구조화.willReturn(List.of(초안(두번째.getName(), "보행 불안정", null, null, "오늘 걸음이 많이 불안하셨어요", "NONE")));
+		구조화.willReturn(List.of(초안(두번째.getCode(), "보행 불안정", null, null, "오늘 걸음이 많이 불안하셨어요", "NONE")));
 		mockMvc
 				.perform(post("/api/handovers/{id}/cards", 두번째_인계.getId()))
 				.andExpect(status().isCreated());
@@ -151,7 +152,7 @@ class HandoverCardApiTest {
 	@Test
 	void 다른_날짜로_조회하면_비어_있다() throws Exception {
 		Handover handover = 인계("점심을 거의 안 드셨어요.");
-		구조화.willReturn(List.of(초안(첫번째.getName(), "점심 식사량 저하", null, null, "점심을 거의 안 드셨어요", "POOR_INTAKE")));
+		구조화.willReturn(List.of(초안(첫번째.getCode(), "점심 식사량 저하", null, null, "점심을 거의 안 드셨어요", "POOR_INTAKE")));
 		mockMvc.perform(post("/api/handovers/{id}/cards", handover.getId())).andExpect(status().isCreated());
 
 		mockMvc
@@ -164,7 +165,7 @@ class HandoverCardApiTest {
 	@Test
 	void 이미_구조화된_인계는_다시_구조화하지_않는다() throws Exception {
 		Handover handover = 인계("점심을 거의 안 드셨어요.");
-		구조화.willReturn(List.of(초안(첫번째.getName(), "점심 식사량 저하", null, null, "점심을 거의 안 드셨어요", "POOR_INTAKE")));
+		구조화.willReturn(List.of(초안(첫번째.getCode(), "점심 식사량 저하", null, null, "점심을 거의 안 드셨어요", "POOR_INTAKE")));
 		mockMvc.perform(post("/api/handovers/{id}/cards", handover.getId())).andExpect(status().isCreated());
 
 		mockMvc
@@ -189,9 +190,65 @@ class HandoverCardApiTest {
 
 		mockMvc.perform(post("/api/handovers/{id}/cards", handover.getId())).andExpect(status().isCreated());
 
-		assertThat(구조화.lastInput().rawText()).isEqualTo("점심을 거의 안 드셨어요.");
-		assertThat(구조화.lastInput().selectedRecipientName()).isEqualTo(첫번째.getName());
-		assertThat(구조화.lastInput().candidateRecipientNames()).contains(첫번째.getName(), 두번째.getName());
+		assertThat(구조화.lastInput().maskedRawText()).isEqualTo("점심을 거의 안 드셨어요.");
+		assertThat(구조화.lastInput().selectedRecipientCode()).isEqualTo(첫번째.getCode());
+		assertThat(구조화.lastInput().candidateRecipientCodes()).contains(첫번째.getCode(), 두번째.getCode());
+	}
+
+	/**
+	 * 이 호출 지점의 요청 페이로드에 어르신 실명이 없다는 것을 확인한다.
+	 *
+	 * <p>PRD success 의 KPI 가 100% 다. 이름 칸만 보지 않고 <b>나가는 값 전부</b>를 본다. 예전에는 원문이 손대지 않은 그대로
+	 * 나갔고, 후보 목록에는 매 호출마다 명단 전체의 실명이 실려 나갔다. (Manyfast F-LUDCWW rules)
+	 */
+	@Test
+	void 구조화_요청_페이로드에_어르신_실명이_없다() throws Exception {
+		Handover handover = 인계("%s 어르신이 점심을 거의 안 드셨어요.".formatted(첫번째.getName()));
+
+		mockMvc.perform(post("/api/handovers/{id}/cards", handover.getId())).andExpect(status().isCreated());
+
+		StructuringInput 요청 = 구조화.lastInput();
+		String 나가는_값 =
+				String.join(
+						" ",
+						요청.maskedRawText(),
+						요청.selectedRecipientCode(),
+						String.join(" ", 요청.candidateRecipientCodes()));
+
+		assertThat(careRecipients.findAll())
+				.isNotEmpty()
+				.allSatisfy(어르신 -> assertThat(나가는_값).doesNotContain(어르신.getName()));
+		assertThat(요청.maskedRawText()).contains(첫번째.getCode());
+	}
+
+	/**
+	 * 치환된 응답을 실명으로 되돌린 뒤에 검증하고 저장한다.
+	 *
+	 * <p>되돌리는 자리가 검증보다 앞이어야 한다. 근거 대조의 상대는 치환되지 않은 인계 원문이라, 되돌리지 않고 대조하면 어르신 이름이 들어간 정상 근거가
+	 * 전부 "원문에 없는 근거"로 폐기된다.
+	 */
+	@Test
+	void 치환된_응답을_실명으로_되돌려_저장한다() throws Exception {
+		Handover handover = 인계("%s 어르신이 점심을 거의 안 드셨어요.".formatted(첫번째.getName()));
+		구조화.willReturn(
+				List.of(
+						초안(
+								첫번째.getCode(),
+								"점심 식사량 저하",
+								null,
+								null,
+								"%s 어르신이 점심을 거의 안 드셨어요".formatted(첫번째.getCode()),
+								"POOR_INTAKE")));
+
+		mockMvc
+				.perform(post("/api/handovers/{id}/cards", handover.getId()))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.createdCount").value(1))
+				.andExpect(jsonPath("$.discardedCount").value(0))
+				.andExpect(jsonPath("$.cards[0].careRecipientId").value(첫번째.getId()))
+				.andExpect(
+						jsonPath("$.cards[0].evidenceText")
+								.value("%s 어르신이 점심을 거의 안 드셨어요".formatted(첫번째.getName())));
 	}
 
 	private Handover 인계(String rawText) {
@@ -207,14 +264,14 @@ class HandoverCardApiTest {
 	}
 
 	private static StructuredCardDraft 초안(
-			String recipientName,
+			String recipientCode,
 			String statusChange,
 			String actionTaken,
 			String nextAction,
 			String evidenceText,
 			String safetyCategory) {
 		return new StructuredCardDraft(
-				recipientName,
+				recipientCode,
 				statusChange,
 				actionTaken,
 				nextAction,

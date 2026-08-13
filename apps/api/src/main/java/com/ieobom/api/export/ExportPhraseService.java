@@ -11,6 +11,7 @@ import com.ieobom.api.handovercard.HandoverCard;
 import com.ieobom.api.handovercard.HandoverCardRepository;
 import com.ieobom.api.recipient.CareRecipient;
 import com.ieobom.api.recipient.CareRecipientRepository;
+import com.ieobom.api.recipient.RecipientAliases;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -71,7 +72,10 @@ public class ExportPhraseService {
 			return new ExportGeneration(false, responseOf(card, existing));
 		}
 
-		ExportPhraseDraft draft = exportPhraseClient.generate(inputOf(card));
+		// 구조화와 같은 대조표를 쓴다. 이용 종료한 어르신도 들어간다. (Manyfast F-LUDCWW rules)
+		RecipientAliases aliases = RecipientAliases.of(careRecipientRepository.findAll());
+
+		ExportPhraseDraft draft = restore(exportPhraseClient.generate(inputOf(card, aliases)), aliases);
 		List<String> otherNames = otherRecipientNames(card);
 
 		List<ExportPhrase> saved =
@@ -156,18 +160,33 @@ public class ExportPhraseService {
 	}
 
 	/**
-	 * 모델에 넘길 것. <b>인계 원문을 넣지 않는다.</b>
+	 * 모델에 넘길 것. <b>인계 원문을 넣지 않고, 실명도 넣지 않는다.</b>
 	 *
 	 * <p>원문에는 이 카드가 담기로 한 것 말고도 다른 어르신 이야기와 아직 검토되지 않은 내용이 섞여 있다. 주지 않은 사실은 문구에 들어갈 수 없다.
+	 *
+	 * <p>어르신은 내부 ID로 넘기고, <b>나머지 칸도 전부 치환해서</b> 넘긴다. 근거 원문은 인계 원문에서 잘라 온 구간이고 상태·조치 칸은 직원이
+	 * 고칠 수 있어서, 어느 칸에나 어르신 이름이 섞일 수 있다. (Manyfast F-LUDCWW rules)
 	 */
-	private ExportInput inputOf(HandoverCard card) {
+	private ExportInput inputOf(HandoverCard card, RecipientAliases aliases) {
 		return new ExportInput(
-				card.getCareRecipient() == null ? null : card.getCareRecipient().getName(),
+				card.getCareRecipient() == null ? null : card.getCareRecipient().getCode(),
 				card.getObservedAt(),
-				card.getStatusChange(),
-				card.getActionTaken(),
-				card.getNextAction(),
-				card.getEvidenceText());
+				aliases.mask(card.getStatusChange()),
+				aliases.mask(card.getActionTaken()),
+				aliases.mask(card.getNextAction()),
+				aliases.mask(card.getEvidenceText()));
+	}
+
+	/**
+	 * 모델이 돌려준 문구의 실명을 되돌린다. <b>마스킹은 LLM 경계에서만 일어난다.</b>
+	 *
+	 * <p>검증·저장보다 먼저 해야 한다. 문구는 사람이 읽고 그대로 복사하는 글이고, 보호자 전달 문구는 특히 이름이 있어야 말이 된다. 되돌리지 않고
+	 * 저장하면 세 가지가 한꺼번에 어긋난다. 내부 ID 안의 숫자가 {@link ExportPhraseVerifier} 의 "카드에 없는 숫자"로 잡히고, 직원이
+	 * 화면(실명)에서 고쳐 저장한 문구만 실명이 되어 형식이 갈리며, 당일 묶음이 두 형식을 이어 붙인다.
+	 */
+	private ExportPhraseDraft restore(ExportPhraseDraft draft, RecipientAliases aliases) {
+		return new ExportPhraseDraft(
+				aliases.restore(draft.recordPhrase()), aliases.restore(draft.guardianPhrase()));
 	}
 
 	/** 이 카드의 어르신을 뺀 나머지. 이 이름이 문구에 섞이면 다른 사람의 기록이 된다. */

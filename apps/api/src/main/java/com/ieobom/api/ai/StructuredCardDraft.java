@@ -7,7 +7,10 @@ package com.ieobom.api.ai;
  * 들어왔을 때 파싱 단계에서 예외로 터져 카드 전체가 날아간다. 문자열로 받아 두고 {@code CardDraftVerifier} 가 한 항목씩 판정해 버릴 것만
  * 버리는 편이 안전하다.
  *
- * @param recipientName 대상 어르신 이름. 가릴 수 없으면 비어 있다
+ * <p>텍스트 칸은 <b>치환된 원문에서 나온 것</b>이라 어르신이 내부 ID로 적혀 있다. 실명 복원은 이 초안을 받은 자리에서 곧바로 한다. ({@code
+ * HandoverCardService})
+ *
+ * @param recipientCode 대상 어르신의 내부 ID. 가릴 수 없으면 비어 있다
  * @param statusChange 상태 변화
  * @param actionTaken 현장에서 이미 한 조치
  * @param nextAction 남아 있는 다음 행동
@@ -18,7 +21,7 @@ package com.ieobom.api.ai;
  * @param safetyCategory 지정 키워드 4종 중 하나 또는 {@code NONE}
  */
 public record StructuredCardDraft(
-		String recipientName,
+		String recipientCode,
 		String statusChange,
 		String actionTaken,
 		String nextAction,
