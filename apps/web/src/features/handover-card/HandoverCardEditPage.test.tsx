@@ -31,6 +31,7 @@ function 카드(patch: Partial<HandoverCard> = {}): HandoverCard {
     exportAllowed: false,
     exportBlockedReason: '검토 완료 후 생성할 수 있습니다.',
     createdAt: '2026-08-11T13:11:02.401',
+    hasAudio: false,
     ...patch,
   }
 }

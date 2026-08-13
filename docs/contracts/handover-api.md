@@ -203,6 +203,7 @@ AI 구조화는 이 API가 하지 않는다. (별도 Issue)
 | `reporterName` | string | ✅ | 입력자 이름. 1~50자 |
 | `proxyInput` | boolean | | 대리 입력 여부. 생략하면 `false` |
 | `infoSource` | enum | | `GUARDIAN` `DRIVER` `COLLEAGUE` `OTHER` |
+| `audioData` | string | | 음성 입력일 때 녹음된 오디오 파일 (Base64 Data URL) |
 
 날짜·시각은 오프셋 없는 ISO-8601 지역 시각이다. (`2026-08-11T09:20:00`)
 
@@ -214,7 +215,8 @@ AI 구조화는 이 API가 하지 않는다. (별도 Issue)
   "occurredAt": "2026-08-11T09:20:00",
   "reporterName": "박데스크",
   "proxyInput": true,
-  "infoSource": "GUARDIAN"
+  "infoSource": "GUARDIAN",
+  "audioData": "data:audio/webm;base64,GkXf..."
 }
 ```
 
@@ -260,6 +262,16 @@ AI 구조화는 이 API가 하지 않는다. (별도 Issue)
 
 ---
 
+## `GET /api/handovers/{id}/audio`
+
+저장된 음성 파일을 재생하기 위해 부른다. (Manyfast `F-SNBVHR` 원본 음성 재생)
+
+### 응답
+- 성공: `200 OK` (Content-Type: `audio/webm`) + 오디오 바이너리
+- 오디오 없음: `404 Not Found`
+
+---
+
 ## 오류 응답
 
 **모든 API가 이 형태를 공유한다.** (`com.ieobom.api.common.ApiErrorResponse`)
@@ -295,7 +307,6 @@ AI 구조화는 이 API가 하지 않는다. (별도 Issue)
 | 항목 | 어디서 |
 |---|---|
 | AI 구조화 · 어르신별 카드 생성 | [`handover-card-schema.md`](handover-card-schema.md) — 저장이 끝난 뒤 `POST /api/handovers/{id}/cards` 로 따로 호출한다 |
-| 음성 파일 업로드 | 별도 Issue. 지금은 `inputMethod: "VOICE"` + 전사된 `rawText`만 받는다 |
 | 인계 수정 · 삭제 | 미정 |
 | 어르신 삭제 · 이용 종료 해제 | 위의 "어르신 삭제 API가 없다" 참고 |
 | LLM 요청의 실명 → 내부 ID 치환 | 가명처리 Issue. 이 API는 대조표를 **만들어 두기만** 한다 |

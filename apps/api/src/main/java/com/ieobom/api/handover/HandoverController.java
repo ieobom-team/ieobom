@@ -25,4 +25,15 @@ public class HandoverController {
 		HandoverResponse response = handoverService.register(request);
 		return ResponseEntity.created(URI.create("/api/handovers/" + response.id())).body(response);
 	}
+
+	@org.springframework.web.bind.annotation.GetMapping("/{id}/audio")
+	public ResponseEntity<byte[]> getAudio(@org.springframework.web.bind.annotation.PathVariable Long id) {
+		Handover handover = handoverService.getById(id);
+		if (handover.getAudioData() == null) {
+			return ResponseEntity.notFound().build();
+		}
+		return ResponseEntity.ok()
+				.header("Content-Type", "audio/webm")
+				.body(handover.getAudioData());
+	}
 }

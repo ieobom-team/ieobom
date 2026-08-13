@@ -29,10 +29,10 @@ public record HandoverCreateRequest(
 		@NotNull(message = "입력 방식을 선택해 주세요.") InputMethod inputMethod,
 		@NotNull(message = "입력 시점을 입력해 주세요.") LocalDateTime occurredAt,
 		@NotBlank(message = "입력자를 선택해 주세요.")
-				@Size(max = 50, message = "입력자 이름은 50자까지 넣을 수 있습니다.")
-				String reporterName,
+		String reporterName,
 		Boolean proxyInput,
-		InfoSource infoSource) {
+		InfoSource infoSource,
+		String audioData) {
 
 	/** 생략된 대리 입력 여부는 직접 입력으로 본다. */
 	public boolean isProxyInput() {

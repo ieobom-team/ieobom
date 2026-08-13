@@ -36,6 +36,8 @@ export type HandoverCard = {
   exportAllowed: boolean
   exportBlockedReason: string | null
   createdAt: string
+  /** 음성 입력으로 생성되어 원본 음성 재생이 가능한지 여부 */
+  hasAudio: boolean
 }
 
 export type RecipientCards = {

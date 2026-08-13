@@ -40,6 +40,15 @@ public class HandoverService {
 										new NotFoundException(
 												CARE_RECIPIENT_NOT_FOUND, "대상 어르신을 찾을 수 없습니다. 목록에서 다시 선택해 주세요."));
 
+		byte[] decodedAudio = null;
+		if (request.audioData() != null && !request.audioData().isBlank()) {
+			String base64 = request.audioData();
+			if (base64.contains(",")) {
+				base64 = base64.split(",")[1];
+			}
+			decodedAudio = java.util.Base64.getDecoder().decode(base64);
+		}
+
 		Handover saved =
 				handoverRepository.save(
 						Handover.builder()
@@ -50,10 +59,17 @@ public class HandoverService {
 								.reporterName(request.reporterName())
 								.proxyInput(request.isProxyInput())
 								.infoSource(request.infoSource())
+								.audioData(decodedAudio)
 								.build());
 
 		logRegistered(saved);
 		return HandoverResponse.from(saved);
+	}
+
+	@Transactional(readOnly = true)
+	public Handover getById(Long id) {
+		return handoverRepository.findById(id)
+				.orElseThrow(() -> new NotFoundException("HANDOVER_NOT_FOUND", "인계 기록을 찾을 수 없습니다."));
 	}
 
 	/**

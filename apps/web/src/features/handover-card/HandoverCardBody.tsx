@@ -101,6 +101,11 @@ export function CardEvidence({ card }: { card: HandoverCard }) {
     <figure className="rounded-xl border-l-4 border-slate-300 bg-slate-50 px-4 py-3">
       <figcaption className="text-lg font-semibold text-slate-500">근거 원문</figcaption>
       <blockquote className="mt-1 text-xl text-slate-800">“{card.evidenceText}”</blockquote>
+      {card.hasAudio && (
+        <div className="mt-3">
+          <audio controls src={`/api/handovers/${card.handoverId}/audio`} className="w-full h-10" />
+        </div>
+      )}
     </figure>
   )
 }

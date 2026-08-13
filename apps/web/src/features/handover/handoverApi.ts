@@ -14,6 +14,8 @@ export type HandoverCreateRequest = {
   proxyInput: boolean
   /** 직접 관찰이면 보내지 않는다. 붙여 보내면 서버가 400 으로 되돌린다 */
   infoSource?: InfoSource
+  /** 녹음된 음성 파일 (base64 Data URL) */
+  audioData?: string
 }
 
 export type HandoverResponse = {

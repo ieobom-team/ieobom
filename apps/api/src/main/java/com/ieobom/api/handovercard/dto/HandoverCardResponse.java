@@ -38,7 +38,8 @@ public record HandoverCardResponse(
 		@JsonFormat(pattern = "HH:mm") LocalTime suggestedDueTime,
 		boolean exportAllowed,
 		String exportBlockedReason,
-		LocalDateTime createdAt) {
+		LocalDateTime createdAt,
+		boolean hasAudio) {
 
 	public static HandoverCardResponse from(HandoverCard card) {
 		return new HandoverCardResponse(
@@ -58,6 +59,7 @@ public record HandoverCardResponse(
 				card.getSuggestedDueTime(),
 				card.canGenerateExport(),
 				card.exportBlockedReason(),
-				card.getCreatedAt());
+				card.getCreatedAt(),
+				card.getHandover().getInputMethod() == com.ieobom.api.handover.InputMethod.VOICE);
 	}
 }

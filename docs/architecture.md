@@ -125,7 +125,7 @@ HandoverCard ───┐ N          1 ┌─── Handover      원본 인계 
 | 엔티티 | 필드 |
 |---|---|
 | `CareRecipient` | `name` 이름, **`code` 내부 ID(unique)**, `dischargedAt` 이용 종료 시점(선택) |
-| `Handover` | `careRecipient`, `rawText` 원문, `inputMethod`(`VOICE`/`TEXT`/`CHECK`), `occurredAt` 입력 시점, `reporterName` 입력자 이름, **`proxyInput` 대리 입력 여부**, **`infoSource` 정보 출처**(`GUARDIAN`/`DRIVER`/`COLLEAGUE`/`OTHER`, 선택) |
+| `Handover` | `careRecipient`, `rawText` 원문, `inputMethod`(`VOICE`/`TEXT`/`CHECK`), `occurredAt` 입력 시점, `reporterName` 입력자 이름, **`proxyInput` 대리 입력 여부**, **`infoSource` 정보 출처**(`GUARDIAN`/`DRIVER`/`COLLEAGUE`/`OTHER`, 선택), `audioData` 오디오 원본 데이터(`MEDIUMBLOB`, 선택) |
 | `HandoverCard` | `handover`, `careRecipient`(선택), `observedAt` 시각(선택), `statusChange` 변화(선택), `actionTaken` 조치(선택), `nextAction` 다음 행동(선택), **`evidenceText` 근거 원문 문장**, `safetyRelated` 안전 관련 여부, **`safetyFlagSource` 판정 출처**(`KEYWORD`/`STAFF`, 선택), **`reviewStatus` 검토 상태**(`NEEDS_REVIEW`/`REVIEWED`), `suggestedJobRole` 제안 직종(선택), `suggestedDueTime` 제안 기한(선택) |
 | `Task` | `handoverCard`, `content` 업무 내용, `assigneeJobRole` 담당 직종(선택), `assigneeName` 담당자 이름(선택), **`dueTime` 기한(`LocalTime`, 당일 HH:MM)**, `status`(`PENDING`/`DONE`), `completedAt` 완료 시각(선택), `completedByName` 완료 기록자(선택) |
 
@@ -265,3 +265,5 @@ AI가 발화를 어르신별로 분리할 때 쓰는 이름 대조 후보(`CardD
 - **판단 근거가 부족하면 직종을 비워 두고 직원이 지정하게 한다.** 억지로 채우지 않는다.
 - 다음 행동 · 담당 직종 · 기한은 모두 **AI 제안값을 미리 채운 상태**로 배정 화면에 띄우고,
   직원이 그대로 확정하거나 수정한다. 빈 입력으로 시작하지 않는다.
+- 조치·다음 행동 칸에는 AI가 발화 맥락에서 추론한 **추천 액션 칩(최대 3개)**을 함께 제시한다.
+  칩은 원문 근거가 있는 내용만으로 만들고, 직접 입력 경로도 동등하게 열어 둔다. (RFC [#62](https://github.com/ieobom-team/ieobom/issues/62))

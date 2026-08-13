@@ -245,8 +245,8 @@ export function HandoverCreatePage() {
       )}
       {step === 'voice' && (
         <VoiceStep
-          value={draft.rawText}
-          onChange={(rawText) => update({ rawText })}
+          draft={draft}
+          onChange={update}
           onNext={goToTarget}
         />
       )}
@@ -433,12 +433,12 @@ function TextStep({
  * 지원 여부는 `pickMethod`에서 이미 걸러 이 화면은 지원하는 브라우저에서만 뜬다.
  */
 function VoiceStep({
-  value,
+  draft,
   onChange,
   onNext,
 }: {
-  value: string
-  onChange: (value: string) => void
+  draft: HandoverDraft
+  onChange: (patch: Partial<HandoverDraft>) => void
   onNext: () => void
 }) {
   const [listening, setListening] = useState(false)
@@ -458,8 +458,13 @@ function VoiceStep({
       return
     }
     const recognizer = createSpeechRecognizer(
-      (transcript) => onChange(transcript),
-      () => setListening(false),
+      (transcript) => onChange({ rawText: transcript }),
+      (audioBase64) => {
+        setListening(false)
+        if (audioBase64) {
+          onChange({ audioData: audioBase64 })
+        }
+      },
       (message) => {
         setNotice(message)
         setListening(false)
@@ -495,14 +500,14 @@ function VoiceStep({
       </label>
       <textarea
         id="voiceText"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
+        value={draft.rawText}
+        onChange={(event) => onChange({ rawText: event.target.value })}
         rows={6}
         maxLength={RAW_TEXT_MAX_LENGTH}
         className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
       />
       <p className="text-lg text-slate-500">
-        {value.length} / {RAW_TEXT_MAX_LENGTH}자
+        {draft.rawText.length} / {RAW_TEXT_MAX_LENGTH}자
       </p>
       <BigButton onClick={onNext}>다음</BigButton>
     </section>

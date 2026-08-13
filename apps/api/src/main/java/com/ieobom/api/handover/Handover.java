@@ -72,6 +72,10 @@ public class Handover extends BaseTimeEntity {
 	@Column(length = 20)
 	private InfoSource infoSource;
 
+	@jakarta.persistence.Lob
+	@Column(columnDefinition = "MEDIUMBLOB")
+	private byte[] audioData;
+
 	@Builder
 	private Handover(
 			CareRecipient careRecipient,
@@ -80,7 +84,8 @@ public class Handover extends BaseTimeEntity {
 			LocalDateTime occurredAt,
 			String reporterName,
 			boolean proxyInput,
-			InfoSource infoSource) {
+			InfoSource infoSource,
+			byte[] audioData) {
 		this.careRecipient = careRecipient;
 		this.rawText = rawText;
 		this.inputMethod = inputMethod;
@@ -88,5 +93,6 @@ public class Handover extends BaseTimeEntity {
 		this.reporterName = reporterName;
 		this.proxyInput = proxyInput;
 		this.infoSource = infoSource;
+		this.audioData = audioData;
 	}
 }

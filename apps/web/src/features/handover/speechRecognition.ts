@@ -74,7 +74,7 @@ export function speechErrorMessage(error: string): string {
  */
 export function createSpeechRecognizer(
   onTranscript: (transcript: string) => void,
-  onEnd: () => void,
+  onEnd: (audioBase64: string | null) => void,
   onError: (message: string) => void,
 ): SpeechRecognizer | null {
   const Ctor = speechRecognitionConstructor()
@@ -87,6 +87,17 @@ export function createSpeechRecognizer(
   recognition.continuous = true
   recognition.interimResults = true
 
+  let mediaRecorder: MediaRecorder | null = null
+  let audioChunks: Blob[] = []
+  let stream: MediaStream | null = null
+  let ended = false
+
+  const finish = (audio: string | null) => {
+    if (ended) return
+    ended = true
+    onEnd(audio)
+  }
+
   recognition.onresult = (event) => {
     let combined = ''
     for (let i = 0; i < event.results.length; i += 1) {
@@ -94,11 +105,68 @@ export function createSpeechRecognizer(
     }
     onTranscript(combined)
   }
-  recognition.onerror = (event) => onError(speechErrorMessage(event.error))
-  recognition.onend = onEnd
+  
+  recognition.onerror = (event) => {
+    onError(speechErrorMessage(event.error))
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop()
+    } else {
+      finish(null)
+    }
+  }
+
+  recognition.onend = () => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop()
+    } else {
+      finish(null)
+    }
+  }
 
   return {
-    start: () => recognition.start(),
-    stop: () => recognition.stop(),
+    start: () => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        recognition.start()
+        return
+      }
+
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then((s) => {
+          stream = s
+          try {
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+          } catch (e) {
+            mediaRecorder = new MediaRecorder(stream)
+          }
+
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunks.push(e.data)
+          }
+
+          mediaRecorder.onstop = () => {
+            const type = mediaRecorder?.mimeType || 'audio/webm'
+            const blob = new Blob(audioChunks, { type })
+            const reader = new FileReader()
+            reader.onloadend = () => {
+              finish(reader.result as string)
+            }
+            reader.readAsDataURL(blob)
+            stream?.getTracks().forEach((track) => track.stop())
+          }
+
+          mediaRecorder.start()
+          recognition.start()
+        })
+        .catch(() => {
+          onError(speechErrorMessage('not-allowed'))
+        })
+    },
+    stop: () => {
+      recognition.stop()
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop()
+      }
+    },
   }
 }
