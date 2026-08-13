@@ -48,7 +48,7 @@ export type RecipientCards = {
  * 하루치 카드.
  *
  * `unresolved` 는 대상 어르신을 가리지 못한 항목이라 `recipients` 안에 섞여 오지 않는다.
- * 화면도 섞지 않고 검토 필요 항목 화면(유저플로우 n24)에서 따로 보여 준다.
+ * 화면도 섞지 않고 검토 필요 항목 화면(유저플로우 "새 플로우 3" n24)에서 따로 보여 준다.
  */
 export type HandoverCardList = {
   date: string

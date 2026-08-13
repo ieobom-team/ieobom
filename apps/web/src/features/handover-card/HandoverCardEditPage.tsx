@@ -27,11 +27,11 @@ import { useCardCacheUpdate, useHandoverCards } from './useHandoverCards'
 const JOB_ROLES = Object.keys(JOB_ROLE_LABELS) as JobRole[]
 
 /**
- * 유저플로우 n25 — 카드 내용 수정·검토.
+ * 유저플로우 "새 플로우 3" n25 — 카드 내용 수정·검토.
  *
  * 상세(n21)와 검토 필요 항목(n24) 양쪽에서 들어오고, 저장하면 n21 로 돌아간다.
  *
- * 항목 수정 · 안전 표시 · 검토 완료 전환을 **한 화면에** 둔다. 유저플로우가 이 셋을 "카드 내용
+ * 항목 수정 · 안전 표시 · 검토 완료 전환을 **한 화면에** 둔다. 유저플로우 "새 플로우 3"가 이 셋을 "카드 내용
  * 수정·검토" 한 동작으로 묶어 두었고, 직원이 카드를 고친 다음 검토 완료를 누르는 것이 한 번의 일이기
  * 때문이다. 서버 API 는 셋이 따로다. (`docs/contracts/handover-card-schema.md`)
  *

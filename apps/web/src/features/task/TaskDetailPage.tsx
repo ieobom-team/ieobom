@@ -12,7 +12,7 @@ import { useTask, useTaskCacheUpdate } from './useTasks'
 type Stage = 'idle' | 'confirming' | 'delegating'
 
 /**
- * 유저플로우 n34 → n35 업무 상세 → n59 수행 확인됨? → n60 대리 완료 확인 모달 → n33 대리 완료 처리.
+ * 유저플로우 "새 플로우 3" n34 → n35 업무 상세 → n59 수행 확인됨? → n60 대리 완료 확인 모달 → n33 대리 완료 처리.
  *
  * **완료 처리 버튼은 이미 완료된 업무에서도 눌린다.** 다시 누르면 아무것도 바뀌지 않고
  * 중복 완료 안내가 뜬다(`alreadyCompleted`, Manyfast F-IVFNPC exceptions) — 업무를 다시 확인하러 온

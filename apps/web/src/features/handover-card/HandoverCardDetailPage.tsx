@@ -10,7 +10,7 @@ import { HandoverCardBody } from './HandoverCardBody'
 import { useCardCacheUpdate, useHandoverCards } from './useHandoverCards'
 
 /**
- * 유저플로우 n21 · n22 — 인계 카드 상세.
+ * 유저플로우 "새 플로우 3" n21 · n22 — 인계 카드 상세.
  *
  * 목록(n20)에서도 들어오고, 관리자 하원 미처리 브리핑(n49 → n21)에서도 들어온다. 그래서 진입
  * 역할로 막지 않는다. (`routes/AppRoutes.tsx`)

@@ -19,7 +19,7 @@ import {
 const JOB_ROLES = Object.keys(JOB_ROLE_LABELS) as JobRole[]
 
 /**
- * 유저플로우 n26 → n27 · n28 · n29 · n30 — 후속 업무 배정.
+ * 유저플로우 "새 플로우 3" n26 → n27 · n28 · n29 · n30 — 후속 업무 배정.
  *
  * 빈 입력으로 열리지 않는다. 카드가 검토에서 확정한 다음 행동·제안 직종·제안 기한을 그대로 채운 뒤
  * 직원이 확정하거나 고친다. (Manyfast F-IVFNPC display)

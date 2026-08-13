@@ -12,7 +12,7 @@ export function useTasks() {
   return useQuery({ queryKey: TASKS_KEY, queryFn: () => fetchTasks() })
 }
 
-/** 업무 하나. 목록을 거치지 않고 바로 열어도(북마크·새로고침) 조회된다. (유저플로우 n34) */
+/** 업무 하나. 목록을 거치지 않고 바로 열어도(북마크·새로고침) 조회된다. (유저플로우 "새 플로우 3" n34) */
 export function useTask(taskId: number) {
   return useQuery({
     queryKey: taskKey(taskId),
