@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router'
 import { AdminHomePage } from '../features/admin/AdminHomePage'
+import { ExportPage } from '../features/export/ExportPage'
 import { FieldHomePage } from '../features/field/FieldHomePage'
 import { HandoverCardDetailPage } from '../features/handover-card/HandoverCardDetailPage'
 import { HandoverCardEditPage } from '../features/handover-card/HandoverCardEditPage'
@@ -49,6 +50,7 @@ export function AppRoutes() {
           <Route path="/handover-cards/:cardId" element={<HandoverCardDetailPage />} />
           <Route path="/handover-cards/:cardId/edit" element={<HandoverCardEditPage />} />
           <Route path="/handover-cards/:cardId/tasks/new" element={<TaskAssignPage />} />
+          <Route path="/handover-cards/:cardId/export" element={<ExportPage />} />
           <Route path="/tasks" element={<TaskListPage />} />
           <Route path="/tasks/:taskId" element={<TaskDetailPage />} />
         </Route>
