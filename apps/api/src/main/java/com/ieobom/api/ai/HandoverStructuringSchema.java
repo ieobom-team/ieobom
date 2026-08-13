@@ -154,6 +154,9 @@ final class HandoverStructuringSchema {
 				   표현이 달라도 뜻이 같으면 해당한다. 예를 들어 "미끄러지실 뻔했다"는 FALL,
 				   "점심을 거의 안 드셨다"는 POOR_INTAKE 다. 어디에도 해당하지 않으면 %s 다.
 				9. 남길 것이 없으면 빈 배열을 넘긴다. 억지로 채우지 않는다.
+				10. 원문이 "체크 항목: ..." 형태일 수 있다. 이는 직원이 사전 정의된 관찰 항목을 선택한 것이다.
+				    체크 항목은 그 자체가 관찰된 상태 변화(statusChange)다. evidenceText 에는 원문을 그대로 옮기고,
+				    statusChange 에 해당 항목을 적는다. actionTaken 과 nextAction 은 원문에 없으면 null 로 둔다.
 				"""
 				.formatted(
 						RECIPIENT_PROPERTY,
@@ -170,10 +173,14 @@ final class HandoverStructuringSchema {
 	 * 치환이 끝난 것을 받는다. ({@link StructuringInput#maskedRawText()})
 	 */
 	static String userPrompt(StructuringInput input) {
+		String methodLine = (input.inputMethod() != null && !input.inputMethod().isBlank())
+				? "\n입력 방식: " + input.inputMethod()
+				: "";
+
 		return """
 				어르신 후보 목록(내부 ID): %s
 				입력할 때 직원이 고른 어르신(내부 ID): %s
-				입력 시각: %s
+				입력 시각: %s%s
 
 				원문:
 				%s
@@ -182,6 +189,8 @@ final class HandoverStructuringSchema {
 						String.join(", ", input.candidateRecipientCodes()),
 						input.selectedRecipientCode(),
 						input.occurredAt().format(TIME),
+						methodLine,
 						input.maskedRawText());
 	}
 }
+

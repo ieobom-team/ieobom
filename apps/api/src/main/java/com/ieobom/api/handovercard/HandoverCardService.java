@@ -301,7 +301,8 @@ public class HandoverCardService {
 				aliases.mask(handover.getRawText()),
 				handover.getOccurredAt(),
 				handover.getCareRecipient().getCode(),
-				aliases.codes());
+				aliases.codes(),
+				handover.getInputMethod() != null ? handover.getInputMethod().name() : null);
 	}
 
 	/**

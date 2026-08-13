@@ -93,6 +93,32 @@ class CardDraftVerifierTest {
 	}
 
 	@Test
+	void 체크_입력_원문에서_상태_변화로_분류된_항목은_카드로_통과한다() {
+		String 체크_원문 = "체크 항목: 식사 거부 또는 소량 섭취";
+		List<StructuredCardDraft> drafts =
+				List.of(
+						초안()
+								.recipientCode("IB-001")
+								.statusChange("식사 거부 또는 소량 섭취")
+								.evidenceText("체크 항목: 식사 거부 또는 소량 섭취")
+								.safetyCategory("POOR_INTAKE")
+								.build());
+
+		CardVerification result = verifier.verify(drafts, 체크_원문, 관찰일, 대조표);
+
+		assertThat(result.accepted()).singleElement().satisfies(card -> {
+			assertThat(card.careRecipient()).isNotNull();
+			assertThat(card.careRecipient().getName()).isEqualTo("김말순");
+			assertThat(card.statusChange()).isEqualTo("식사 거부 또는 소량 섭취");
+			assertThat(card.actionTaken()).isNull();
+			assertThat(card.nextAction()).isNull();
+			assertThat(card.evidenceText()).isEqualTo("체크 항목: 식사 거부 또는 소량 섭취");
+			assertThat(card.safetyRelated()).isTrue();
+		});
+		assertThat(result.discarded()).isEmpty();
+	}
+
+	@Test
 	void 역할_목록_밖의_직종은_비워_둔다() {
 		List<StructuredCardDraft> drafts =
 				List.of(

@@ -251,6 +251,38 @@ class HandoverCardApiTest {
 								.value("%s 어르신이 점심을 거의 안 드셨어요".formatted(첫번째.getName())));
 	}
 
+	@Test
+	void 체크_입력_방식_인계_구조화_시_inputMethod가_전달된다() throws Exception {
+		Handover handover = handovers.save(
+				Handover.builder()
+						.careRecipient(첫번째)
+						.rawText("체크 항목: 식사 거부 또는 소량 섭취")
+						.inputMethod(InputMethod.CHECK)
+						.occurredAt(LocalDateTime.of(LocalDate.now(), java.time.LocalTime.of(13, 10)))
+						.reporterName("김요양")
+						.proxyInput(false)
+						.build());
+
+		구조화.willReturn(
+				List.of(
+						초안(
+								첫번째.getCode(),
+								"식사 거부 또는 소량 섭취",
+								null,
+								null,
+								"체크 항목: 식사 거부 또는 소량 섭취",
+								"POOR_INTAKE")));
+
+		mockMvc
+				.perform(post("/api/handovers/{id}/cards", handover.getId()))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.createdCount").value(1))
+				.andExpect(jsonPath("$.discardedCount").value(0))
+				.andExpect(jsonPath("$.cards[0].statusChange").value("식사 거부 또는 소량 섭취"));
+
+		assertThat(구조화.lastInput().inputMethod()).isEqualTo("CHECK");
+	}
+
 	private Handover 인계(String rawText) {
 		return handovers.save(
 				Handover.builder()

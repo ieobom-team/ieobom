@@ -86,6 +86,29 @@ class HandoverStructuringSchemaTest {
 		assertThat(prompt).contains("13:10");
 	}
 
+	@Test
+	void 프롬프트는_체크_입력_방식의_상태변화_분류를_안내한다() {
+		String prompt = HandoverStructuringSchema.systemPrompt();
+
+		assertThat(prompt).contains("체크 항목: ...");
+		assertThat(prompt).contains("체크 항목은 그 자체가 관찰된 상태 변화(statusChange)다");
+	}
+
+	@Test
+	void 체크_입력_방식이면_사용자_프롬프트에_입력_방식이_들어간다() {
+		StructuringInput input = new StructuringInput(
+				"체크 항목: 식사 거부 또는 소량 섭취",
+				java.time.LocalDateTime.of(2026, 8, 11, 13, 10),
+				"IB-001",
+				List.of("IB-001", "IB-002"),
+				"CHECK");
+
+		String prompt = HandoverStructuringSchema.userPrompt(input);
+
+		assertThat(prompt).contains("입력 방식: CHECK");
+		assertThat(prompt).contains("체크 항목: 식사 거부 또는 소량 섭취");
+	}
+
 	/**
 	 * 이 호출 지점의 요청 페이로드에 어르신 실명이 없다는 것을 프롬프트 문자열에서 직접 확인한다.
 	 *
