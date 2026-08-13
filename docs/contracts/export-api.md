@@ -3,8 +3,8 @@
 검토 완료 카드에서 만드는 **전산 기록 문구**와 **보호자 전달 문구**, 그리고 그것을 어르신 단위로 이어 붙인 **당일 묶음**.
 
 - Manyfast: `R-TUBGKD` 기록 및 보호자 전달 문구 출력 / `F-GUSOFG` 기록 및 보호자 전달 문구 복사
-- 기준 버전: `v0.2-export-unit.1`
-- 관련 화면: 유저플로우 "새 플로우 3" — n38 문구 생성 선택 → n39 기록·보호자 문구 화면 → n40 · n41 → n42 수정 후 복사
+- 기준 버전: `v0.3-plan-0813`
+- 관련 화면: 유저플로우 "AI 인계 도구 내비게이션 맵" — n36 기록 문구 출력 화면 → n37 전산 기록 문구 / n38 보호자 전달 문구 / n62 어르신 당일 묶음 문구 → n39 문구 수정 → n40 문구 복사 / n41 파일 다운로드
 
 > 제품이 **왜** 이렇게 동작하는지는 Manyfast가 기준이다. 여기에는 **JSON이 어떻게 생겼는지**만 적는다.
 
@@ -39,7 +39,7 @@ POST  /api/care-recipients/{id}/export-bundles/copy  묶음을 복사했다는 �
 | `RECORD` 전산 기록 문구 | 장기요양 전산에 붙여넣는 직원 | 기록체 (`~함` `~하심`) | 300자 |
 | `GUARDIAN` 보호자 전달 문구 | 보호자 | 존댓말, 짧고 담담하게 | 200자 |
 
-**말투와 길이는 Manyfast에서 확정된 값이다.** (`F-GUSOFG` rules · display, `v0.2-export-unit.1`)
+**말투와 길이는 Manyfast에서 확정된 값이다.** (`F-GUSOFG` rules · display, `v0.3-plan-0813`)
 구현은 `com.ieobom.api.ai.ExportPhraseSchema`의 프롬프트로 이 값을 지킨다. **여기 적힌 값을 고치려면
 Manyfast를 먼저 고친다.**
 
@@ -414,7 +414,7 @@ Manyfast에 없다. 안내를 보고 `PUT`으로 고치는 길이 열려 있으�
 이야기가 로그 파일로 새어 나갈 이유가 없다. 대신 몇 개가 검토 안내를 달고 나갔는지를 남긴다.
 "AI 문구를 그대로 쓸 수 있었는지"를 나중에 물을 수 있는 흔적이다.
 
-**생성 단위가 카드 한 장인 것은 Manyfast에 명시돼 있다.** (`F-GUSOFG` action, `v0.2-export-unit.1`)
+**생성 단위가 카드 한 장인 것은 Manyfast에 명시돼 있다.** (`F-GUSOFG` action, `v0.3-plan-0813`)
 유저플로우의 진입점이 카드 상세(n21)와 업무 상세(n34)이고, 문구를 만들 수 있는지 판정하는
 `exportAllowed`도 카드마다 붙는다. 어르신 단위로 필요한 것은 **생성이 아니라 복사**이고, 그건
 저장하지 않는 묶음으로 푼다. (위 [`GET .../export-bundles`](#get-apicare-recipientscarerecipientidexport-bundles))
