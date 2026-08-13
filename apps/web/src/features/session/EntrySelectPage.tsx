@@ -3,18 +3,24 @@ import { Navigate, useNavigate } from 'react-router'
 import { BigButton } from '../../shared/ui/BigButton'
 import { ENTRY_ROLES, findEntryRole, homePathOf, type EntryRole } from './entryRole'
 import { useSession } from './sessionContext'
-import { STAFF_DIRECTORY, type Staff } from './staffDirectory'
+import type { Staff } from './staffDirectory'
+import { useStaffDirectory } from './useStaffDirectory'
 
 /**
  * 유저플로우 n2 — 역할·본인 식별 선택 화면.
  *
  * 로그인이 아니다. 비밀번호를 받지 않고, 진입 역할 2종과 본인만 고른다.
  * 고르고 나면 n3 분기대로 각 역할의 홈으로 간다.
+ *
+ * 본인 선택 목록은 **센터가 사전 등록한 직원 명단**에서 온다. (Manyfast F-YJJJUX permissions, #33)
+ * 이 화면에서 명단을 고치지 않는다 — 직원 명단 관리 화면은 만들지 않는다.
  */
 export function EntrySelectPage() {
   const { session, enter } = useSession()
   const navigate = useNavigate()
   const [pickedRole, setPickedRole] = useState<EntryRole | null>(null)
+  const directory = useStaffDirectory()
+  const staffList = directory.data ?? []
 
   // 이미 고른 상태로 다시 들어오면 자기 홈으로 보낸다. 바꾸려면 홈에서 '본인 바꾸기'를 누른다.
   if (session) {
@@ -59,18 +65,36 @@ export function EntrySelectPage() {
             <p className="text-xl text-slate-600">{findEntryRole(pickedRole).label}</p>
           </div>
 
-          <ul className="flex flex-col gap-4">
-            {STAFF_DIRECTORY.map((staff) => (
-              <li key={staff.code}>
-                <BigButton tone="plain" onClick={() => handlePickStaff(staff)}>
-                  <span className="flex flex-wrap items-baseline gap-x-3">
-                    <span>{staff.name}</span>
-                    <span className="text-lg font-normal text-slate-500">{staff.code}</span>
-                  </span>
-                </BigButton>
-              </li>
-            ))}
-          </ul>
+          {directory.isPending ? (
+            <p className="text-xl text-slate-600">명단을 불러오는 중입니다…</p>
+          ) : directory.isError ? (
+            // 캐시까지 비어 있을 때만 여기로 온다. 받아 둔 명단이 있으면 그것으로 고르게 한다.
+            <div className="flex flex-col items-start gap-4">
+              <p className="text-xl text-slate-700">
+                직원 명단을 불러오지 못했습니다. 연결을 확인한 뒤 다시 눌러 주세요.
+              </p>
+              <BigButton tone="plain" onClick={() => void directory.refetch()}>
+                명단 다시 불러오기
+              </BigButton>
+            </div>
+          ) : staffList.length === 0 ? (
+            <p className="text-xl text-slate-700">
+              등록된 직원이 없습니다. 센터 관리자에게 명단 등록을 요청해 주세요.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-4">
+              {staffList.map((staff) => (
+                <li key={staff.code}>
+                  <BigButton tone="plain" onClick={() => handlePickStaff(staff)}>
+                    <span className="flex flex-wrap items-baseline gap-x-3">
+                      <span>{staff.name}</span>
+                      <span className="text-lg font-normal text-slate-500">{staff.code}</span>
+                    </span>
+                  </BigButton>
+                </li>
+              ))}
+            </ul>
+          )}
 
           <button
             type="button"

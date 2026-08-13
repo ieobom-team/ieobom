@@ -1,13 +1,13 @@
 /**
- * 직원 명단 — 본인 식별에 쓰는 데모용 상수.
+ * 직원 명단 — 본인 식별에 쓰는 목록.
  *
- * 명단을 어디서 받아오는지는 아직 정해지지 않아서(#4) 지금은 프론트 상수로 둔다.
- * 서버가 명단을 관리해야 하면 별도 Issue로 뺀다.
+ * **명단은 서버가 관리한다.** (`GET /api/staff`, #33) 화면은 받아 온 명단을 기기에 캐시해 두고,
+ * 저장된 선택값(사번)을 되살릴 때 이 캐시에서 이름을 다시 찾는다.
+ * 연결이 끊긴 채 앱을 다시 열어도 본인 선택이 유지돼야 하기 때문이다.
+ * (Manyfast F-YJJJUX exceptions — 돌봄 중인 근무자에게 다시 고르라고 요구하지 않는다)
  *
  * 담당 직종은 **일부러 넣지 않았다.** 담당 직종은 업무 배정에만 쓰는 값이라
  * 여기에 두면 진입 역할과 섞인다.
- *
- * 이름은 모두 가상 인물이다. 실제 직원 정보를 넣지 않는다.
  */
 export type Staff = {
   /** 사번. 명단 안에서 유일하며 저장된 선택값을 되살릴 때 이 값을 쓴다. */
@@ -15,20 +15,57 @@ export type Staff = {
   name: string
 }
 
-export const STAFF_DIRECTORY: readonly Staff[] = [
-  { code: 'ST-001', name: '김하늘' },
-  { code: 'ST-002', name: '이도윤' },
-  { code: 'ST-003', name: '박서연' },
-  { code: 'ST-004', name: '최민재' },
-  { code: 'ST-005', name: '정유진' },
-  { code: 'ST-006', name: '강태호' },
-  { code: 'ST-007', name: '윤소라' },
-  { code: 'ST-008', name: '임현우' },
-]
+/** 캐시 형식이 바뀌면 뒤의 번호를 올려 옛 값과 섞이지 않게 한다. */
+export const STAFF_CACHE_KEY = 'ieobom.staff-directory.v1'
 
-export function findStaffByCode(code: string | null | undefined): Staff | undefined {
+function isStaff(value: unknown): value is Staff {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as Staff).code === 'string' &&
+    typeof (value as Staff).name === 'string'
+  )
+}
+
+/**
+ * 마지막으로 받아 둔 명단.
+ *
+ * 브라우저 저장소를 못 쓰는 환경(사생활 보호 모드 등)에서는 빈 목록이 된다.
+ * 이때는 명단을 받아 오기 전까지 본인을 고를 수 없을 뿐, 앱이 뜨지 않는 것은 아니다.
+ */
+export function readCachedDirectory(): Staff[] {
+  let raw: string | null
+  try {
+    raw = window.localStorage.getItem(STAFF_CACHE_KEY)
+  } catch {
+    return []
+  }
+  if (raw === null) {
+    return []
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter(isStaff) : []
+  } catch {
+    return []
+  }
+}
+
+export function cacheDirectory(directory: readonly Staff[]): void {
+  try {
+    window.localStorage.setItem(STAFF_CACHE_KEY, JSON.stringify(directory))
+  } catch {
+    // 캐시하지 못해도 이번 화면은 받아 온 목록으로 그대로 동작한다.
+  }
+}
+
+export function findStaffByCode(
+  directory: readonly Staff[],
+  code: string | null | undefined,
+): Staff | undefined {
   if (!code) {
     return undefined
   }
-  return STAFF_DIRECTORY.find((staff) => staff.code === code)
+  return directory.find((staff) => staff.code === code)
 }

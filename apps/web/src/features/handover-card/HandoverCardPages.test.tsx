@@ -7,10 +7,10 @@ import { AppRoutes } from '../../routes/AppRoutes'
 import { createQueryClient } from '../../shared/api/queryClient'
 import { SessionProvider } from '../session/SessionProvider'
 import { saveSession } from '../session/sessionStorage'
-import { STAFF_DIRECTORY } from '../session/staffDirectory'
+import { seedStaffCache, TEST_STAFF } from '../session/staffFixture'
 import type { HandoverCard } from './handoverCardApi'
 
-const 김하늘 = STAFF_DIRECTORY[0]
+const 김하늘 = TEST_STAFF[0]
 
 function 카드(patch: Partial<HandoverCard> = {}): HandoverCard {
   return {
@@ -91,6 +91,7 @@ function renderApp(
   initialPath = '/handover-cards',
   entryRole: 'FIELD_WORKER' | 'MANAGER' = 'FIELD_WORKER',
 ) {
+  seedStaffCache()
   saveSession({ entryRole, staff: 김하늘 })
   return render(
     <QueryClientProvider client={createQueryClient()}>

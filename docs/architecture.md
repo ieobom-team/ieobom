@@ -75,6 +75,7 @@ VM 한 대에 `docker compose` 로 Caddy · API · MySQL 을 함께 올린다.
 |---|---|
 | `common` | 도메인이 함께 쓰는 값 — `JobRole`(담당 직종 5종), `SafetyKeyword`(지정 키워드 4종), `BaseTimeEntity`(생성·수정 시각) |
 | `recipient` | 어르신(`CareRecipient`) |
+| `staff` | 직원 명단(`Staff`) — 진입 화면의 본인 선택 목록. 계정이 아니다 |
 | `handover` | 원본 인계 입력 — 음성·텍스트·체크로 들어온 그대로 |
 | `handovercard` | AI가 구조화한 어르신별 카드 |
 | `task` | 담당자 배정, 당일 기한, 미처리/완료 상태 |
@@ -90,7 +91,7 @@ AI 호출은 추상화 라이브러리를 쓰지 않고 `RestClient`로 직접 �
 
 ```
 apps/web/src/
-├── features/session/      진입 역할·본인 식별, 진입 선택값 보관
+├── features/session/      진입 역할·본인 식별, 직원 명단 조회·캐시, 진입 선택값 보관
 ├── features/field/        현장 근무자 홈 (모바일)
 ├── features/admin/        관리자 홈 (웹)
 ├── routes/                라우트 정의(`AppRoutes`)와 진입 가드(`RequireSession`)
@@ -101,7 +102,9 @@ apps/web/src/
 화면 전환은 `react-router`의 선언형 `BrowserRouter`를 쓴다.
 검증은 `oxlint` · `vitest`(+ `@testing-library/react`, `jsdom`) · `tsc -b && vite build` 세 가지다.
 
-## 엔티티 (4개)
+## 엔티티
+
+인계 흐름을 잇는 네 엔티티다. `Staff`는 여기에 붙지 않고 따로 선다 — 아래 표 다음에 적었다.
 
 ```
 CareRecipient   어르신
@@ -116,7 +119,7 @@ HandoverCard ───┐ N          1 ┌─── Handover      원본 인계 
     Task        후속 업무 (담당자 · 미처리/완료)
 ```
 
-네 엔티티 모두 `BaseTimeEntity`를 상속해 `createdAt` · `updatedAt`을 갖는다.
+모든 엔티티가 `BaseTimeEntity`를 상속해 `createdAt` · `updatedAt`을 갖는다.
 아래에서 *(선택)* 표시가 없는 필드는 `nullable = false`다.
 
 | 엔티티 | 필드 |
@@ -126,8 +129,15 @@ HandoverCard ───┐ N          1 ┌─── Handover      원본 인계 
 | `HandoverCard` | `handover`, `careRecipient`(선택), `observedAt` 시각(선택), `statusChange` 변화(선택), `actionTaken` 조치(선택), `nextAction` 다음 행동(선택), **`evidenceText` 근거 원문 문장**, `safetyRelated` 안전 관련 여부, **`safetyFlagSource` 판정 출처**(`KEYWORD`/`STAFF`, 선택), **`reviewStatus` 검토 상태**(`NEEDS_REVIEW`/`REVIEWED`), `suggestedJobRole` 제안 직종(선택), `suggestedDueTime` 제안 기한(선택) |
 | `Task` | `handoverCard`, `content` 업무 내용, `assigneeJobRole` 담당 직종(선택), `assigneeName` 담당자 이름(선택), **`dueTime` 기한(`LocalTime`, 당일 HH:MM)**, `status`(`PENDING`/`DONE`), `completedAt` 완료 시각(선택), `completedByName` 완료 기록자(선택) |
 
+**`Staff`는 위 그림에 없다.** 직원 명단(`name` 이름, `code` 사번(unique))은 진입 화면이 본인 선택 목록을
+그릴 때만 읽고, 인계·업무는 직원을 **이름 문자열**로 가리키므로 연관관계를 걸지 않는다.
+외래키를 걸려면 이름 대신 직원 id를 저장해야 하는데, 그 결정은 아직 하지 않았다. (인증 절 참고)
+
 **어르신 시드.** `CareRecipientSeeder`가 기동 시 데모용 어르신 20명(`IB-001`~`IB-020`)을 채운다.
 식별번호 단위로 확인하고 넣으므로 여러 번 기동해도 중복이 쌓이지 않는다. 이름은 모두 가상 인물이다.
+
+**직원 시드.** `StaffSeeder`가 같은 방식으로 데모용 직원 8명(`ST-001`~`ST-008`)을 채운다.
+명단이 비면 진입 화면에서 본인을 고를 수 없어 앱 전체가 시작되지 않는다.
 
 **`HandoverCard.careRecipient`가 비어 있을 수 있는 이유.** 대상 어르신을 분리할 수 없는 원문은
 확정 카드로 만들지 않고 사람에게 넘긴다. 이때 어르신 없이 `검토 필요` 상태로 남는다.
@@ -193,9 +203,17 @@ HandoverCard ───┐ N          1 ┌─── Handover      원본 인계 
 - 기기 하나를 여러 직원이 돌려 쓰므로 홈 헤더에 **본인 바꾸기**를 둔다.
   이게 없으면 앞사람 이름으로 입력이 남는다.
 
-**직원 명단은 프론트 상수(mock)다.** (`features/session/staffDirectory.ts`)
-서버에 직원 엔티티가 없고, API는 직원을 `reporterName` · `assigneeName` · `completedByName`
-같은 **이름 문자열**로만 받는다. 명단을 서버가 관리해야 하면 별도 Issue로 뺀다.
+**직원 명단은 서버가 관리한다.** (`GET /api/staff`, [#33](https://github.com/ieobom-team/ieobom/issues/33))
+진입 화면이 명단을 받아 본인 선택 목록을 그리고, 받아 온 명단을 기기에 캐시해 둔다.
+브라우저에는 **사번만** 저장하므로 선택값을 되살릴 때 이 캐시에서 이름을 다시 찾는다.
+(`features/session/staffApi.ts` · `staffDirectory.ts`)
+
+- **연결이 끊겨도 진입을 막지 않는다.** 명단을 받지 못하면 마지막으로 캐시해 둔 명단으로 고르게 하고,
+  캐시까지 비어 있을 때만 오류로 알린다. 여기서 막으면 현장 근무자가 입력 자체를 못 한다.
+- **직원 명단 관리 화면은 만들지 않는다.** 유저플로우 "AI 인계 도구 내비게이션 맵"에 그 화면이 없다.
+  입·퇴사는 `StaffSeeder`와 DB로 반영한다. 어르신 명단([#42](https://github.com/ieobom-team/ieobom/issues/42))과 다른 점이다.
+- API는 직원을 여전히 `reporterName` · `assigneeName` · `completedByName` 같은 **이름 문자열**로 받는다.
+  사번을 함께 저장할지는 동명이인 구분이 실제로 필요해지는 시점에 다시 판단한다.
 
 ## AI 구조화 규칙
 

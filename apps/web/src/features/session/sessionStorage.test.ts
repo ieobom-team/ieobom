@@ -1,8 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { clearSession, loadSession, saveSession, STORAGE_KEY } from './sessionStorage'
-import { STAFF_DIRECTORY } from './staffDirectory'
+import { STAFF_CACHE_KEY } from './staffDirectory'
+import { seedStaffCache, TEST_STAFF } from './staffFixture'
 
-const 김하늘 = STAFF_DIRECTORY[0]
+const 김하늘 = TEST_STAFF[0]
+
+// 이름은 저장하지 않고 명단에서 다시 찾으므로, 되살리려면 명단을 받아 둔 상태여야 한다.
+beforeEach(() => {
+  seedStaffCache()
+})
 
 describe('진입 선택값 저장', () => {
   it('저장한 역할과 본인을 그대로 되살린다', () => {
@@ -26,6 +32,21 @@ describe('진입 선택값 저장', () => {
 
     expect(loadSession()).toBeNull()
     expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull()
+  })
+
+  it('명단에서 이름이 바뀌면 바뀐 이름으로 되살린다', () => {
+    saveSession({ entryRole: 'FIELD_WORKER', staff: 김하늘 })
+    seedStaffCache([{ code: 김하늘.code, name: '김하늘(개명)' }])
+
+    // 이름을 함께 저장했다면 옛 이름이 입력자로 계속 남았을 것이다.
+    expect(loadSession()?.staff.name).toBe('김하늘(개명)')
+  })
+
+  it('명단을 아직 한 번도 받지 못했으면 되살리지 않는다', () => {
+    saveSession({ entryRole: 'MANAGER', staff: 김하늘 })
+    window.localStorage.removeItem(STAFF_CACHE_KEY)
+
+    expect(loadSession()).toBeNull()
   })
 
   it('진입 역할이 아닌 값이 들어 있으면 버린다', () => {
