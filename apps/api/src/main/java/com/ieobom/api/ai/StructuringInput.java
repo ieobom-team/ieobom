@@ -14,9 +14,21 @@ import java.util.List;
  * @param occurredAt 특이사항이 있었던 시점. 제안 기한과 관찰 시각의 기준이 된다
  * @param selectedRecipientCode 입력할 때 직원이 고른 어르신의 내부 ID
  * @param candidateRecipientCodes 고를 수 있는 어르신의 내부 ID 전체. 이 목록 밖의 ID는 뒤에서 버린다
+ * @param inputMethod 입력 방식 (CHECK, TEXT, VOICE 등)
  */
 public record StructuringInput(
 		String maskedRawText,
 		LocalDateTime occurredAt,
 		String selectedRecipientCode,
-		List<String> candidateRecipientCodes) {}
+		List<String> candidateRecipientCodes,
+		String inputMethod) {
+
+	public StructuringInput(
+			String maskedRawText,
+			LocalDateTime occurredAt,
+			String selectedRecipientCode,
+			List<String> candidateRecipientCodes) {
+		this(maskedRawText, occurredAt, selectedRecipientCode, candidateRecipientCodes, null);
+	}
+}
+
