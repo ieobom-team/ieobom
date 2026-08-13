@@ -32,7 +32,7 @@ public class TaskController {
 	private final TaskService taskService;
 
 	/**
-	 * 카드의 다음 행동을 후속 업무로 만든다. (유저플로우 n26 → n27 → n29)
+	 * 카드의 다음 행동을 후속 업무로 만든다. (유저플로우 "새 플로우 3" n26 → n27 → n29)
 	 *
 	 * <p>AI 제안값(n28)을 내려주는 엔드포인트를 따로 두지 않는다. 카드 응답이 이미 {@code nextAction} · {@code
 	 * suggestedJobRole} · {@code suggestedDueTime} 을 들고 있고, 배정 화면은 그것으로 미리 채운다.
@@ -43,13 +43,13 @@ public class TaskController {
 		return ResponseEntity.status(201).body(taskService.create(cardId, request));
 	}
 
-	/** 업무 상세. (유저플로우 n34) */
+	/** 업무 상세. (유저플로우 "새 플로우 3" n34) */
 	@GetMapping("/api/tasks/{taskId}")
 	public TaskResponse find(@PathVariable Long taskId) {
 		return taskService.find(taskId);
 	}
 
-	/** 그날 업무 목록. {@code date} 를 생략하면 오늘이다. (유저플로우 n31 · n32) */
+	/** 그날 업무 목록. {@code date} 를 생략하면 오늘이다. (유저플로우 "새 플로우 3" n31 · n32) */
 	@GetMapping("/api/tasks")
 	public TaskListResponse findByDate(
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
@@ -58,7 +58,7 @@ public class TaskController {
 	}
 
 	/**
-	 * 완료로 닫는다. 확인자가 담당자와 달라도 된다. (유저플로우 n35)
+	 * 완료로 닫는다. 확인자가 담당자와 달라도 된다. (유저플로우 "새 플로우 3" n35)
 	 *
 	 * <p>이미 완료된 업무여도 {@code 200} 이다. 아무것도 바꾸지 않고 지금 상태를 돌려주며, 화면은 {@code alreadyCompleted} 로
 	 * 중복 완료 안내(n37)를 띄운다.

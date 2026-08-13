@@ -26,13 +26,13 @@ import {
 const MAX_LENGTH: Record<PhraseType, number> = { RECORD: 300, GUARDIAN: 200 }
 
 /**
- * 유저플로우 n36~n41 — 기록·보호자 전달 문구 화면.
+ * 유저플로우 "새 플로우 3" n36~n41 — 기록·보호자 전달 문구 화면.
  *
  * 카드 상세(n21)에서 `exportAllowed`가 참일 때만 들어온다. 판정은 화면이 다시 하지 않고
  * `HandoverCardDetailPage`의 `ExportEntry`와 같은 서버 값을 그대로 믿는다.
  *
  * "카드 한 장의 문구"(n37 · n38)와 "어르신 당일 묶음"(n62)을 탭으로 가르지 않고 세로로 함께 둔다.
- * 유저플로우에서 셋이 n36의 나란한 자식 노드이기 때문이다. 파일 다운로드(n41)는 #45 로 분리했다.
+ * 유저플로우 "새 플로우 3"에서 셋이 n36의 나란한 자식 노드이기 때문이다. 파일 다운로드(n41)는 #45 로 분리했다.
  */
 export function ExportPage() {
   const { cardId } = useParams()

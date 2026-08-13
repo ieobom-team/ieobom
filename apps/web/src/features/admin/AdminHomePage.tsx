@@ -1,7 +1,7 @@
 import { SessionHeader } from '../session/SessionHeader'
 
 /**
- * 유저플로우 n5 — 관리자 홈. 이 Issue(#4)에서는 진입 결과를 확인하는 자리까지만 만든다.
+ * 유저플로우 "새 플로우 3" n5 — 관리자 홈. 이 Issue(#4)에서는 진입 결과를 확인하는 자리까지만 만든다.
  * 당일 운영 현황과 하원 미처리 브리핑(#16)이 여기에 붙는다.
  */
 export function AdminHomePage() {

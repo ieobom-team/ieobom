@@ -7,7 +7,7 @@ import { HandoverCardBody } from './HandoverCardBody'
 import { useHandoverCards } from './useHandoverCards'
 
 /**
- * 유저플로우 n18 · n19 — 어르신별 인계 카드 목록.
+ * 유저플로우 "새 플로우 3" n18 · n19 — 어르신별 인계 카드 목록.
  *
  * 어르신을 가리지 못한 항목(n23 negative)은 여기 섞지 않고 n24 화면으로 보낸다. 목록에는
  * 몇 건이 그쪽에 있는지만 알린다. 누구의 것인지 모르는 카드가 어르신 묶음 안에 그려지면

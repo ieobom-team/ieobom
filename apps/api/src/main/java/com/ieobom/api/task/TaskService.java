@@ -79,14 +79,14 @@ public class TaskService {
 		return TaskResponse.from(task);
 	}
 
-	/** 업무 하나. (유저플로우 n34 업무 상세) */
+	/** 업무 하나. (유저플로우 "새 플로우 3" n34 업무 상세) */
 	@Transactional(readOnly = true)
 	public TaskResponse find(Long taskId) {
 		return TaskResponse.from(findTask(taskId));
 	}
 
 	/**
-	 * 그날 만들어진 업무 전체. (유저플로우 n31 · n32)
+	 * 그날 만들어진 업무 전체. (유저플로우 "새 플로우 3" n31 · n32)
 	 *
 	 * <p>건수 집계나 하원 미처리 브리핑은 여기서 만들지 않는다. 그건 당일 현황을 종합해서 보여주는
 	 * 대시보드(Manyfast F-HQTFLK, #16)의 몫이고, 여기서는 그날의 업무를 있는 그대로 나열만 한다.
@@ -162,7 +162,7 @@ public class TaskService {
 	/**
 	 * 업무를 만들 수 있는 카드인지. (Manyfast F-IVFNPC preconditions)
 	 *
-	 * <p>검토 완료까지는 요구하지 않는다. 유저플로우에서 카드 상세(n21)는 검토와 배정 두 갈래로 함께 열려 있고, Manyfast 도 "검토 가능한"
+	 * <p>검토 완료까지는 요구하지 않는다. 유저플로우 "새 플로우 3"에서 카드 상세(n21)는 검토와 배정 두 갈래로 함께 열려 있고, Manyfast 도 "검토 가능한"
 	 * 카드라고만 한다. 문구 생성과 다른 지점이다 — 문구는 보호자에게 나가지만 업무는 내부에서 닫힌다.
 	 *
 	 * <p>대상 어르신은 막는다. 누구의 일인지 모르는 업무는 담당자가 받아도 수행할 수 없고, 완료 확인은 더 못 한다.

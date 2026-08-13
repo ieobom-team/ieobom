@@ -4,7 +4,7 @@ import { useOfflineQueue } from '../handover/useOfflineQueue'
 import { SessionHeader } from '../session/SessionHeader'
 
 /**
- * 유저플로우 n4 — 현장 근무자 홈.
+ * 유저플로우 "새 플로우 3" n4 — 현장 근무자 홈.
  *
  * n6 특이사항 남기기(#6), n18 인계 카드 목록(#11), n61 → n31 업무 목록(#15)이 붙어 있다.
  */

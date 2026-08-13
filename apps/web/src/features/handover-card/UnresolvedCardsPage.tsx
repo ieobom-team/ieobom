@@ -6,7 +6,7 @@ import { CardLink } from './HandoverCardListPage'
 import { useHandoverCards } from './useHandoverCards'
 
 /**
- * 유저플로우 n24 — 검토 필요 항목.
+ * 유저플로우 "새 플로우 3" n24 — 검토 필요 항목.
  *
  * 어르신을 분리할 수 없는 원문은 확정 카드로 만들지 않고 검토 대상으로 표시한다.
  * (Manyfast F-SNBVHR exceptions) 서버가 `unresolved` 로 갈라 내려주는 항목이 그대로 여기다.

@@ -288,7 +288,7 @@ class TaskApiTest {
 				.perform(완료(task.getId(), """
 						{"completedByName": "최센터장"}
 						"""))
-				// 오류가 아니다. 화면이 보여 줘야 하는 것은 지금 이 업무가 어떤 상태인지다. (유저플로우 n36 → n37)
+				// 오류가 아니다. 화면이 보여 줘야 하는 것은 지금 이 업무가 어떤 상태인지다. (유저플로우 "새 플로우 3" n36 → n37)
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.alreadyCompleted").value(true))
 				.andExpect(jsonPath("$.notice").value(containsString("이미 완료")))

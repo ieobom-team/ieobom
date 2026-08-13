@@ -7,7 +7,7 @@ import type { Staff } from './staffDirectory'
 import { useStaffDirectory } from './useStaffDirectory'
 
 /**
- * 유저플로우 n2 — 역할·본인 식별 선택 화면.
+ * 유저플로우 "새 플로우 3" n2 — 역할·본인 식별 선택 화면.
  *
  * 로그인이 아니다. 비밀번호를 받지 않고, 진입 역할 2종과 본인만 고른다.
  * 고르고 나면 n3 분기대로 각 역할의 홈으로 간다.
