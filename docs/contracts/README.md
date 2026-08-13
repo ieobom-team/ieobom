@@ -51,5 +51,5 @@ docs/contracts/
 |---|---|---|
 | `handover-api.md` | 어르신 명단 등록·수정 API / 음성 원본 저장 | #42, #44 |
 | `handover-card-schema.md` | LLM 호출 전 실명→내부 ID 치환 시점과 식별자 규칙 | #43 |
-| `export-api.md` | 문구 파일 출력 — `.txt` · `.md`는 작성됨, `.docx` · `.xlsx`가 남았다 | #45 |
+| `export-api.md` | 문구 파일 출력 — `.txt` · `.md` · `.docx` · `.xlsx` 작성됨 | #45 |
 | `../architecture.md` | `CareRecipient.code`가 가명처리의 내부 ID임을 명시 / 음성 원본 필드 / 시드 서술 | #42, #43, #44 |

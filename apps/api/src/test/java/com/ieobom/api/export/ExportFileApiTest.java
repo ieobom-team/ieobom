@@ -18,6 +18,7 @@ import com.ieobom.api.handovercard.ReviewStatus;
 import com.ieobom.api.handovercard.SafetyFlagSource;
 import com.ieobom.api.recipient.CareRecipient;
 import com.ieobom.api.recipient.CareRecipientRepository;
+import java.io.ByteArrayInputStream;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -25,6 +26,9 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -112,6 +116,67 @@ class ExportFileApiTest {
 		assertThat(파일).contains("1. 점심 식사량이 줄었습니다.");
 		assertThat(파일).contains("> \"점심을 거의 안 드셨어요\"");
 		assertThat(파일).contains(ExportDocument.DISCLAIMER);
+	}
+
+	/**
+	 * "일지"라고 부르지 않는다. 워드로 받은 문서에 그 이름이 붙으면 그대로 제출해도 되는 것으로 읽힌다.
+	 *
+	 * <p>담기는 사실은 텍스트·마크다운과 같다. 다른 것은 모양뿐이다.
+	 */
+	@Test
+	void docx_는_검토용_초안_제목과_근거와_고지를_담는다() throws Exception {
+		HandoverCard 카드 = 문구있는_카드(LocalTime.of(12, 40), false, "점심 식사량 저하 보이심.", "점심 식사량이 줄었습니다.");
+
+		MvcResult result =
+				mockMvc
+						.perform(get("/api/exports/{id}/file", 문구(카드, ExportPhraseType.RECORD).getId())
+								.param("format", "docx"))
+						.andExpect(status().isOk())
+						.andExpect(header().string(HttpHeaders.CONTENT_TYPE, containsString("wordprocessingml")))
+						.andReturn();
+
+		String 문서 = 워드_본문(result.getResponse().getContentAsByteArray());
+		assertThat(문서).contains("검토용 서술형 기록 초안");
+		assertThat(문서).doesNotContain("일지");
+		assertThat(문서).contains("전산 기록 문구 — 김말순");
+		assertThat(문서).contains("점심 식사량 저하 보이심.");
+		assertThat(문서).as("파일만 받은 사람도 근거를 볼 수 있어야 한다").contains("점심을 거의 안 드셨어요");
+		assertThat(문서).contains(ExportDocument.DISCLAIMER);
+		assertThat(파일이름(result))
+				.isEqualTo("이어봄_전산기록문구_김말순_%s.docx".formatted(LocalDate.now()));
+	}
+
+	@Test
+	void 묶음도_docx_로_내려받을_수_있다() throws Exception {
+		문구있는_카드(LocalTime.of(9, 0), false, "아침 기침 잦으심.", "아침에 기침이 잦으셨습니다.");
+		문구있는_카드(LocalTime.of(14, 0), true, "복도에서 넘어지실 뻔함.", "복도에서 넘어지실 뻔해 부축해 드렸습니다.");
+
+		MvcResult result =
+				mockMvc
+						.perform(
+								get("/api/care-recipients/{id}/export-bundles/file", 김말순.getId())
+										.param("phraseType", "RECORD")
+										.param("format", "docx"))
+						.andExpect(status().isOk())
+						.andReturn();
+
+		String 문서 = 워드_본문(result.getResponse().getContentAsByteArray());
+		assertThat(문서).contains("전산 기록 문구 묶음 — 김말순");
+		assertThat(문서)
+				.as("이어 붙인 본문이 한 덩어리로 뭉치지 않고 줄로 나뉜다")
+				.contains("복도에서 넘어지실 뻔함.\n아침 기침 잦으심.");
+	}
+
+	/** 표는 단위가 다르다. 문구를 내려받는 자리에서 고를 수 있으면 무엇이 나가는지 설명할 수 없다. */
+	@Test
+	void 문구는_xlsx_로_내려받을_수_없다() throws Exception {
+		HandoverCard 카드 = 문구있는_카드(LocalTime.of(12, 40), false, "점심 식사량 저하 보이심.", "점심 식사량이 줄었습니다.");
+
+		mockMvc
+				.perform(get("/api/exports/{id}/file", 문구(카드, ExportPhraseType.RECORD).getId())
+						.param("format", "xlsx"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.fields[0].field").value("format"));
 	}
 
 	/** 이름이 깨지면 여러 개를 받아 둔 직원이 어느 것이 누구 것인지 알 수 없다. */
@@ -245,6 +310,15 @@ class ExportFileApiTest {
 				.andReturn()
 				.getResponse()
 				.getContentAsString(StandardCharsets.UTF_8);
+	}
+
+	/** 받은 워드 파일을 실제로 열어 문단을 잇는다. 바이트가 나왔다는 것만으로는 무엇이 담겼는지 알 수 없다. */
+	private String 워드_본문(byte[] file) throws Exception {
+		try (XWPFDocument word = new XWPFDocument(new ByteArrayInputStream(file))) {
+			return word.getParagraphs().stream()
+					.map(XWPFParagraph::getText)
+					.collect(Collectors.joining("\n"));
+		}
 	}
 
 	/** RFC 5987 로 인코딩된 이름을 되돌린다. 브라우저가 실제로 보게 될 이름이다. */

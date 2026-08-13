@@ -163,7 +163,8 @@ beforeEach(() => {
         )
 
       // 묶음 파일 경로가 `/export-bundles` 를 품고 있어 묶음 조회보다 먼저 본다.
-      if (input.includes('/file?')) {
+      // 표는 단위가 달라 경로도 다르다 — `/file` 이 붙지 않는다.
+      if (input.includes('/file?') || input.includes('/export-sheet')) {
         파일요청.push(input)
         return Promise.resolve(
           파일_응답.status === 200
@@ -393,6 +394,37 @@ describe('기록·보호자 전달 문구 화면 (n36~n40)', () => {
         '/api/care-recipients/1/export-bundles/file?phraseType=RECORD&format=md',
       ]),
     )
+  })
+
+  it('워드 파일도 같은 자리에서 고른다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    const recordHeading = await screen.findByRole('heading', { name: '전산 기록 문구' })
+    const section = recordHeading.closest('article') as HTMLElement
+
+    await user.click(within(section).getByRole('button', { name: '워드 파일(.docx)' }))
+
+    await vi.waitFor(() => expect(파일요청).toEqual(['/api/exports/7/file?format=docx']))
+  })
+
+  /** 표는 문구가 아니라 카드와 후속 업무를 담는다. 유형별 묶음 안에 있으면 안 된다. */
+  it('어르신 당일 표는 유형과 무관하게 한 번만 내려받는다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    const bundleHeading = await screen.findByRole('heading', { name: '전산 기록 문구 묶음' })
+    const bundleSection = bundleHeading.closest('article') as HTMLElement
+    expect(
+      within(bundleSection).queryByRole('button', { name: '당일 항목 표(.xlsx)' }),
+    ).not.toBeInTheDocument()
+
+    const 표버튼 = screen.getAllByRole('button', { name: '당일 항목 표(.xlsx)' })
+    expect(표버튼).toHaveLength(1)
+
+    await user.click(표버튼[0])
+
+    await vi.waitFor(() => expect(파일요청).toEqual(['/api/care-recipients/1/export-sheet']))
   })
 
   it('서버가 내려받기를 거절하면 그 이유를 보여 준다', async () => {

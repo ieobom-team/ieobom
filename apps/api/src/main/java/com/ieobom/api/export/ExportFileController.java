@@ -30,13 +30,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class ExportFileController {
 
 	private final ExportFileService exportFileService;
+	private final ExportSheetService exportSheetService;
 
 	/** 카드 한 장의 문구 하나. */
 	@GetMapping("/api/exports/{phraseId}/file")
 	public ResponseEntity<byte[]> phraseFile(
 			@PathVariable Long phraseId, @RequestParam String format) {
 
-		return attachment(exportFileService.ofPhrase(phraseId, ExportFileFormat.from(format)));
+		return attachment(
+				exportFileService.ofPhrase(phraseId, ExportFileFormat.fromPhraseFormat(format)));
 	}
 
 	/** 어르신 당일 묶음 하나. {@code date} 를 생략하면 오늘이다. */
@@ -53,7 +55,23 @@ public class ExportFileController {
 						careRecipientId,
 						phraseTypeOf(phraseType),
 						date == null ? LocalDate.now() : date,
-						ExportFileFormat.from(format)));
+						ExportFileFormat.fromPhraseFormat(format)));
+	}
+
+	/**
+	 * 어르신 당일 인계 항목 표. {@code date} 를 생략하면 오늘이다.
+	 *
+	 * <p><b>형식을 고르지 않는다.</b> 표는 {@code .xlsx} 하나뿐이라 고를 것이 없고, 문구 형식과 섞이면 "표를 텍스트로" 같은 요청이 만들어진다.
+	 * 담기는 것이 문구가 아니라 카드와 후속 업무라 경로도 문구 쪽과 나눠 둔다.
+	 */
+	@GetMapping("/api/care-recipients/{careRecipientId}/export-sheet")
+	public ResponseEntity<byte[]> sheetFile(
+			@PathVariable Long careRecipientId,
+			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+					LocalDate date) {
+
+		return attachment(
+				exportSheetService.ofRecipient(careRecipientId, date == null ? LocalDate.now() : date));
 	}
 
 	/**
