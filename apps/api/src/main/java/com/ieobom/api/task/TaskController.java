@@ -3,21 +3,27 @@ package com.ieobom.api.task;
 import com.ieobom.api.task.dto.TaskCompleteRequest;
 import com.ieobom.api.task.dto.TaskCompleteResponse;
 import com.ieobom.api.task.dto.TaskCreateRequest;
+import com.ieobom.api.task.dto.TaskListResponse;
 import com.ieobom.api.task.dto.TaskResponse;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 후속 업무 배정과 완료 처리. 계약은 {@code docs/contracts/task-api.md} 에 있다.
  *
- * <p>미처리 업무 <b>목록</b>은 여기 없다. 하원 미처리 브리핑과 당일 현황은 대시보드(Manyfast F-HQTFLK)의 몫이라 별도 Issue 로 뗀다.
+ * <p>여기서 내려주는 목록은 그날 업무를 있는 그대로 나열한 것뿐이다. 건수 집계, 하원 미처리 브리핑,
+ * 인계 카드·기록 문구로의 이동은 당일 현황을 종합하는 대시보드(Manyfast F-HQTFLK)의 몫이라 별도
+ * Issue(#16)로 뗀다.
  */
 @RestController
 @RequiredArgsConstructor
@@ -41,6 +47,14 @@ public class TaskController {
 	@GetMapping("/api/tasks/{taskId}")
 	public TaskResponse find(@PathVariable Long taskId) {
 		return taskService.find(taskId);
+	}
+
+	/** 그날 업무 목록. {@code date} 를 생략하면 오늘이다. (유저플로우 n31 · n32) */
+	@GetMapping("/api/tasks")
+	public TaskListResponse findByDate(
+			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+					LocalDate date) {
+		return taskService.findByDate(date == null ? LocalDate.now() : date);
 	}
 
 	/**

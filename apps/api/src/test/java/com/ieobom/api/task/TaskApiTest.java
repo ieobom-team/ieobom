@@ -321,6 +321,46 @@ class TaskApiTest {
 	}
 
 	@Test
+	void 당일_업무_목록은_미처리를_먼저_기한_순으로_준다() throws Exception {
+		Task 늦은미처리 = 업무(카드(김말순, "저녁 식사량 확인"), "박간호", LocalTime.of(17, 30));
+		Task 이른완료 = 업무(카드(김말순, "물리치료 확인"), "이재활", LocalTime.of(10, 0));
+		Task 이른미처리 = 업무(카드(김말순, "투약 확인"), "박간호", LocalTime.of(9, 0));
+		완료로_만든다(이른완료.getId(), "박간호");
+
+		mockMvc
+				.perform(get("/api/tasks").param("date", LocalDate.now().toString()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.tasks.length()").value(3))
+				.andExpect(jsonPath("$.tasks[0].id").value(이른미처리.getId()))
+				.andExpect(jsonPath("$.tasks[0].status").value("PENDING"))
+				.andExpect(jsonPath("$.tasks[1].id").value(늦은미처리.getId()))
+				.andExpect(jsonPath("$.tasks[1].status").value("PENDING"))
+				.andExpect(jsonPath("$.tasks[2].id").value(이른완료.getId()))
+				.andExpect(jsonPath("$.tasks[2].status").value("DONE"));
+	}
+
+	@Test
+	void 다른_날짜를_지정하면_그날_업무만_준다() throws Exception {
+		업무(카드(김말순, "저녁 식사량 확인"), "박간호", LocalTime.of(17, 30));
+
+		mockMvc
+				.perform(get("/api/tasks").param("date", LocalDate.now().minusDays(1).toString()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.tasks.length()").value(0));
+	}
+
+	@Test
+	void 날짜를_생략하면_오늘로_본다() throws Exception {
+		업무(카드(김말순, "저녁 식사량 확인"), "박간호", LocalTime.of(17, 30));
+
+		mockMvc
+				.perform(get("/api/tasks"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.date").value(LocalDate.now().toString()))
+				.andExpect(jsonPath("$.tasks.length()").value(1));
+	}
+
+	@Test
 	void 업무_상세는_담당과_기한과_상태를_함께_준다() throws Exception {
 		Task task = 업무(카드(김말순, "저녁 식사량 확인"), "박간호");
 
@@ -372,7 +412,17 @@ class TaskApiTest {
 	}
 
 	private Task 업무(HandoverCard card, String assigneeName) {
-		return tasks.save(
-				Task.pending(card, "저녁 식사량 확인", JobRole.NURSE_AIDE, assigneeName, LocalTime.of(17, 30)));
+		return 업무(card, assigneeName, LocalTime.of(17, 30));
+	}
+
+	private Task 업무(HandoverCard card, String assigneeName, LocalTime dueTime) {
+		return tasks.save(Task.pending(card, "저녁 식사량 확인", JobRole.NURSE_AIDE, assigneeName, dueTime));
+	}
+
+	/** API 를 거치지 않고 완료 상태로 만든다. 완료 처리 자체는 다른 테스트가 이미 본다. */
+	private void 완료로_만든다(Long taskId, String completedByName) {
+		Task task = tasks.findById(taskId).orElseThrow();
+		task.complete(completedByName);
+		tasks.save(task);
 	}
 }

@@ -8,7 +8,10 @@ import com.ieobom.api.handovercard.HandoverCardRepository;
 import com.ieobom.api.recipient.CareRecipient;
 import com.ieobom.api.task.dto.TaskCompleteResponse;
 import com.ieobom.api.task.dto.TaskCreateRequest;
+import com.ieobom.api.task.dto.TaskListResponse;
 import com.ieobom.api.task.dto.TaskResponse;
+import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +34,10 @@ public class TaskService {
 	static final String RECIPIENT_NOT_RESOLVED = "CARE_RECIPIENT_NOT_RESOLVED";
 	static final String TASK_ALREADY_CREATED = "TASK_ALREADY_CREATED";
 	static final String TASK_NOT_FOUND = "TASK_NOT_FOUND";
+
+	/** 미처리를 먼저, 그 안에서는 기한이 이른 순. 완료는 뒤에 두고 기한 순으로 묶는다. 화면이 먼저 봐야 하는 건 아직 안 닫힌 일이다. */
+	private static final Comparator<Task> PENDING_FIRST_BY_DUE_TIME =
+			Comparator.comparing(Task::isDone).thenComparing(Task::getDueTime);
 
 	private final TaskRepository taskRepository;
 	private final HandoverCardRepository cardRepository;
@@ -76,6 +83,24 @@ public class TaskService {
 	@Transactional(readOnly = true)
 	public TaskResponse find(Long taskId) {
 		return TaskResponse.from(findTask(taskId));
+	}
+
+	/**
+	 * 그날 만들어진 업무 전체. (유저플로우 n31 · n32)
+	 *
+	 * <p>건수 집계나 하원 미처리 브리핑은 여기서 만들지 않는다. 그건 당일 현황을 종합해서 보여주는
+	 * 대시보드(Manyfast F-HQTFLK, #16)의 몫이고, 여기서는 그날의 업무를 있는 그대로 나열만 한다.
+	 */
+	@Transactional(readOnly = true)
+	public TaskListResponse findByDate(LocalDate date) {
+		List<TaskResponse> tasks =
+				taskRepository.findCreatedBetween(date.atStartOfDay(), date.plusDays(1).atStartOfDay())
+						.stream()
+						.sorted(PENDING_FIRST_BY_DUE_TIME)
+						.map(TaskResponse::from)
+						.toList();
+
+		return new TaskListResponse(date, tasks);
 	}
 
 	/**
