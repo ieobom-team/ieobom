@@ -9,6 +9,8 @@ import { HandoverCreatePage } from '../features/handover/HandoverCreatePage'
 import { OfflineQueueSync } from '../features/handover/OfflineQueueSync'
 import { EntrySelectPage } from '../features/session/EntrySelectPage'
 import { TaskAssignPage } from '../features/task/TaskAssignPage'
+import { TaskDetailPage } from '../features/task/TaskDetailPage'
+import { TaskListPage } from '../features/task/TaskListPage'
 import { RequireSession } from './RequireSession'
 
 /**
@@ -47,6 +49,8 @@ export function AppRoutes() {
           <Route path="/handover-cards/:cardId" element={<HandoverCardDetailPage />} />
           <Route path="/handover-cards/:cardId/edit" element={<HandoverCardEditPage />} />
           <Route path="/handover-cards/:cardId/tasks/new" element={<TaskAssignPage />} />
+          <Route path="/tasks" element={<TaskListPage />} />
+          <Route path="/tasks/:taskId" element={<TaskDetailPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
