@@ -72,6 +72,62 @@ export function fetchHandoverCards(date?: string): Promise<HandoverCardList> {
 }
 
 /**
+ * 직원이 검토하며 고친 내용.
+ *
+ * **고칠 수 있는 항목을 통째로 보낸다.** 일부만 보내는 방식으로는 "조치를 지운다"와 "조치는 건드리지 않는다"가
+ * 요청에서 똑같이 보인다. 보내지 않은 항목은 지운 것으로 처리된다.
+ * 근거 원문과 관찰 시각은 여기 없다. 원문에서 뽑아 원문과 대조해 통과시킨 값이라 사람이 고치지 않는다.
+ */
+export type HandoverCardUpdateRequest = {
+  /** `null` 은 아직 누구 이야기인지 가리지 못했다는 뜻이다 */
+  careRecipientId: number | null
+  statusChange: string | null
+  actionTaken: string | null
+  nextAction: string | null
+  suggestedJobRole: JobRole | null
+  /** `HH:MM` */
+  suggestedDueTime: string | null
+}
+
+export function updateHandoverCard(
+  cardId: number,
+  request: HandoverCardUpdateRequest,
+): Promise<HandoverCard> {
+  return apiFetch<HandoverCard>(`/api/handover-cards/${cardId}`, {
+    method: 'PUT',
+    body: JSON.stringify(request),
+  })
+}
+
+/**
+ * 검토 필요 ↔ 검토 완료.
+ *
+ * 되돌리는 방향도 열려 있다. 잘못 눌러 검토 완료가 된 카드에서 빠져나올 길이 없으면
+ * 그 카드로 문구가 나가 버린다.
+ */
+export function changeReviewStatus(
+  cardId: number,
+  reviewStatus: ReviewStatus,
+): Promise<HandoverCard> {
+  return apiFetch<HandoverCard>(`/api/handover-cards/${cardId}/review-status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ reviewStatus }),
+  })
+}
+
+/**
+ * 직원이 직접 하는 안전 관련 표시. (Manyfast F-SNBVHR rules)
+ *
+ * 켜면 판정 출처가 `STAFF` 가 되고, 끄면 비워진다. 화면은 판정을 계산하지 않고 응답을 그대로 쓴다.
+ */
+export function markSafety(cardId: number, safetyRelated: boolean): Promise<HandoverCard> {
+  return apiFetch<HandoverCard>(`/api/handover-cards/${cardId}/safety`, {
+    method: 'PATCH',
+    body: JSON.stringify({ safetyRelated }),
+  })
+}
+
+/**
  * 저장된 원문을 카드로 구조화한다.
  *
  * 저장(`POST /api/handovers`) 안에서 하지 않고 프론트가 이어서 부르는 이유는 계약 문서에 있다.

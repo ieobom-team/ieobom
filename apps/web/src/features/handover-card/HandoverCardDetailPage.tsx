@@ -2,6 +2,7 @@ import { Link, useParams } from 'react-router'
 import { SessionHeader } from '../session/SessionHeader'
 import { CardsLoadFailed, CardsLoading } from './CardsLoadState'
 import { findCard, observedTimeLabel } from './handoverCard'
+import type { HandoverCard } from './handoverCardApi'
 import { HandoverCardBody } from './HandoverCardBody'
 import { useHandoverCards } from './useHandoverCards'
 
@@ -65,6 +66,14 @@ export function HandoverCardDetailPage() {
               </p>
             )}
 
+            {/* n21 → n25. 어르신을 가리지 못한 카드도 여기서 지정해 확정한다 */}
+            <Link
+              to={`/handover-cards/${card.id}/edit`}
+              className="block rounded-2xl border-2 border-slate-300 bg-white px-6 py-5 text-center text-2xl font-semibold text-slate-900 hover:border-teal-600 hover:bg-teal-50"
+            >
+              카드 검토·수정하기
+            </Link>
+
             {card.careRecipientId !== null && card.nextAction !== null && (
               <Link
                 to={`/handover-cards/${card.id}/tasks/new`}
@@ -74,12 +83,38 @@ export function HandoverCardDetailPage() {
               </Link>
             )}
 
-            <p className="text-lg text-slate-500">
-              카드 수정과 검토 완료 처리, 문구 복사는 다음 화면에서 붙습니다.
-            </p>
+            <ExportEntry card={card} />
           </>
         )}
       </main>
     </div>
+  )
+}
+
+/**
+ * n21 → n38 문구 생성 선택 → n39 기록·보호자 문구 화면.
+ *
+ * 열고 닫는 판정을 화면이 하지 않는다. `exportAllowed` 는 문구 생성 API 와 **같은 판정**
+ * (`HandoverCard.canGenerateExport()`)에서 나온 서버의 답이고, 막힌 이유도 서버가 문장으로 준다.
+ * 조건이 화면과 서버 두 군데에 있으면 한쪽만 고쳐진 채로 검토되지 않은 내용이 보호자에게 나갈 수 있다.
+ *
+ * 문구 화면 자체는 #18 이다. 그 화면이 붙기 전까지 이 링크를 누르면 갈 곳이 없다.
+ */
+function ExportEntry({ card }: { card: HandoverCard }) {
+  if (!card.exportAllowed) {
+    return (
+      <p className="text-lg text-slate-500">
+        {card.exportBlockedReason ?? '아직 문구를 만들 수 없습니다.'}
+      </p>
+    )
+  }
+
+  return (
+    <Link
+      to={`/handover-cards/${card.id}/export`}
+      className="block rounded-2xl bg-teal-700 px-6 py-5 text-center text-2xl font-semibold text-white hover:bg-teal-800"
+    >
+      기록·보호자 전달 문구 만들기
+    </Link>
   )
 }
