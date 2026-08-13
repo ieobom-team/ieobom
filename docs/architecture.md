@@ -124,7 +124,7 @@ HandoverCard ───┐ N          1 ┌─── Handover      원본 인계 
 
 | 엔티티 | 필드 |
 |---|---|
-| `CareRecipient` | `name` 이름, `code` 식별번호(unique) |
+| `CareRecipient` | `name` 이름, **`code` 내부 ID(unique)**, `dischargedAt` 이용 종료 시점(선택) |
 | `Handover` | `careRecipient`, `rawText` 원문, `inputMethod`(`VOICE`/`TEXT`/`CHECK`), `occurredAt` 입력 시점, `reporterName` 입력자 이름, **`proxyInput` 대리 입력 여부**, **`infoSource` 정보 출처**(`GUARDIAN`/`DRIVER`/`COLLEAGUE`/`OTHER`, 선택) |
 | `HandoverCard` | `handover`, `careRecipient`(선택), `observedAt` 시각(선택), `statusChange` 변화(선택), `actionTaken` 조치(선택), `nextAction` 다음 행동(선택), **`evidenceText` 근거 원문 문장**, `safetyRelated` 안전 관련 여부, **`safetyFlagSource` 판정 출처**(`KEYWORD`/`STAFF`, 선택), **`reviewStatus` 검토 상태**(`NEEDS_REVIEW`/`REVIEWED`), `suggestedJobRole` 제안 직종(선택), `suggestedDueTime` 제안 기한(선택) |
 | `Task` | `handoverCard`, `content` 업무 내용, `assigneeJobRole` 담당 직종(선택), `assigneeName` 담당자 이름(선택), **`dueTime` 기한(`LocalTime`, 당일 HH:MM)**, `status`(`PENDING`/`DONE`), `completedAt` 완료 시각(선택), `completedByName` 완료 기록자(선택) |
@@ -133,8 +133,19 @@ HandoverCard ───┐ N          1 ┌─── Handover      원본 인계 
 그릴 때만 읽고, 인계·업무는 직원을 **이름 문자열**로 가리키므로 연관관계를 걸지 않는다.
 외래키를 걸려면 이름 대신 직원 id를 저장해야 하는데, 그 결정은 아직 하지 않았다. (인증 절 참고)
 
+**`CareRecipient.code`가 내부 ID다.** 가명처리용 필드를 따로 두지 않는다.
+LLM 호출 전에 실명을 바꿔 넣는 값이 이 `code`이고, 화면에 그릴 때만 실명으로 되돌린다.
+동명이인을 화면에서 구분하는 식별번호와 같은 값이며, 형식은 **접두어 `IB-` + 순번**이다.
+발급은 `RecipientCodeIssuer`가 하고, 순번은 개수가 아니라 **이미 쓰인 최대 순번 + 1**이다. ([#42](https://github.com/ieobom-team/ieobom/issues/42))
+
+**어르신 명단은 화면에서 관리한다.** 관리자가 `/admin/care-recipients`에서 등록·이름 수정·이용 종료
+표시를 한다. **삭제는 없다** — 기존 인계 기록과 카드가 어르신을 가리키고 있어서, 지우면 이미 남긴
+기록이 대상을 잃는다. 이용 종료로 표시한 어르신은 새 입력의 대상 목록에서만 빠지고,
+AI가 발화를 어르신별로 분리할 때 쓰는 이름 대조 후보(`CardDraftVerifier`)에는 그대로 남는다.
+
 **어르신 시드.** `CareRecipientSeeder`가 기동 시 데모용 어르신 20명(`IB-001`~`IB-020`)을 채운다.
 식별번호 단위로 확인하고 넣으므로 여러 번 기동해도 중복이 쌓이지 않는다. 이름은 모두 가상 인물이다.
+화면에서 등록한 어르신은 `IB-021`부터 이어지므로 시드와 겹치지 않는다.
 
 **직원 시드.** `StaffSeeder`가 같은 방식으로 데모용 직원 8명(`ST-001`~`ST-008`)을 채운다.
 명단이 비면 진입 화면에서 본인을 고를 수 없어 앱 전체가 시작되지 않는다.
@@ -214,6 +225,10 @@ HandoverCard ───┐ N          1 ┌─── Handover      원본 인계 
   입·퇴사는 `StaffSeeder`와 DB로 반영한다. 어르신 명단([#42](https://github.com/ieobom-team/ieobom/issues/42))과 다른 점이다.
 - API는 직원을 여전히 `reporterName` · `assigneeName` · `completedByName` 같은 **이름 문자열**로 받는다.
   사번을 함께 저장할지는 동명이인 구분이 실제로 필요해지는 시점에 다시 판단한다.
+
+**어르신 명단 등록은 이 원칙의 예외가 아니다.** 등록되는 것은 어르신(데이터)이지 근무자(계정)가
+아니다. 비밀번호도 로그인도 없고, 어르신이 서비스에 접속하지도 않는다. 데이터 세팅이다.
+([#42](https://github.com/ieobom-team/ieobom/issues/42), Manyfast `F-LUDCWW` permissions)
 
 ## AI 구조화 규칙
 

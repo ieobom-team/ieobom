@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { ApiError, type ApiFieldError } from '../../shared/api/client'
 import { BigButton } from '../../shared/ui/BigButton'
-import { fetchCareRecipients, type CareRecipient } from '../handover/handoverApi'
+import type { CareRecipient } from '../recipient/recipientApi'
+import { useAllRecipients } from '../recipient/useRecipients'
 import { SessionHeader } from '../session/SessionHeader'
 import {
   cardDraftFrom,
@@ -43,7 +44,9 @@ export function HandoverCardEditPage() {
   const navigate = useNavigate()
   const cards = useHandoverCards()
   const applyCard = useCardCacheUpdate()
-  const recipients = useQuery({ queryKey: ['care-recipients'], queryFn: fetchCareRecipients })
+  // 이미 남은 카드가 가리키는 어르신을 고르는 자리라 이용 종료한 어르신까지 받는다.
+  // 새 입력이 아니므로 목록에서 빼면 그 카드의 현재 대상이 선택지에서 사라진다.
+  const recipients = useAllRecipients()
 
   const parsed = Number(cardId)
   const card =
