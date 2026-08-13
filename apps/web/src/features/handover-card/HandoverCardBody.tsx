@@ -1,4 +1,9 @@
-import { cardEntries, observedTimeLabel, suggestionLabel } from './handoverCard'
+import {
+  cardEntries,
+  observedTimeLabel,
+  suggestionLabel,
+  uncertainFieldLabels,
+} from './handoverCard'
 import type { HandoverCard } from './handoverCardApi'
 
 /**
@@ -21,6 +26,8 @@ export function HandoverCardBody({ card }: { card: HandoverCard }) {
         )}
       </div>
 
+      <CardUncertainNotes card={card} />
+
       <dl className="flex flex-col gap-3">
         {cardEntries(card).map((entry) => (
           <div key={entry.key} className="flex flex-col gap-1">
@@ -35,10 +42,7 @@ export function HandoverCardBody({ card }: { card: HandoverCard }) {
         ))}
       </dl>
 
-      <figure className="rounded-xl border-l-4 border-slate-300 bg-slate-50 px-4 py-3">
-        <figcaption className="text-lg font-semibold text-slate-500">근거 원문</figcaption>
-        <blockquote className="mt-1 text-xl text-slate-800">“{card.evidenceText}”</blockquote>
-      </figure>
+      <CardEvidence card={card} />
     </div>
   )
 }
@@ -68,5 +72,35 @@ export function CardBadges({ card }: { card: HandoverCard }) {
         </span>
       )}
     </>
+  )
+}
+
+/**
+ * AI 가 확신하지 못하고 비워 둔 자리. (Manyfast F-SNBVHR display)
+ *
+ * 카드 어딘가에 "확신도 60%" 같은 값이 있는 게 아니라, 판단 근거가 부족하면 서버가 그 칸을 비워서
+ * 내려준다. 빈 칸은 조용히 지나가기 쉬우므로 무엇이 비었는지 한 줄로 모아 앞에 세운다.
+ */
+export function CardUncertainNotes({ card }: { card: HandoverCard }) {
+  const labels = uncertainFieldLabels(card)
+  if (labels.length === 0) {
+    return null
+  }
+
+  return (
+    <p className="rounded-xl border-l-4 border-amber-400 bg-amber-50 px-4 py-3 text-lg text-amber-900">
+      AI가 채우지 못한 곳: <span className="font-bold">{labels.join(' · ')}</span> — 직원이 확인해
+      주세요.
+    </p>
+  )
+}
+
+/** 근거 원문. 카드 화면과 검토·수정 화면(n25)이 같은 것을 쓴다. */
+export function CardEvidence({ card }: { card: HandoverCard }) {
+  return (
+    <figure className="rounded-xl border-l-4 border-slate-300 bg-slate-50 px-4 py-3">
+      <figcaption className="text-lg font-semibold text-slate-500">근거 원문</figcaption>
+      <blockquote className="mt-1 text-xl text-slate-800">“{card.evidenceText}”</blockquote>
+    </figure>
   )
 }

@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router'
 import { AdminHomePage } from '../features/admin/AdminHomePage'
 import { FieldHomePage } from '../features/field/FieldHomePage'
 import { HandoverCardDetailPage } from '../features/handover-card/HandoverCardDetailPage'
+import { HandoverCardEditPage } from '../features/handover-card/HandoverCardEditPage'
 import { HandoverCardListPage } from '../features/handover-card/HandoverCardListPage'
 import { UnresolvedCardsPage } from '../features/handover-card/UnresolvedCardsPage'
 import { HandoverCreatePage } from '../features/handover/HandoverCreatePage'
@@ -17,6 +18,7 @@ import { RequireSession } from './RequireSession'
  *   → n3 선택 역할? → n4 현장 근무자 홈(`/field`) / n5 관리자 홈(`/admin`)
  *   → n6 특이사항 남기기 → n7~n16 입력(`/field/handovers/new`)
  *   → n18 인계 카드 목록(`/handover-cards`) → n21 상세 / n24 검토 필요 항목
+ *   → n25 카드 내용 수정·검토(`/handover-cards/:cardId/edit`) → n21 로 복귀
  *
  * 인계 카드는 `/field` 밑에 두지 않는다. 현장 근무자 홈(n4 → n18)에서도 들어오지만
  * 관리자 하원 미처리 브리핑(n49 → n21)에서도 같은 상세로 들어오기 때문이다.
@@ -43,6 +45,7 @@ export function AppRoutes() {
           <Route path="/handover-cards" element={<HandoverCardListPage />} />
           <Route path="/handover-cards/unresolved" element={<UnresolvedCardsPage />} />
           <Route path="/handover-cards/:cardId" element={<HandoverCardDetailPage />} />
+          <Route path="/handover-cards/:cardId/edit" element={<HandoverCardEditPage />} />
           <Route path="/handover-cards/:cardId/tasks/new" element={<TaskAssignPage />} />
         </Route>
 

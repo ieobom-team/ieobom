@@ -57,7 +57,19 @@ beforeEach(() => {
 
   vi.stubGlobal(
     'fetch',
-    vi.fn((input: string) => {
+    vi.fn((input: string, init?: RequestInit) => {
+      // 안전 표시는 고쳐진 카드 한 장을 돌려준다. 판정 출처는 서버가 붙인다
+      if (input.endsWith('/safety')) {
+        const { safetyRelated } = JSON.parse(String(init?.body)) as { safetyRelated: boolean }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(
+              카드({ safetyRelated, safetyFlagSource: safetyRelated ? 'STAFF' : null }),
+            ),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        )
+      }
       if (input.includes('/api/handover-cards')) {
         return Promise.resolve(
           new Response(JSON.stringify(목록_응답.body), {
@@ -303,6 +315,40 @@ describe('인계 카드 상세 (n20 → n21 · n22)', () => {
     renderApp('/handover-cards/999')
 
     expect(await screen.findByText(/그 인계 카드를 찾지 못했습니다/)).toBeInTheDocument()
+  })
+
+  it('카드를 고치지 않고 안전 관련 표시만 켤 수 있다', async () => {
+    const user = userEvent.setup()
+    renderApp('/handover-cards/31')
+
+    await user.click(await screen.findByRole('button', { name: '안전 관련으로 표시하기' }))
+
+    expect(await screen.findByText('안전 관련')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '안전 관련 표시 해제하기' })).toBeInTheDocument()
+  })
+
+  it('안전 관련 표시를 해제할 수도 있다', async () => {
+    목록_응답 = {
+      status: 200,
+      body: {
+        date: '2026-08-11',
+        recipients: [
+          {
+            careRecipientId: 1,
+            careRecipientName: '김말순',
+            cards: [카드({ safetyRelated: true, safetyFlagSource: 'KEYWORD' })],
+          },
+        ],
+        unresolved: [],
+      },
+    }
+    const user = userEvent.setup()
+    renderApp('/handover-cards/31')
+
+    await user.click(await screen.findByRole('button', { name: '안전 관련 표시 해제하기' }))
+
+    expect(await screen.findByRole('button', { name: '안전 관련으로 표시하기' })).toBeInTheDocument()
+    expect(screen.queryByText('안전 관련')).not.toBeInTheDocument()
   })
 
   it('관리자로 들어와도 같은 상세를 본다', async () => {
