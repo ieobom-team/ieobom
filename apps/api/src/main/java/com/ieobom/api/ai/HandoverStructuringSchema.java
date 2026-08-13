@@ -24,6 +24,14 @@ final class HandoverStructuringSchema {
 	static final String CARDS_PROPERTY = "cards";
 	static final String EVIDENCE_PROPERTY = "evidenceText";
 
+	/**
+	 * 어르신을 가리키는 자리. <b>이름이 아니라 내부 ID다.</b>
+	 *
+	 * <p>필드 이름을 {@code recipientName} 으로 두면 프롬프트가 ID를 요구해도 모델이 이름 자리로 읽는다. 실명이 나가지 않게 하는 장치를 필드
+	 * 이름 하나로 무르지 않는다. (Manyfast F-LUDCWW rules)
+	 */
+	static final String RECIPIENT_PROPERTY = "recipientCode";
+
 	/** 직종을 고를 근거가 부족할 때 쓰는 값. 목록 밖 직종을 지어내는 대신 이걸 내게 한다. */
 	static final String UNKNOWN_JOB_ROLE = "UNKNOWN";
 
@@ -65,8 +73,8 @@ final class HandoverStructuringSchema {
 	private static Map<String, Object> card() {
 		Map<String, Object> properties = new LinkedHashMap<>();
 		properties.put(
-				"recipientName",
-				nullableString("대상 어르신 이름. 후보 목록에 있는 이름만 쓴다. 누구인지 가릴 수 없으면 null"));
+				RECIPIENT_PROPERTY,
+				nullableString("대상 어르신의 내부 ID. 후보 목록에 있는 ID만 쓴다. 누구인지 가릴 수 없으면 null"));
 		properties.put("statusChange", nullableString("어르신 상태가 어떻게 달라졌는지. 없으면 null"));
 		properties.put("actionTaken", nullableString("현장에서 이미 한 조치. 없으면 null"));
 		properties.put("nextAction", nullableString("아직 남아 있는 다음 행동. 없으면 null"));
@@ -131,9 +139,11 @@ final class HandoverStructuringSchema {
 				   원문에 적힌 상태와 이미 한 조치를 그대로 옮기는 데서 멈춘다.
 				3. 모든 항목은 evidenceText 를 가진다. 원문에 있는 글자를 그대로 옮겨 적는다.
 				   요약하거나 말을 다듬으면 안 된다. 그대로 옮길 구간을 찾을 수 없으면 그 항목을 아예 만들지 않는다.
-				4. 어르신이 여러 명 섞여 있으면 사람 수만큼 항목을 나눈다.
-				   recipientName 은 후보 목록에 있는 이름만 쓴다. 목록에 없는 이름을 새로 만들지 않는다.
-				   누구 이야기인지 원문으로 가릴 수 없으면 recipientName 을 null 로 둔다. 아무나 골라 넣지 않는다.
+				4. 원문에서 어르신은 이름이 아니라 내부 ID로 적혀 있다. 그 ID를 사람 이름처럼 다룬다.
+				   어르신이 여러 명 섞여 있으면 사람 수만큼 항목을 나눈다.
+				   %s 는 후보 목록에 있는 ID만 쓴다. 목록에 없는 ID를 새로 만들지 않는다.
+				   내부 ID를 사람 이름으로 바꿔 적지 않는다. 원문에 적힌 ID 표기를 그대로 옮긴다.
+				   누구 이야기인지 원문으로 가릴 수 없으면 %s 를 null 로 둔다. 아무나 골라 넣지 않는다.
 				5. 하나의 항목은 한 가지 일을 담는다. 서로 다른 일은 항목을 나눈다.
 				6. 다음 행동이 있으면 담당 직종과 기한을 제안한다.
 				   투약·바이탈 확인은 NURSE_AIDE, 보호자 연락·상담은 SOCIAL_WORKER, 등하원·송영은 DRIVER,
@@ -145,22 +155,33 @@ final class HandoverStructuringSchema {
 				   "점심을 거의 안 드셨다"는 POOR_INTAKE 다. 어디에도 해당하지 않으면 %s 다.
 				9. 남길 것이 없으면 빈 배열을 넘긴다. 억지로 채우지 않는다.
 				"""
-				.formatted(UNKNOWN_JOB_ROLE, UNKNOWN_JOB_ROLE, NO_SAFETY_CATEGORY);
+				.formatted(
+						RECIPIENT_PROPERTY,
+						RECIPIENT_PROPERTY,
+						UNKNOWN_JOB_ROLE,
+						UNKNOWN_JOB_ROLE,
+						NO_SAFETY_CATEGORY);
 	}
 
+	/**
+	 * 나가는 값은 전부 내부 ID다. <b>실명은 이 문자열 어디에도 없다.</b>
+	 *
+	 * <p>후보 목록이 특히 중요하다. 예전에는 매 호출마다 명단 전체의 실명이 여기 실려 나갔다. 지금은 같은 자리에 내부 ID 목록이 들어간다. 원문도
+	 * 치환이 끝난 것을 받는다. ({@link StructuringInput#maskedRawText()})
+	 */
 	static String userPrompt(StructuringInput input) {
 		return """
-				어르신 후보 목록: %s
-				입력할 때 직원이 고른 어르신: %s
+				어르신 후보 목록(내부 ID): %s
+				입력할 때 직원이 고른 어르신(내부 ID): %s
 				입력 시각: %s
 
 				원문:
 				%s
 				"""
 				.formatted(
-						String.join(", ", input.candidateRecipientNames()),
-						input.selectedRecipientName(),
+						String.join(", ", input.candidateRecipientCodes()),
+						input.selectedRecipientCode(),
 						input.occurredAt().format(TIME),
-						input.rawText());
+						input.maskedRawText());
 	}
 }
