@@ -1,4 +1,4 @@
-import { apiFetch } from '../../shared/api/client'
+import { apiDownload, apiFetch, type DownloadedFile } from '../../shared/api/client'
 
 /** 계약은 `docs/contracts/export-api.md` 에 있다. */
 
@@ -116,4 +116,39 @@ export function copyExportBundle(
     method: 'POST',
     body: JSON.stringify(date ? { phraseType, date } : { phraseType }),
   })
+}
+
+/**
+ * 내려받을 수 있는 파일 형식. (Manyfast `F-GUSOFG` action)
+ *
+ * **같은 내용의 다른 렌더링이다.** 형식이 늘어도 담기는 사실은 늘지 않는다.
+ * 목록의 순서가 화면에 놓이는 순서다.
+ */
+export const EXPORT_FILE_FORMATS = [
+  { format: 'txt', label: '텍스트' },
+  { format: 'md', label: '마크다운' },
+] as const
+
+export type ExportFileFormat = (typeof EXPORT_FILE_FORMATS)[number]['format']
+
+/** 카드 한 장의 문구 하나를 파일로 받는다. 내려받는 글자는 복사되는 것과 같다. */
+export function downloadPhraseFile(
+  phraseId: number,
+  format: ExportFileFormat,
+): Promise<DownloadedFile> {
+  return apiDownload(`/api/exports/${phraseId}/file?format=${format}`)
+}
+
+/** 어르신 당일 묶음을 파일로 받는다. 무엇이 들어가는지는 묶음 조회와 같은 규칙이다. */
+export function downloadBundleFile(
+  careRecipientId: number,
+  phraseType: PhraseType,
+  format: ExportFileFormat,
+  date?: string,
+): Promise<DownloadedFile> {
+  const query = new URLSearchParams({ phraseType, format })
+  if (date !== undefined) {
+    query.set('date', date)
+  }
+  return apiDownload(`/api/care-recipients/${careRecipientId}/export-bundles/file?${query}`)
 }
