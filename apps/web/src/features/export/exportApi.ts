@@ -125,8 +125,9 @@ export function copyExportBundle(
  * 목록의 순서가 화면에 놓이는 순서다.
  */
 export const EXPORT_FILE_FORMATS = [
-  { format: 'txt', label: '텍스트' },
-  { format: 'md', label: '마크다운' },
+  { format: 'txt', label: '텍스트 파일' },
+  { format: 'md', label: '마크다운 파일' },
+  { format: 'docx', label: '워드 파일' },
 ] as const
 
 export type ExportFileFormat = (typeof EXPORT_FILE_FORMATS)[number]['format']
@@ -151,4 +152,26 @@ export function downloadBundleFile(
     query.set('date', date)
   }
   return apiDownload(`/api/care-recipients/${careRecipientId}/export-bundles/file?${query}`)
+}
+
+/**
+ * 어르신 당일 인계 항목 표. (Manyfast `F-GUSOFG` action)
+ *
+ * **단위가 문구가 아니다.** 행은 카드고 담당·기한·처리 상태는 후속 업무에서 온다. 그래서 형식을 고르지 않고
+ * 유형(전산 기록 / 보호자 전달)으로 갈리지도 않는다 — 어르신 하루에 표는 하나다.
+ */
+export const EXPORT_SHEET_FORMATS = [{ format: 'xlsx', label: '당일 항목 표' }] as const
+
+export type ExportSheetFormat = (typeof EXPORT_SHEET_FORMATS)[number]['format']
+
+/** `date`를 생략하면 서버가 오늘로 본다. */
+export function downloadSheetFile(
+  careRecipientId: number,
+  date?: string,
+): Promise<DownloadedFile> {
+  return apiDownload(
+    date
+      ? `/api/care-recipients/${careRecipientId}/export-sheet?date=${date}`
+      : `/api/care-recipients/${careRecipientId}/export-sheet`,
+  )
 }

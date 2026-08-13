@@ -15,13 +15,14 @@ import {
   copyExportPhrase,
   downloadBundleFile,
   downloadPhraseFile,
+  downloadSheetFile,
   fetchExportBundles,
   generateExportPhrases,
   updateExportPhrase,
   EXPORT_FILE_FORMATS,
+  EXPORT_SHEET_FORMATS,
   type ExportBundle,
   type ExportBundleList,
-  type ExportFileFormat,
   type ExportPhrase,
   type ExportPhraseGroup,
   type PhraseType,
@@ -171,6 +172,17 @@ function ExportContent({
           오늘 검토 완료된 카드의 문구를 유형별로 이어 붙입니다. 여러 카드를 한 번에 옮길 때 씁니다.
         </p>
 
+        {/*
+          표는 문구가 아니라 카드와 후속 업무를 담는다. 유형별 묶음 안에 두면 "전산 기록 문구의 표"처럼
+          읽히므로, 두 묶음 위 어르신 당일 자리에 한 번만 둔다.
+        */}
+        <DownloadRow
+          formats={EXPORT_SHEET_FORMATS}
+          request={() => downloadSheetFile(careRecipientId)}
+          blocked={null}
+          caption="오늘 인계 항목을 담당·기한·처리 상태까지 표로 내려받기"
+        />
+
         {bundlesQuery.isPending && <p className="text-xl text-slate-600">묶음을 만드는 중입니다…</p>}
         {bundlesQuery.isError && (
           <ExportLoadFailed
@@ -201,17 +213,21 @@ function ExportContent({
  * `blocked`가 있으면 그 이유를 그대로 보여 주고 누르지 못하게 한다. 저장하지 않은 편집을 서버는 알 수 없으므로
  * 복사와 똑같이 화면이 막는다 — 막지 않으면 화면에 보이는 글자와 파일 속 글자가 갈린다.
  */
-function DownloadRow({
+function DownloadRow<F extends string>({
+  formats,
   request,
   blocked,
+  caption = '파일로 내려받기',
 }: {
-  request: (format: ExportFileFormat) => Promise<DownloadedFile>
+  formats: readonly { format: F; label: string }[]
+  request: (format: F) => Promise<DownloadedFile>
   blocked: string | null
+  caption?: string
 }) {
-  const [pending, setPending] = useState<ExportFileFormat | null>(null)
+  const [pending, setPending] = useState<F | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
 
-  const handleDownload = async (format: ExportFileFormat) => {
+  const handleDownload = async (format: F) => {
     if (blocked !== null) {
       return
     }
@@ -232,11 +248,9 @@ function DownloadRow({
 
   return (
     <div className="mt-4">
-      <p className="text-lg font-semibold text-slate-500">
-        {blocked ?? '파일로 내려받기'}
-      </p>
+      <p className="text-lg font-semibold text-slate-500">{blocked ?? caption}</p>
       <div className="mt-2 flex flex-wrap gap-3">
-        {EXPORT_FILE_FORMATS.map(({ format, label }) => (
+        {formats.map(({ format, label }) => (
           <button
             key={format}
             type="button"
@@ -244,7 +258,7 @@ function DownloadRow({
             onClick={() => void handleDownload(format)}
             className="rounded-2xl border-2 border-slate-300 bg-white px-5 py-3 text-xl font-semibold text-slate-900 hover:border-teal-600 hover:bg-teal-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300 disabled:border-slate-200 disabled:text-slate-400"
           >
-            {pending === format ? '내려받는 중…' : `${label} 파일(.${format})`}
+            {pending === format ? '내려받는 중…' : `${label}(.${format})`}
           </button>
         ))}
       </div>
@@ -373,6 +387,7 @@ function PhraseCard({
           </div>
 
           <DownloadRow
+            formats={EXPORT_FILE_FORMATS}
             request={(format) => downloadPhraseFile(phrase.id, format)}
             blocked={dirty ? '저장한 뒤 내려받을 수 있습니다' : null}
           />
@@ -476,6 +491,7 @@ function BundleCard({
           </div>
 
           <DownloadRow
+            formats={EXPORT_FILE_FORMATS}
             request={(format) => downloadBundleFile(careRecipientId, bundle.phraseType, format)}
             blocked={null}
           />
