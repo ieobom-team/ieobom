@@ -1,8 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { Link } from 'react-router'
 import { ApiError } from '../../shared/api/client'
-import { SessionHeader } from '../session/SessionHeader'
+import { PageLayout } from '../../shared/ui/PageLayout'
 import {
   activeFirst,
   duplicateNotice,
@@ -34,53 +33,50 @@ export function RecipientListPage() {
   const recipients = useAllRecipients()
 
   return (
-    <div className="min-h-svh bg-slate-50">
-      <SessionHeader />
-      <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-5 py-8">
-        <header>
-          <Link
-            to="/admin"
-            className="rounded-xl px-2 py-2 text-xl font-semibold text-teal-800 underline underline-offset-4"
+    <PageLayout
+      title="어르신 명단"
+      showBottomNav
+      backTo="/admin"
+      backLabel="관리자 홈"
+      maxWidth="4xl"
+    >
+      <header>
+        <h1 className="text-3xl font-bold text-slate-900">어르신 명단</h1>
+        <p className="mt-2 text-lg text-slate-600">
+          여기에 등록한 어르신만 현장 입력에서 고를 수 있습니다. 이름과 내부 ID를 함께 보여 줍니다.
+        </p>
+      </header>
+
+      <RecipientRegisterForm recipients={recipients.data ?? []} />
+
+      {recipients.isPending && <p className="text-xl text-slate-600">명단을 불러오는 중입니다.</p>}
+      {recipients.isError && (
+        <div className="flex flex-col items-start gap-3">
+          <p className="text-xl text-slate-700">명단을 불러오지 못했습니다.</p>
+          <button
+            type="button"
+            onClick={() => void recipients.refetch()}
+            className="rounded-xl border-2 border-slate-300 bg-white px-5 py-3 text-xl font-semibold text-slate-900"
           >
-            관리자 홈으로
-          </Link>
-          <h1 className="mt-3 text-3xl font-bold text-slate-900">어르신 명단</h1>
-          <p className="mt-2 text-lg text-slate-600">
-            여기에 등록한 어르신만 현장 입력에서 고를 수 있습니다. 이름과 내부 ID를 함께 보여 줍니다.
-          </p>
-        </header>
+            다시 시도
+          </button>
+        </div>
+      )}
 
-        <RecipientRegisterForm recipients={recipients.data ?? []} />
+      {recipients.isSuccess && recipients.data.length === 0 && (
+        <p className="text-xl text-slate-600">아직 등록된 어르신이 없습니다.</p>
+      )}
 
-        {recipients.isPending && <p className="text-xl text-slate-600">명단을 불러오는 중입니다.</p>}
-        {recipients.isError && (
-          <div className="flex flex-col items-start gap-3">
-            <p className="text-xl text-slate-700">명단을 불러오지 못했습니다.</p>
-            <button
-              type="button"
-              onClick={() => void recipients.refetch()}
-              className="rounded-xl border-2 border-slate-300 bg-white px-5 py-3 text-xl font-semibold text-slate-900"
-            >
-              다시 시도
-            </button>
-          </div>
-        )}
-
-        {recipients.isSuccess && recipients.data.length === 0 && (
-          <p className="text-xl text-slate-600">아직 등록된 어르신이 없습니다.</p>
-        )}
-
-        {recipients.isSuccess && recipients.data.length > 0 && (
-          <ul className="flex flex-col gap-3">
-            {activeFirst(recipients.data).map((recipient) => (
-              <li key={recipient.id}>
-                <RecipientRow recipient={recipient} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </main>
-    </div>
+      {recipients.isSuccess && recipients.data.length > 0 && (
+        <ul className="flex flex-col gap-3">
+          {activeFirst(recipients.data).map((recipient) => (
+            <li key={recipient.id}>
+              <RecipientRow recipient={recipient} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </PageLayout>
   )
 }
 

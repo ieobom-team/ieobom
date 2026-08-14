@@ -7,7 +7,7 @@ import { CardsLoadFailed, CardsLoading } from '../handover-card/CardsLoadState'
 import { findCard } from '../handover-card/handoverCard'
 import type { HandoverCard } from '../handover-card/handoverCardApi'
 import { useHandoverCards } from '../handover-card/useHandoverCards'
-import { SessionHeader } from '../session/SessionHeader'
+import { PageLayout } from '../../shared/ui/PageLayout'
 import { writeToClipboard } from './clipboard'
 import { saveFile } from './download'
 import {
@@ -50,39 +50,33 @@ export function ExportPage() {
     cards.data === undefined || !Number.isInteger(parsed) ? null : findCard(cards.data, parsed)
 
   return (
-    <div className="min-h-svh bg-slate-50">
-      <SessionHeader />
-      <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-5 py-8">
-        <Link
-          to={`/handover-cards/${cardId}`}
-          className="text-xl font-semibold text-teal-800 underline underline-offset-4"
-        >
-          카드로 돌아가기
-        </Link>
+    <PageLayout
+      title="기록·보호자 전달 문구"
+      backTo={`/handover-cards/${cardId}`}
+      backLabel="카드로 돌아가기"
+    >
+      <h1 className="text-3xl font-bold text-slate-900">기록·보호자 전달 문구</h1>
 
-        <h1 className="text-3xl font-bold text-slate-900">기록·보호자 전달 문구</h1>
+      {cards.isPending && <CardsLoading />}
+      {cards.isError && <CardsLoadFailed onRetry={() => void cards.refetch()} />}
 
-        {cards.isPending && <CardsLoading />}
-        {cards.isError && <CardsLoadFailed onRetry={() => void cards.refetch()} />}
+      {cards.isSuccess && card === null && (
+        <p className="text-xl text-slate-600">
+          그 인계 카드를 찾지 못했습니다. 오늘 목록에 없는 카드일 수 있습니다.
+        </p>
+      )}
 
-        {cards.isSuccess && card === null && (
-          <p className="text-xl text-slate-600">
-            그 인계 카드를 찾지 못했습니다. 오늘 목록에 없는 카드일 수 있습니다.
-          </p>
-        )}
+      {card !== null && !card.exportAllowed && (
+        <p className="rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4 text-xl text-amber-900">
+          {card.exportBlockedReason ?? '아직 문구를 만들 수 없습니다.'}
+        </p>
+      )}
 
-        {card !== null && !card.exportAllowed && (
-          <p className="rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4 text-xl text-amber-900">
-            {card.exportBlockedReason ?? '아직 문구를 만들 수 없습니다.'}
-          </p>
-        )}
-
-        {/* exportAllowed 인 카드에는 언제나 어르신이 있다. (docs/contracts/export-api.md) */}
-        {card !== null && card.exportAllowed && card.careRecipientId !== null && (
-          <ExportContent card={card} careRecipientId={card.careRecipientId} />
-        )}
-      </main>
-    </div>
+      {/* exportAllowed 인 카드에는 언제나 어르신이 있다. (docs/contracts/export-api.md) */}
+      {card !== null && card.exportAllowed && card.careRecipientId !== null && (
+        <ExportContent card={card} careRecipientId={card.careRecipientId} />
+      )}
+    </PageLayout>
   )
 }
 

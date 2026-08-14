@@ -1,6 +1,6 @@
-import { Link, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
 import { BigButton } from '../../shared/ui/BigButton'
-import { SessionHeader } from '../session/SessionHeader'
+import { PageLayout } from '../../shared/ui/PageLayout'
 import { assigneeLabel, dueTimeLabel } from './task'
 import { TasksLoadFailed, TasksLoading } from './TaskLoadState'
 import type { TaskResponse } from './taskApi'
@@ -16,37 +16,28 @@ export function TaskListPage() {
   const tasks = useTasks()
 
   return (
-    <div className="min-h-svh bg-slate-50">
-      <SessionHeader />
-      <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-5 py-8">
-        <header>
-          <Link
-            to="/field"
-            className="rounded-xl px-2 py-2 text-xl font-semibold text-teal-800 underline underline-offset-4"
-          >
-            현장 홈으로
-          </Link>
-          <h1 className="mt-3 text-3xl font-bold text-slate-900">오늘의 업무</h1>
-        </header>
+    <PageLayout title="오늘의 업무" showBottomNav backTo="/field" backLabel="현장 홈">
+      <header>
+        <h1 className="text-3xl font-bold text-slate-900">오늘의 업무</h1>
+      </header>
 
-        {tasks.isPending && <TasksLoading />}
-        {tasks.isError && <TasksLoadFailed onRetry={() => void tasks.refetch()} />}
+      {tasks.isPending && <TasksLoading />}
+      {tasks.isError && <TasksLoadFailed onRetry={() => void tasks.refetch()} />}
 
-        {tasks.isSuccess && tasks.data.tasks.length === 0 && (
-          <p className="text-xl text-slate-600">오늘 등록된 업무가 없습니다.</p>
-        )}
+      {tasks.isSuccess && tasks.data.tasks.length === 0 && (
+        <p className="text-xl text-slate-600">오늘 등록된 업무가 없습니다.</p>
+      )}
 
-        {tasks.isSuccess && tasks.data.tasks.length > 0 && (
-          <ul className="flex flex-col gap-4">
-            {tasks.data.tasks.map((task) => (
-              <li key={task.id}>
-                <TaskListItem task={task} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </main>
-    </div>
+      {tasks.isSuccess && tasks.data.tasks.length > 0 && (
+        <ul className="flex flex-col gap-4">
+          {tasks.data.tasks.map((task) => (
+            <li key={task.id}>
+              <TaskListItem task={task} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </PageLayout>
   )
 }
 

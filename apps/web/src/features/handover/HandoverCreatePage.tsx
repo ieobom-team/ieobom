@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ApiError, NETWORK_UNAVAILABLE, type ApiFieldError } from '../../shared/api/client'
 import { BigButton } from '../../shared/ui/BigButton'
+import { PageLayout } from '../../shared/ui/PageLayout'
 import {
   structureHandover,
   type HandoverCardStructureResult,
@@ -223,16 +224,14 @@ export function HandoverCreatePage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-svh w-full max-w-2xl flex-col gap-7 px-5 py-8">
+    <PageLayout
+      title="특이사항 남기기"
+      showBack={true}
+      onBack={goBack}
+      backLabel="이전"
+    >
       <header>
-        <button
-          type="button"
-          onClick={goBack}
-          className="rounded-xl px-2 py-2 text-xl font-semibold text-teal-800 underline underline-offset-4"
-        >
-          이전
-        </button>
-        <h1 className="mt-3 text-3xl font-bold text-slate-900">특이사항 남기기</h1>
+        <h1 className="text-3xl font-bold text-slate-900">특이사항 남기기</h1>
         <p className="mt-2 text-xl text-slate-600">
           입력자 <span className="font-semibold text-slate-900">{reporterName}</span>
         </p>
@@ -276,7 +275,7 @@ export function HandoverCreatePage() {
           saving={save.isPending}
         />
       )}
-    </main>
+    </PageLayout>
   )
 }
 
@@ -686,7 +685,7 @@ function SavedNotice({
   const navigate = useNavigate()
 
   return (
-    <main className="mx-auto flex min-h-svh w-full max-w-2xl flex-col gap-6 px-5 py-8">
+    <PageLayout title="저장 완료">
       <section role="status" className="rounded-2xl border-2 border-teal-600 bg-teal-50 px-5 py-6">
         <h1 className="text-3xl font-bold text-teal-900">저장했습니다</h1>
         <p className="mt-3 text-2xl text-teal-900">
@@ -725,7 +724,7 @@ function SavedNotice({
       <BigButton tone="plain" onClick={() => navigate('/field')}>
         현장 홈으로
       </BigButton>
-    </main>
+    </PageLayout>
   )
 }
 
@@ -746,7 +745,7 @@ function QueuedNotice({
   const navigate = useNavigate()
 
   return (
-    <main className="mx-auto flex min-h-svh w-full max-w-2xl flex-col gap-6 px-5 py-8">
+    <PageLayout title="임시 저장">
       <section role="status" className="rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-6">
         <h1 className="text-3xl font-bold text-amber-900">기기에 임시 저장했습니다</h1>
         <p className="mt-3 text-2xl text-amber-900">
@@ -766,7 +765,7 @@ function QueuedNotice({
       <BigButton tone="plain" onClick={onAnother}>
         하나 더 남기기
       </BigButton>
-    </main>
+    </PageLayout>
   )
 }
 

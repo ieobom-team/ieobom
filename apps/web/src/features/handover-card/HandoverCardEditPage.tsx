@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
 import { ApiError, type ApiFieldError } from '../../shared/api/client'
 import { BigButton } from '../../shared/ui/BigButton'
+import { PageLayout } from '../../shared/ui/PageLayout'
 import type { CareRecipient } from '../recipient/recipientApi'
 import { useAllRecipients } from '../recipient/useRecipients'
-import { SessionHeader } from '../session/SessionHeader'
 import {
   cardDraftFrom,
   cardFieldLabel,
@@ -150,48 +150,42 @@ export function HandoverCardEditPage() {
   }
 
   return (
-    <div className="min-h-svh bg-slate-50">
-      <SessionHeader />
-      <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-5 py-8">
-        <Link
-          to={`/handover-cards/${cardId}`}
-          className="text-xl font-semibold text-teal-800 underline underline-offset-4"
-        >
-          카드로 돌아가기
-        </Link>
+    <PageLayout
+      title="카드 검토·수정"
+      backTo={`/handover-cards/${cardId}`}
+      backLabel="카드로 돌아가기"
+    >
+      <h1 className="text-3xl font-bold text-slate-900">카드 검토·수정</h1>
 
-        <h1 className="text-3xl font-bold text-slate-900">카드 검토·수정</h1>
+      {cards.isPending && <CardsLoading />}
+      {cards.isError && <CardsLoadFailed onRetry={() => void cards.refetch()} />}
 
-        {cards.isPending && <CardsLoading />}
-        {cards.isError && <CardsLoadFailed onRetry={() => void cards.refetch()} />}
+      {cards.isSuccess && card === null && (
+        <p className="text-xl text-slate-600">
+          그 인계 카드를 찾지 못했습니다. 오늘 목록에 없는 카드일 수 있습니다.
+        </p>
+      )}
 
-        {cards.isSuccess && card === null && (
-          <p className="text-xl text-slate-600">
-            그 인계 카드를 찾지 못했습니다. 오늘 목록에 없는 카드일 수 있습니다.
-          </p>
-        )}
-
-        {card !== null && draft !== null && (
-          <CardEditForm
-            card={card}
-            draft={draft}
-            recipients={recipients.data ?? []}
-            recipientsLoading={recipients.isPending}
-            recipientsFailed={recipients.isError}
-            onRetryRecipients={() => void recipients.refetch()}
-            errors={errors}
-            notice={notice}
-            saving={save.isPending}
-            reviewChanging={revertReview.isPending}
-            safetyChanging={toggleSafety.isPending}
-            onChange={update}
-            onToggleSafety={() => toggleSafety.mutate(!card.safetyRelated)}
-            onRevertReview={() => revertReview.mutate()}
-            onSubmit={submit}
-          />
-        )}
-      </main>
-    </div>
+      {card !== null && draft !== null && (
+        <CardEditForm
+          card={card}
+          draft={draft}
+          recipients={recipients.data ?? []}
+          recipientsLoading={recipients.isPending}
+          recipientsFailed={recipients.isError}
+          onRetryRecipients={() => void recipients.refetch()}
+          errors={errors}
+          notice={notice}
+          saving={save.isPending}
+          reviewChanging={revertReview.isPending}
+          safetyChanging={toggleSafety.isPending}
+          onChange={update}
+          onToggleSafety={() => toggleSafety.mutate(!card.safetyRelated)}
+          onRevertReview={() => revertReview.mutate()}
+          onSubmit={submit}
+        />
+      )}
+    </PageLayout>
   )
 }
 

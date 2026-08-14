@@ -1,6 +1,5 @@
-import { Link } from 'react-router'
+import { PageLayout } from '../../shared/ui/PageLayout'
 import { dateLabel } from '../handover-card/handoverCard'
-import { SessionHeader } from '../session/SessionHeader'
 import { TaskRow } from './TaskRow'
 import { TasksLoadFailed, TasksLoading } from './TasksLoadState'
 import { usePendingBriefing } from './useTodayTasks'
@@ -27,19 +26,20 @@ export function UnprocessedBriefingPage() {
   const list = briefing.data
 
   return (
-    <div className="min-h-svh bg-slate-50">
-      <SessionHeader />
-      <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-5 py-8">
-        <header>
-          <Link to="/admin/dashboard" className="text-lg text-slate-600 underline underline-offset-4">
-            당일 운영 현황으로
-          </Link>
-          <h1 className="mt-3 text-3xl font-bold text-slate-900">하원 미처리 브리핑</h1>
-          {list !== undefined && <p className="mt-2 text-xl text-slate-600">{dateLabel(list.date)}</p>}
-          <p className="mt-2 text-lg text-slate-600">
-            아직 닫히지 않은 업무입니다. 다음 날로 넘어가지 않습니다.
-          </p>
-        </header>
+    <PageLayout
+      title="하원 미처리 브리핑"
+      showBottomNav
+      backTo="/admin/dashboard"
+      backLabel="당일 운영 현황"
+      maxWidth="4xl"
+    >
+      <header>
+        <h1 className="text-3xl font-bold text-slate-900">하원 미처리 브리핑</h1>
+        {list !== undefined && <p className="mt-2 text-xl text-slate-600">{dateLabel(list.date)}</p>}
+        <p className="mt-2 text-lg text-slate-600">
+          아직 닫히지 않은 업무입니다. 다음 날로 넘어가지 않습니다.
+        </p>
+      </header>
 
         {list !== undefined && (
           /*
@@ -62,7 +62,6 @@ export function UnprocessedBriefingPage() {
         <ul className="flex flex-col gap-4">
           {list?.pending.map((task) => <TaskRow key={task.id} task={task} />)}
         </ul>
-      </main>
-    </div>
+    </PageLayout>
   )
 }

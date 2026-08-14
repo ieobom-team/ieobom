@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
 import { ApiError, type ApiFieldError } from '../../shared/api/client'
 import { BigButton } from '../../shared/ui/BigButton'
+import { PageLayout } from '../../shared/ui/PageLayout'
 import { CardsLoadFailed, CardsLoading } from '../handover-card/CardsLoadState'
 import { findCard, jobRoleLabel, JOB_ROLE_LABELS } from '../handover-card/handoverCard'
 import type { JobRole } from '../handover-card/handoverCardApi'
@@ -96,15 +97,13 @@ export function TaskAssignPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-svh w-full max-w-2xl flex-col gap-7 px-5 py-8">
+    <PageLayout
+      title="후속 업무 배정"
+      backTo={`/handover-cards/${cardId}`}
+      backLabel="카드로 돌아가기"
+    >
       <header>
-        <Link
-          to={`/handover-cards/${cardId}`}
-          className="rounded-xl px-2 py-2 text-xl font-semibold text-teal-800 underline underline-offset-4"
-        >
-          카드로 돌아가기
-        </Link>
-        <h1 className="mt-3 text-3xl font-bold text-slate-900">후속 업무 배정</h1>
+        <h1 className="text-3xl font-bold text-slate-900">후속 업무 배정</h1>
       </header>
 
       {cards.isPending && <CardsLoading />}
@@ -152,7 +151,7 @@ export function TaskAssignPage() {
           onBackToList={() => navigate('/handover-cards')}
         />
       )}
-    </main>
+    </PageLayout>
   )
 }
 

@@ -1,5 +1,5 @@
 import { Link } from 'react-router'
-import { SessionHeader } from '../session/SessionHeader'
+import { PageLayout } from '../../shared/ui/PageLayout'
 import { CardsLoadFailed, CardsLoading } from './CardsLoadState'
 import { dateLabel, safetyFirst, totalCardCount } from './handoverCard'
 import type { HandoverCard } from './handoverCardApi'
@@ -20,55 +20,52 @@ export function HandoverCardListPage() {
   const list = cards.data
 
   return (
-    <div className="min-h-svh bg-slate-50">
-      <SessionHeader />
-      <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-5 py-8">
-        <header>
-          <h1 className="text-3xl font-bold text-slate-900">인계 카드</h1>
-          {list !== undefined && (
-            <p className="mt-2 text-xl text-slate-600">
-              {dateLabel(list.date)} · 모두 {totalCardCount(list)}건
-            </p>
-          )}
-        </header>
-
-        {cards.isPending && <CardsLoading />}
-        {cards.isError && <CardsLoadFailed onRetry={() => void cards.refetch()} />}
-
-        {list !== undefined && list.unresolved.length > 0 && (
-          <Link
-            to="/handover-cards/unresolved"
-            className="rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4 text-xl text-amber-900 underline underline-offset-4"
-          >
-            어느 어르신 이야기인지 가리지 못한 항목이 {list.unresolved.length}건 있습니다. 확인하기
-          </Link>
-        )}
-
-        {list !== undefined && totalCardCount(list) === 0 && (
-          <p className="text-xl text-slate-600">
-            아직 정리된 인계 카드가 없습니다. 특이사항을 남기면 여기에 쌓입니다.
+    <PageLayout title="인계 카드" showBottomNav backTo="/field" backLabel="현장 홈">
+      <header>
+        <h1 className="text-3xl font-bold text-slate-900">인계 카드</h1>
+        {list !== undefined && (
+          <p className="mt-2 text-xl text-slate-600">
+            {dateLabel(list.date)} · 모두 {totalCardCount(list)}건
           </p>
         )}
+      </header>
 
-        {list?.recipients.map((recipient) => (
-          <section key={recipient.careRecipientId} className="flex flex-col gap-4">
-            <h2 className="text-2xl font-bold text-slate-900">
-              {recipient.careRecipientName}
-              <span className="ml-2 text-xl font-normal text-slate-500">
-                {recipient.cards.length}건
-              </span>
-            </h2>
-            <ul className="flex flex-col gap-4">
-              {safetyFirst(recipient.cards).map((card) => (
-                <li key={card.id}>
-                  <CardLink card={card} />
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
-      </main>
-    </div>
+      {cards.isPending && <CardsLoading />}
+      {cards.isError && <CardsLoadFailed onRetry={() => void cards.refetch()} />}
+
+      {list !== undefined && list.unresolved.length > 0 && (
+        <Link
+          to="/handover-cards/unresolved"
+          className="rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4 text-xl text-amber-900 underline underline-offset-4"
+        >
+          어느 어르신 이야기인지 가리지 못한 항목이 {list.unresolved.length}건 있습니다. 확인하기
+        </Link>
+      )}
+
+      {list !== undefined && totalCardCount(list) === 0 && (
+        <p className="text-xl text-slate-600">
+          아직 정리된 인계 카드가 없습니다. 특이사항을 남기면 여기에 쌓입니다.
+        </p>
+      )}
+
+      {list?.recipients.map((recipient) => (
+        <section key={recipient.careRecipientId} className="flex flex-col gap-4">
+          <h2 className="text-2xl font-bold text-slate-900">
+            {recipient.careRecipientName}
+            <span className="ml-2 text-xl font-normal text-slate-500">
+              {recipient.cards.length}건
+            </span>
+          </h2>
+          <ul className="flex flex-col gap-4">
+            {safetyFirst(recipient.cards).map((card) => (
+              <li key={card.id}>
+                <CardLink card={card} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </PageLayout>
   )
 }
 

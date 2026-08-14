@@ -2,7 +2,7 @@ import { Link, useParams } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
 import { ApiError } from '../../shared/api/client'
 import { BigButton } from '../../shared/ui/BigButton'
-import { SessionHeader } from '../session/SessionHeader'
+import { PageLayout } from '../../shared/ui/PageLayout'
 import { CardsLoadFailed, CardsLoading } from './CardsLoadState'
 import { findCard, observedTimeLabel } from './handoverCard'
 import { markSafety, type HandoverCard } from './handoverCardApi'
@@ -29,72 +29,62 @@ export function HandoverCardDetailPage() {
   const observedTime = card === null ? null : observedTimeLabel(card.observedAt)
 
   return (
-    <div className="min-h-svh bg-slate-50">
-      <SessionHeader />
-      <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-5 py-8">
-        <Link
-          to="/handover-cards"
-          className="text-xl font-semibold text-teal-800 underline underline-offset-4"
-        >
-          목록으로
-        </Link>
+    <PageLayout title="인계 카드 상세" backTo="/handover-cards" backLabel="목록으로">
+      {cards.isPending && <CardsLoading />}
+      {cards.isError && <CardsLoadFailed onRetry={() => void cards.refetch()} />}
 
-        {cards.isPending && <CardsLoading />}
-        {cards.isError && <CardsLoadFailed onRetry={() => void cards.refetch()} />}
+      {cards.isSuccess && card === null && (
+        <p className="text-xl text-slate-600">
+          그 인계 카드를 찾지 못했습니다. 오늘 목록에 없는 카드일 수 있습니다.
+        </p>
+      )}
 
-        {cards.isSuccess && card === null && (
-          <p className="text-xl text-slate-600">
-            그 인계 카드를 찾지 못했습니다. 오늘 목록에 없는 카드일 수 있습니다.
-          </p>
-        )}
-
-        {card !== null && (
-          <>
-            <header>
-              <h1 className="text-3xl font-bold text-slate-900">
-                {card.careRecipientName ?? '대상 어르신 미정'}
-              </h1>
-              {observedTime !== null && (
-                <p className="mt-2 text-xl text-slate-600">오늘 {observedTime}에 있었던 일</p>
-              )}
-            </header>
-
-            <article className="rounded-2xl border-2 border-slate-200 bg-white px-5 py-5">
-              <HandoverCardBody card={card} />
-            </article>
-
-            {card.careRecipientId === null && (
-              <p className="rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4 text-xl text-amber-900">
-                어느 어르신 이야기인지 아직 가리지 못했습니다. 어르신을 지정하기 전까지는 확정
-                카드가 되지 않습니다.
-              </p>
+      {card !== null && (
+        <>
+          <header>
+            <h1 className="text-3xl font-bold text-slate-900">
+              {card.careRecipientName ?? '대상 어르신 미정'}
+            </h1>
+            {observedTime !== null && (
+              <p className="mt-2 text-xl text-slate-600">오늘 {observedTime}에 있었던 일</p>
             )}
+          </header>
 
-            {/* 안전 표시는 상세에서 바로 켜고 끈다. 카드를 고칠 일이 없어도 눌러야 하는 조작이다 */}
-            <SafetyToggle card={card} />
+          <article className="rounded-2xl border-2 border-slate-200 bg-white px-5 py-5">
+            <HandoverCardBody card={card} />
+          </article>
 
-            {/* n21 → n25. 어르신을 가리지 못한 카드도 여기서 지정해 확정한다 */}
+          {card.careRecipientId === null && (
+            <p className="rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4 text-xl text-amber-900">
+              어느 어르신 이야기인지 아직 가리지 못했습니다. 어르신을 지정하기 전까지는 확정
+              카드가 되지 않습니다.
+            </p>
+          )}
+
+          {/* 안전 표시는 상세에서 바로 켜고 끈다. 카드를 고칠 일이 없어도 눌러야 하는 조작이다 */}
+          <SafetyToggle card={card} />
+
+          {/* n21 → n25. 어르신을 가리지 못한 카드도 여기서 지정해 확정한다 */}
+          <Link
+            to={`/handover-cards/${card.id}/edit`}
+            className="block rounded-2xl border-2 border-slate-300 bg-white px-6 py-5 text-center text-2xl font-semibold text-slate-900 hover:border-teal-600 hover:bg-teal-50"
+          >
+            카드 검토·수정하기
+          </Link>
+
+          {card.careRecipientId !== null && card.nextAction !== null && (
             <Link
-              to={`/handover-cards/${card.id}/edit`}
-              className="block rounded-2xl border-2 border-slate-300 bg-white px-6 py-5 text-center text-2xl font-semibold text-slate-900 hover:border-teal-600 hover:bg-teal-50"
+              to={`/handover-cards/${card.id}/tasks/new`}
+              className="block rounded-2xl bg-teal-700 px-6 py-5 text-center text-2xl font-semibold text-white hover:bg-teal-800"
             >
-              카드 검토·수정하기
+              다음 행동을 후속 업무로 배정하기
             </Link>
+          )}
 
-            {card.careRecipientId !== null && card.nextAction !== null && (
-              <Link
-                to={`/handover-cards/${card.id}/tasks/new`}
-                className="block rounded-2xl bg-teal-700 px-6 py-5 text-center text-2xl font-semibold text-white hover:bg-teal-800"
-              >
-                다음 행동을 후속 업무로 배정하기
-              </Link>
-            )}
-
-            <ExportEntry card={card} />
-          </>
-        )}
-      </main>
-    </div>
+          <ExportEntry card={card} />
+        </>
+      )}
+    </PageLayout>
   )
 }
 

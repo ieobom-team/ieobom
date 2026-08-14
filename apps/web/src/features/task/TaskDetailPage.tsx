@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
 import { ApiError } from '../../shared/api/client'
 import { BigButton } from '../../shared/ui/BigButton'
+import { PageLayout } from '../../shared/ui/PageLayout'
 import { useSession } from '../session/sessionContext'
 import { assigneeLabel, completionLabel, dueTimeLabel } from './task'
 import { TasksLoadFailed, TasksLoading } from './TaskLoadState'
@@ -70,15 +71,9 @@ export function TaskDetailPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-svh w-full max-w-2xl flex-col gap-7 px-5 py-8">
+    <PageLayout title="업무 상세" backTo="/tasks" backLabel="업무 목록으로">
       <header>
-        <Link
-          to="/tasks"
-          className="rounded-xl px-2 py-2 text-xl font-semibold text-teal-800 underline underline-offset-4"
-        >
-          업무 목록으로
-        </Link>
-        <h1 className="mt-3 text-3xl font-bold text-slate-900">업무 상세</h1>
+        <h1 className="text-3xl font-bold text-slate-900">업무 상세</h1>
       </header>
 
       {task.isPending && <TasksLoading />}
@@ -110,7 +105,7 @@ export function TaskDetailPage() {
           )}
         </>
       )}
-    </main>
+    </PageLayout>
   )
 }
 
