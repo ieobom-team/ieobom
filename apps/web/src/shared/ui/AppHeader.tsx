@@ -1,3 +1,4 @@
+import { ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router'
 import { findEntryRole, homePathOf } from '../../features/session/entryRole'
 import { useSession } from '../../features/session/sessionContext'
@@ -53,7 +54,7 @@ export function AppHeader({
                 className="flex min-h-12 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-lg font-semibold text-slate-800 hover:border-teal-600 hover:bg-teal-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300"
                 aria-label={backLabel}
               >
-                <span aria-hidden="true" className="text-xl">←</span>
+                <ArrowLeft size={20} strokeWidth={2.4} aria-hidden="true" />
                 <span>{backLabel}</span>
               </button>
             ) : (
@@ -62,7 +63,7 @@ export function AppHeader({
                 className="flex min-h-12 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-lg font-semibold text-slate-800 hover:border-teal-600 hover:bg-teal-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300"
                 aria-label={backLabel}
               >
-                <span aria-hidden="true" className="text-xl">←</span>
+                <ArrowLeft size={20} strokeWidth={2.4} aria-hidden="true" />
                 <span>{backLabel}</span>
               </Link>
             )
