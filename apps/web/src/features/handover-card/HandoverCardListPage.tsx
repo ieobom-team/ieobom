@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
 import { Link } from 'react-router'
 import { PageLayout } from '../../shared/ui/PageLayout'
 import { CardsLoadFailed, CardsLoading } from './CardsLoadState'
@@ -96,13 +97,14 @@ export function HandoverCardListPage() {
               role="tab"
               aria-selected={activeFilter === 'SAFETY'}
               onClick={() => setActiveFilter('SAFETY')}
-              className={`rounded-2xl px-5 py-3 text-lg font-bold transition-colors ${
+              className={`inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-lg font-bold transition-colors ${
                 activeFilter === 'SAFETY'
                   ? 'bg-rose-600 text-white'
                   : 'border-2 border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
               }`}
             >
-              🚨 안전 관련 {stats.safetyCount}건
+              <AlertTriangle size={20} strokeWidth={2.4} aria-hidden="true" className="shrink-0" />
+              <span>안전 관련 {stats.safetyCount}건</span>
             </button>
 
             <button
@@ -198,7 +200,11 @@ export function HandoverCardListPage() {
             className="flex items-center justify-between rounded-2xl border-2 border-slate-300 bg-slate-100 px-6 py-4 text-xl font-semibold text-slate-800 hover:bg-slate-200 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300"
           >
             <span>검토 완료 카드 {reviewedCardsForRecipient.length}건 {isReviewedExpanded ? '접기' : '보기'}</span>
-            <span aria-hidden="true" className="text-2xl">{isReviewedExpanded ? '▴' : '▾'}</span>
+            {isReviewedExpanded ? (
+              <ChevronUp size={24} strokeWidth={2.4} aria-hidden="true" className="shrink-0" />
+            ) : (
+              <ChevronDown size={24} strokeWidth={2.4} aria-hidden="true" className="shrink-0" />
+            )}
           </button>
 
           {isReviewedExpanded && (
