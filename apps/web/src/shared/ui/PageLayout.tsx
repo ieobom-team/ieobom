@@ -57,8 +57,8 @@ export function PageLayout({
       />
 
       <main
-        className={`mx-auto flex w-full ${widthClass} flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8 ${
-          showBottomNav ? 'pb-24 sm:pb-8' : ''
+        className={`mx-auto flex w-full ${widthClass} flex-col gap-6 px-4 pt-6 sm:px-6 sm:pt-8 ${
+          showBottomNav ? 'pb-36 sm:pb-12' : 'pb-16 sm:pb-12'
         } ${mainClassName}`}
       >
         {children}
