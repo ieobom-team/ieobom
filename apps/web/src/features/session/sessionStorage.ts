@@ -1,5 +1,5 @@
 import { isEntryRole, type EntryRole } from './entryRole'
-import { findStaffByCode, type Staff } from './staffDirectory'
+import { findStaffByCode, readCachedDirectory, type Staff } from './staffDirectory'
 
 /**
  * 진입 시 고른 값. 로그인이 아니라 **입력자 식별**이다. 비밀번호를 받지 않는다.
@@ -13,7 +13,12 @@ export type EntrySession = {
 /** 저장 형식이 바뀌면 뒤의 번호를 올려 옛 값과 섞이지 않게 한다. */
 export const STORAGE_KEY = 'ieobom.entry-session.v1'
 
-/** 저장은 사번만 한다. 이름은 명단에서 다시 찾아 쓴다. */
+/**
+ * 저장은 사번만 한다. 이름은 명단에서 다시 찾아 쓴다.
+ *
+ * 명단은 서버가 관리하므로(#33) 되살릴 때 참고하는 것은 마지막으로 받아 둔 명단 캐시다.
+ * 이름을 함께 저장해 두면 명단에서 이름이 바뀌어도 옛 이름이 계속 따라다닌다.
+ */
 type StoredSession = {
   entryRole: string
   staffCode: string
@@ -51,7 +56,7 @@ export function loadSession(): EntrySession | null {
   }
 
   const { entryRole, staffCode } = parsed as Partial<StoredSession>
-  const staff = findStaffByCode(staffCode)
+  const staff = findStaffByCode(readCachedDirectory(), staffCode)
   // 명단이나 역할 값이 바뀌어 더는 맞지 않는 저장값이면 버리고 다시 고르게 한다.
   if (!isEntryRole(entryRole) || !staff) {
     clearSession()

@@ -6,7 +6,7 @@ import { CardLink } from './HandoverCardListPage'
 import { useHandoverCards } from './useHandoverCards'
 
 /**
- * 유저플로우 n24 — 검토 필요 항목.
+ * 유저플로우 "새 플로우 3" n24 — 검토 필요 항목.
  *
  * 어르신을 분리할 수 없는 원문은 확정 카드로 만들지 않고 검토 대상으로 표시한다.
  * (Manyfast F-SNBVHR exceptions) 서버가 `unresolved` 로 갈라 내려주는 항목이 그대로 여기다.
@@ -41,10 +41,17 @@ export function UnresolvedCardsPage() {
           <p className="text-xl text-slate-600">지금은 가리지 못한 항목이 없습니다.</p>
         )}
 
-        <ul className="flex flex-col gap-4">
+        <ul className="flex flex-col gap-6">
           {safetyFirst(unresolved).map((card) => (
-            <li key={card.id}>
+            <li key={card.id} className="flex flex-col gap-3">
               <CardLink card={card} />
+              {/* n24 → n25. 여기서 어르신을 지정하는 것이 이 항목을 확정하는 유일한 경로다 */}
+              <Link
+                to={`/handover-cards/${card.id}/edit`}
+                className="block rounded-2xl border-2 border-slate-300 bg-white px-6 py-4 text-center text-xl font-semibold text-slate-900 hover:border-teal-600 hover:bg-teal-50"
+              >
+                어르신 지정하고 고치기
+              </Link>
             </li>
           ))}
         </ul>

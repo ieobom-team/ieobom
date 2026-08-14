@@ -77,6 +77,7 @@ final class ExportPhraseSchema {
 				지켜야 할 규칙:
 				1. 아래에 주어진 카드 내용에 있는 것만 쓴다. 카드에 없는 사실을 채우지 않는다.
 				   카드에 없는 숫자, 체온, 횟수, 시각, 사람 이름을 새로 만들지 않는다.
+				   어르신은 이름이 아니라 내부 ID로 주어진다. 그 표기를 그대로 옮겨 쓰고 사람 이름으로 바꿔 적지 않는다.
 				2. 의료적 판단·진단·투약 권고를 쓰지 않는다.
 				   증상의 원인을 추정하거나, 약을 바꾸라거나, 병원에 가라고 쓰지 않는다.
 				   카드에 적힌 상태와 이미 한 조치를 옮기는 데서 멈춘다.
@@ -90,9 +91,15 @@ final class ExportPhraseSchema {
 				.formatted(RECORD_PROPERTY, RECORD_LIMIT, GUARDIAN_PROPERTY, GUARDIAN_LIMIT);
 	}
 
+	/**
+	 * 나가는 값은 전부 내부 ID다. <b>실명은 이 문자열 어디에도 없다.</b>
+	 *
+	 * <p>어르신 칸뿐 아니라 상태·조치·근거 칸도 치환이 끝난 것을 받는다. ({@link ExportInput}) 모델은 ID를 사람 이름 자리에 그대로 쓰고,
+	 * 실명은 응답을 받은 자리에서 되돌린다. ({@code ExportPhraseService})
+	 */
 	static String userPrompt(ExportInput input) {
 		return """
-				어르신: %s
+				어르신(내부 ID): %s
 				시각: %s
 				상태 변화: %s
 				이미 한 조치: %s
@@ -100,7 +107,7 @@ final class ExportPhraseSchema {
 				근거 원문: %s
 				"""
 				.formatted(
-						blankToMark(input.careRecipientName()),
+						blankToMark(input.careRecipientCode()),
 						input.observedAt() == null ? "기록 없음" : input.observedAt().format(TIME),
 						blankToMark(input.statusChange()),
 						blankToMark(input.actionTaken()),

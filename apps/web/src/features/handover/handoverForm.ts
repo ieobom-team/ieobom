@@ -28,6 +28,8 @@ export type HandoverDraft = {
   checkedItems: readonly string[]
   /** `<input type="datetime-local">` 값. `YYYY-MM-DDTHH:mm` */
   occurredAt: string
+  /** 녹음한 원본 음성. Base64 Data URL 이고, 음성으로 남겼을 때만 채워진다 */
+  audioData?: string
 }
 
 /** 보완 안내에서 어떤 항목인지 사람 말로 보여 준다. */
@@ -54,6 +56,7 @@ export function emptyDraft(now: Date): HandoverDraft {
     rawText: '',
     checkedItems: [],
     occurredAt: toDateTimeLocal(now),
+    audioData: undefined,
   }
 }
 
@@ -152,6 +155,9 @@ export function toCreateRequest(draft: HandoverDraft, reporterName: string): Han
 
   if (draft.proxyInput && draft.infoSource !== null) {
     request.infoSource = draft.infoSource
+  }
+  if (draft.inputMethod === 'VOICE' && draft.audioData) {
+    request.audioData = draft.audioData
   }
   return request
 }

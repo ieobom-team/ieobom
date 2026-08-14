@@ -7,6 +7,8 @@ import { CardsLoadFailed, CardsLoading } from '../handover-card/CardsLoadState'
 import { findCard, jobRoleLabel, JOB_ROLE_LABELS } from '../handover-card/handoverCard'
 import type { JobRole } from '../handover-card/handoverCardApi'
 import { useHandoverCards } from '../handover-card/useHandoverCards'
+import type { Staff } from '../session/staffDirectory'
+import { useStaffDirectory } from '../session/useStaffDirectory'
 import { createTask, type TaskResponse } from './taskApi'
 import {
   draftFromCard,
@@ -19,7 +21,7 @@ import {
 const JOB_ROLES = Object.keys(JOB_ROLE_LABELS) as JobRole[]
 
 /**
- * 유저플로우 n26 → n27 · n28 · n29 · n30 — 후속 업무 배정.
+ * 유저플로우 "새 플로우 3" n26 → n27 · n28 · n29 · n30 — 후속 업무 배정.
  *
  * 빈 입력으로 열리지 않는다. 카드가 검토에서 확정한 다음 행동·제안 직종·제안 기한을 그대로 채운 뒤
  * 직원이 확정하거나 고친다. (Manyfast F-IVFNPC display)
@@ -30,6 +32,8 @@ export function TaskAssignPage() {
   const { cardId } = useParams()
   const navigate = useNavigate()
   const cards = useHandoverCards()
+  const directory = useStaffDirectory()
+  const staffList = directory.data ?? []
 
   const parsed = Number(cardId)
   const card =
@@ -132,6 +136,7 @@ export function TaskAssignPage() {
           <TaskForm
             careRecipientName={card.careRecipientName ?? '대상 어르신'}
             draft={draft}
+            staffList={staffList}
             errors={errors}
             notice={notice}
             saving={assign.isPending}
@@ -183,6 +188,7 @@ function Problems({ errors, notice }: { errors: ApiFieldError[]; notice: string 
 function TaskForm({
   careRecipientName,
   draft,
+  staffList,
   errors,
   notice,
   saving,
@@ -191,6 +197,7 @@ function TaskForm({
 }: {
   careRecipientName: string
   draft: TaskDraft
+  staffList: Staff[]
   errors: ApiFieldError[]
   notice: string | null
   saving: boolean
@@ -231,7 +238,10 @@ function TaskForm({
               tone="plain"
               selected={draft.assigneeJobRole === role}
               onClick={() =>
-                onChange({ assigneeJobRole: draft.assigneeJobRole === role ? null : role })
+                onChange({
+                  assigneeJobRole: draft.assigneeJobRole === role ? null : role,
+                  assigneeName: '',
+                })
               }
             >
               {jobRoleLabel(role)}
@@ -240,16 +250,41 @@ function TaskForm({
         </div>
       </fieldset>
 
-      <label htmlFor="assigneeName" className="text-2xl font-bold text-slate-900">
-        담당자 이름 (선택)
-      </label>
-      <input
-        id="assigneeName"
-        value={draft.assigneeName}
-        onChange={(event) => onChange({ assigneeName: event.target.value })}
-        maxLength={50}
-        className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
-      />
+      {(() => {
+        const filteredStaff = draft.assigneeJobRole
+          ? staffList.filter((s) => s.jobRole === draft.assigneeJobRole)
+          : staffList
+
+        return (
+          <div className="flex flex-col gap-2">
+            <label htmlFor="assigneeName" className="text-2xl font-bold text-slate-900">
+              담당자 (선택)
+            </label>
+            <p className="text-lg text-slate-500">
+              {draft.assigneeJobRole
+                ? `${jobRoleLabel(draft.assigneeJobRole)} 직종 직원만 표시됩니다.`
+                : '특정 담당자를 지정하지 않으면 선택한 직종으로만 배정됩니다.'}
+            </p>
+            <select
+              id="assigneeName"
+              value={draft.assigneeName}
+              onChange={(event) => onChange({ assigneeName: event.target.value })}
+              className="w-full rounded-2xl border-2 border-slate-300 bg-white px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
+            >
+              <option value="">직종만 배정 (특정인 미지정)</option>
+              {draft.assigneeName !== '' &&
+                !filteredStaff.some((s) => s.name === draft.assigneeName) && (
+                  <option value={draft.assigneeName}>{draft.assigneeName}</option>
+                )}
+              {filteredStaff.map((staff) => (
+                <option key={staff.code} value={staff.name}>
+                  {staff.name} ({staff.code})
+                </option>
+              ))}
+            </select>
+          </div>
+        )
+      })()}
 
       <label htmlFor="dueTime" className="text-2xl font-bold text-slate-900">
         기한

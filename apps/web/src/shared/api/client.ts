@@ -38,6 +38,17 @@ export const NETWORK_UNAVAILABLE = 'NETWORK_UNAVAILABLE'
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '')
 
+/**
+ * API 경로를 브라우저가 그대로 쓸 주소로 바꾼다.
+ *
+ * `fetch` 를 거치지 않고 브라우저가 직접 받아 오는 것(`<audio src>`, `<img src>`)에 쓴다.
+ * 이걸 안 거치고 `/api/...` 를 그대로 박으면 개발 서버(프록시)에서만 되고
+ * `VITE_API_BASE_URL` 로 다른 출처를 가리키는 환경에서 조용히 깨진다.
+ */
+export function apiUrl(path: string): string {
+  return `${BASE_URL}${path}`
+}
+
 function isFieldErrorList(value: unknown): value is ApiFieldError[] {
   return (
     Array.isArray(value) &&
@@ -71,7 +82,7 @@ async function toApiError(response: Response): Promise<ApiError> {
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response
   try {
-    response = await fetch(`${BASE_URL}${path}`, {
+    response = await fetch(apiUrl(path), {
       ...init,
       headers: {
         'Content-Type': 'application/json',
@@ -95,4 +106,63 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     return undefined as T
   }
   return (await response.json()) as T
+}
+
+/** 서버가 만들어 내려준 파일 하나. */
+export type DownloadedFile = {
+  blob: Blob
+  /** 서버가 헤더로 준 이름. 읽지 못했으면 `null` */
+  fileName: string | null
+}
+
+/**
+ * 파일을 받아 오는 한 겹.
+ *
+ * `apiFetch`는 본문을 JSON으로 읽으므로 바이너리에 쓸 수 없다. 오류 응답은 여전히 JSON이라
+ * 같은 `ApiError`로 바꿔 던진다 — 화면이 "내려받을 문구가 없습니다" 같은 서버 문장을 그대로 보여줄 수 있어야 한다.
+ */
+export async function apiDownload(path: string): Promise<DownloadedFile> {
+  let response: Response
+  try {
+    response = await fetch(apiUrl(path))
+  } catch {
+    throw new ApiError(
+      NETWORK_UNAVAILABLE,
+      '연결이 끊겨 파일을 받지 못했습니다. 잠시 뒤 다시 눌러 주세요.',
+      [],
+      0,
+    )
+  }
+
+  if (!response.ok) {
+    throw await toApiError(response)
+  }
+
+  return {
+    blob: await response.blob(),
+    fileName: fileNameOf(response.headers.get('Content-Disposition')),
+  }
+}
+
+/**
+ * `Content-Disposition` 에서 파일 이름을 꺼낸다.
+ *
+ * 서버가 한글 이름을 RFC 5987 `filename*=UTF-8''…` 로 인코딩해 보낸다. 프론트와 API가 같은 출처라
+ * (`docs/architecture.md`) CORS 설정 없이 이 헤더를 읽을 수 있다.
+ */
+function fileNameOf(header: string | null): string | null {
+  if (header === null) {
+    return null
+  }
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header)
+  if (encoded !== null) {
+    try {
+      return decodeURIComponent(encoded[1])
+    } catch {
+      // 이름을 못 읽어도 파일 자체는 멀쩡하다. 부르는 쪽이 대신 쓸 이름을 정한다.
+      return null
+    }
+  }
+  const plain = /filename="([^"]+)"/i.exec(header)
+  return plain === null ? null : plain[1]
 }

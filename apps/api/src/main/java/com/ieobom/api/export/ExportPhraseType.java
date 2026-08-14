@@ -24,4 +24,13 @@ public enum ExportPhraseType {
 	public String label() {
 		return label;
 	}
+
+	/**
+	 * 내려받은 파일 이름에 들어갈 짧은 이름.
+	 *
+	 * <p>{@link #label()} 과 따로 두는 이유는 띄어쓰기 하나뿐이다. 파일 이름에 공백이 있으면 메신저나 셸을 거칠 때 이름이 잘리거나 따옴표가 붙는다.
+	 */
+	public String fileLabel() {
+		return label.replace(" ", "");
+	}
 }

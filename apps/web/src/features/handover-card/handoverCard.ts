@@ -1,4 +1,10 @@
-import type { HandoverCard, HandoverCardList, JobRole } from './handoverCardApi'
+import type {
+  CardField,
+  HandoverCard,
+  HandoverCardList,
+  RecipientCards,
+  JobRole,
+} from './handoverCardApi'
 
 /**
  * 카드를 화면에 그리는 규칙.
@@ -80,6 +86,85 @@ export function suggestionLabel(card: HandoverCard): string | null {
   const role = jobRoleLabel(card.suggestedJobRole) ?? '담당 직종 미정'
   const due = card.suggestedDueTime === null ? '기한 미정' : `${card.suggestedDueTime}까지`
   return `제안 · ${role} · ${due}`
+}
+
+/**
+ * AI 가 채우지 못하고 비워서 내려보낸 자리.
+ *
+ * 카드에는 확신도 값이 없다. **AI 가 확신하지 못한 것은 비어 있는 자리로 드러난다.** 대상 어르신을
+ * 가리지 못하면 어르신이 비고(`CardDraftVerifier`), 직종을 판단할 근거가 부족하면 직종이 비고,
+ * 원문에서 시각을 읽지 못하면 관찰 시각이 빈다. 그 자리를 모아 "여기는 사람이 봐야 한다"고 알린다.
+ * (Manyfast F-SNBVHR display — AI 가 확신하지 못한 내용은 검토가 필요함을 구분해 표시)
+ *
+ * 제안 직종·기한은 다음 행동에 붙는 값이라, 다음 행동이 없으면 비어 있어도 빈 자리가 아니다.
+ */
+export function uncertainFieldLabels(card: HandoverCard): string[] {
+  const labels: string[] = []
+  if (card.careRecipientId === null) {
+    labels.push('대상 어르신')
+  }
+  if (card.observedAt === null) {
+    labels.push('관찰 시각')
+  }
+  if (card.nextAction !== null && card.suggestedJobRole === null) {
+    labels.push('제안 담당 직종')
+  }
+  if (card.nextAction !== null && card.suggestedDueTime === null) {
+    labels.push('제안 기한')
+  }
+  return labels
+}
+
+/**
+ * 조치 또는 다음 행동 칸에 붙는 추천 액션 칩의 문구만 뽑는다. (Manyfast F-SNBVHR display —
+ * "조치·다음행동 입력란 하단에 AI 추천 액션 칩을 나란히 표시")
+ *
+ * 서버가 이미 근거 검증과 최대 3개 제한을 끝냈으므로, 화면은 대상 칸으로 나누기만 한다.
+ */
+export function chipTextsFor(card: HandoverCard, field: CardField): string[] {
+  return card.suggestedActions
+    .filter((action) => action.targetField === field)
+    .map((action) => action.text)
+}
+
+/**
+ * 고쳐진 카드 한 장을 당일 목록에 되꽂는다.
+ *
+ * 어르신을 지정하면 그 카드는 `unresolved` 에서 어르신 묶음으로 **옮겨 가야 한다.** 서버가 목록을
+ * 그렇게 가르기 때문에(`docs/contracts/handover-card-schema.md`), 화면 캐시도 같은 자리에 넣지 않으면
+ * 방금 확정한 카드가 여전히 검토 필요 항목에 남아 보인다.
+ *
+ * 그래서 **먼저 모든 자리에서 빼고**, 지금 소속으로 다시 넣는다. 비게 된 어르신 묶음은 지운다.
+ */
+export function withUpdatedCard(list: HandoverCardList, updated: HandoverCard): HandoverCardList {
+  const recipients = list.recipients
+    .map((recipient) => ({
+      ...recipient,
+      cards: recipient.cards.filter((card) => card.id !== updated.id),
+    }))
+    .filter((recipient) => recipient.cards.length > 0)
+  const unresolved = list.unresolved.filter((card) => card.id !== updated.id)
+
+  if (updated.careRecipientId === null) {
+    return { ...list, recipients, unresolved: [...unresolved, updated] }
+  }
+
+  const belongsTo = (recipient: RecipientCards) =>
+    recipient.careRecipientId === updated.careRecipientId
+  const placed: RecipientCards[] = recipients.some(belongsTo)
+    ? recipients.map((recipient) =>
+        belongsTo(recipient) ? { ...recipient, cards: [...recipient.cards, updated] } : recipient,
+      )
+    : [
+        ...recipients,
+        {
+          careRecipientId: updated.careRecipientId,
+          careRecipientName: updated.careRecipientName ?? '',
+          cards: [updated],
+        },
+      ]
+
+  return { ...list, recipients: placed, unresolved }
 }
 
 /** 목록 응답 어디에 있든 카드 하나를 찾는다. 어르신을 가리지 못한 카드도 상세로 열 수 있어야 한다. */

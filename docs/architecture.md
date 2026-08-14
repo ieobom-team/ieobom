@@ -31,6 +31,42 @@ ieobom/
 
 모노레포 하나로 간다. 제출 시 프론트/백 두 칸에 같은 URL을 넣는다. ([submission.md](./submission.md))
 
+## 배포 배치
+
+**프론트와 API 를 같은 출처(same-origin)에 둔다.** 리버스 프록시 하나가 앞에 서고,
+그 뒤에 정적 산출물과 API 가 붙는다. 브라우저 기준으로는 주소가 하나다.
+
+```
+사용자 → https://<서브도메인>.duckdns.org
+           ↓
+        Caddy (HTTPS 자동 발급·갱신)
+        ├─ /      → apps/web 빌드 산출물 (정적)
+        └─ /api   → Spring Boot :8080
+                      ↓
+                   MySQL 8.4 (같은 compose, 볼륨)
+```
+
+VM 한 대에 `docker compose` 로 Caddy · API · MySQL 을 함께 올린다.
+배포 구성 파일(Dockerfile · compose · Caddyfile)은 [#19](https://github.com/ieobom-team/ieobom/issues/19)에서 만든다.
+
+### 왜 같은 출처인가
+
+- **CORS 설정이 필요 없다.** 백엔드에 CORS 코드가 한 줄도 없고([#37](https://github.com/ieobom-team/ieobom/issues/37)),
+  그 상태 그대로 배포된다. 개발 편의로 열어 둔 와일드카드가 배포까지 따라갈 위험 자체가 없다.
+- **개발과 배포의 모양이 같다.** 개발은 `apps/web/vite.config.ts` 의 `/api` 프록시가,
+  배포는 Caddy 가 같은 일을 한다. 양쪽 다 브라우저에서 같은 출처다.
+- **`VITE_API_BASE_URL` 을 배포에서 주입하지 않는다.** 값이 비면 `shared/api/client.ts` 가
+  상대경로 `/api` 로 호출한다. 배포 주소를 번들에 굳혀 넣지 않아도 된다. ([development.md](./development.md#1-환경변수))
+- **HTTPS 가 필요하다.** 음성 입력(`features/handover/speechRecognition.ts` 의 `webkitSpeechRecognition`)은
+  secure context 에서만 동작한다. 공인 IP 에 `http://` 로 붙이면 배포에서 음성 입력이 그냥 실패한다.
+  Caddy 가 Let's Encrypt 인증서를 자동으로 처리한다.
+- **제출 링크가 서버에 묶이지 않는다.** 도메인을 우리가 통제하므로 서버를 옮기거나 IP 가 바뀌어도
+  README 의 링크는 그대로다. 코드 수정이 아니라 DNS 변경으로 대응한다.
+  (제출 마감 후 코드 수정은 탈락 사유다. [submission.md](./submission.md))
+
+다른 출처에 두고 백엔드에 CORS 를 여는 안은 채택하지 않았다.
+허용 출처 환경변수 · 프리플라이트 · 와일드카드 관리가 따라붙는데, 남은 기간에 늘릴 표면이 아니다.
+
 ## 백엔드 패키지
 
 `com.ieobom.api` 아래 **도메인별로** 나눈다. 계층(controller/service/repository)이 아니라 도메인이 1차 기준이다.
@@ -39,6 +75,7 @@ ieobom/
 |---|---|
 | `common` | 도메인이 함께 쓰는 값 — `JobRole`(담당 직종 5종), `SafetyKeyword`(지정 키워드 4종), `BaseTimeEntity`(생성·수정 시각) |
 | `recipient` | 어르신(`CareRecipient`) |
+| `staff` | 직원 명단(`Staff`) — 진입 화면의 본인 선택 목록. 계정이 아니다 |
 | `handover` | 원본 인계 입력 — 음성·텍스트·체크로 들어온 그대로 |
 | `handovercard` | AI가 구조화한 어르신별 카드 |
 | `task` | 담당자 배정, 당일 기한, 미처리/완료 상태 |
@@ -54,7 +91,7 @@ AI 호출은 추상화 라이브러리를 쓰지 않고 `RestClient`로 직접 �
 
 ```
 apps/web/src/
-├── features/session/      진입 역할·본인 식별, 진입 선택값 보관
+├── features/session/      진입 역할·본인 식별, 직원 명단 조회·캐시, 진입 선택값 보관
 ├── features/field/        현장 근무자 홈 (모바일)
 ├── features/admin/        관리자 홈 (웹)
 ├── routes/                라우트 정의(`AppRoutes`)와 진입 가드(`RequireSession`)
@@ -65,7 +102,9 @@ apps/web/src/
 화면 전환은 `react-router`의 선언형 `BrowserRouter`를 쓴다.
 검증은 `oxlint` · `vitest`(+ `@testing-library/react`, `jsdom`) · `tsc -b && vite build` 세 가지다.
 
-## 엔티티 (4개)
+## 엔티티
+
+인계 흐름을 잇는 네 엔티티다. `Staff`는 여기에 붙지 않고 따로 선다 — 아래 표 다음에 적었다.
 
 ```
 CareRecipient   어르신
@@ -73,25 +112,49 @@ CareRecipient   어르신
       │
       │ N
 HandoverCard ───┐ N          1 ┌─── Handover      원본 인계 입력 (발화 한 덩어리)
-   구조화 카드   │ ─────────────┘
-      │ 1
-      │
+   구조화 카드   │ ─────────────┘        │ 1
+      │ 1                                │ 0..1
+      │                             HandoverAudio   원본 음성 (음성 입력일 때만)
       │ N
     Task        후속 업무 (담당자 · 미처리/완료)
 ```
 
-네 엔티티 모두 `BaseTimeEntity`를 상속해 `createdAt` · `updatedAt`을 갖는다.
+모든 엔티티가 `BaseTimeEntity`를 상속해 `createdAt` · `updatedAt`을 갖는다.
 아래에서 *(선택)* 표시가 없는 필드는 `nullable = false`다.
 
 | 엔티티 | 필드 |
 |---|---|
-| `CareRecipient` | `name` 이름, `code` 식별번호(unique) |
-| `Handover` | `careRecipient`, `rawText` 원문, `inputMethod`(`VOICE`/`TEXT`/`CHECK`), `occurredAt` 입력 시점, `reporterName` 입력자 이름, **`proxyInput` 대리 입력 여부**, **`infoSource` 정보 출처**(`GUARDIAN`/`DRIVER`/`COLLEAGUE`/`OTHER`, 선택) |
+| `CareRecipient` | `name` 이름, **`code` 내부 ID(unique)**, `dischargedAt` 이용 종료 시점(선택) |
+| `Handover` | `careRecipient`, `rawText` 원문, `inputMethod`(`VOICE`/`TEXT`/`CHECK`), `occurredAt` 입력 시점, `reporterName` 입력자 이름, **`proxyInput` 대리 입력 여부**, **`infoSource` 정보 출처**(`GUARDIAN`/`DRIVER`/`COLLEAGUE`/`OTHER`, 선택), **`audioMimeType` 원본 음성 형식**(선택 — 있으면 들을 음성이 있다는 뜻) |
+| `HandoverAudio` | `handover`(unique), `data` 음성 바이트(`MEDIUMBLOB`) |
 | `HandoverCard` | `handover`, `careRecipient`(선택), `observedAt` 시각(선택), `statusChange` 변화(선택), `actionTaken` 조치(선택), `nextAction` 다음 행동(선택), **`evidenceText` 근거 원문 문장**, `safetyRelated` 안전 관련 여부, **`safetyFlagSource` 판정 출처**(`KEYWORD`/`STAFF`, 선택), **`reviewStatus` 검토 상태**(`NEEDS_REVIEW`/`REVIEWED`), `suggestedJobRole` 제안 직종(선택), `suggestedDueTime` 제안 기한(선택) |
 | `Task` | `handoverCard`, `content` 업무 내용, `assigneeJobRole` 담당 직종(선택), `assigneeName` 담당자 이름(선택), **`dueTime` 기한(`LocalTime`, 당일 HH:MM)**, `status`(`PENDING`/`DONE`), `completedAt` 완료 시각(선택), `completedByName` 완료 기록자(선택) |
 
+**원본 음성은 테이블을 나눠 둔다.** 카드 조회는 원문을 `join fetch`로 함께 읽는데(`HandoverCardRepository`),
+음성 바이트가 `Handover`에 있으면 카드 한 장을 볼 때마다 그날 녹음이 통째로 메모리에 올라온다.
+그래서 바이트는 `HandoverAudio`에 두고, "음성이 있는지"만 `Handover.audioMimeType`으로 남긴다.
+데모 규모라 파일 스토리지 없이 DB에 넣고, 한 건 상한은 10MB다(화면은 5분에서 스스로 멈춘다). ([#44](https://github.com/ieobom-team/ieobom/issues/44))
+
+**`Staff`는 위 그림에 없다.** 직원 명단(`name` 이름, `code` 사번(unique))은 진입 화면이 본인 선택 목록을
+그릴 때만 읽고, 인계·업무는 직원을 **이름 문자열**로 가리키므로 연관관계를 걸지 않는다.
+외래키를 걸려면 이름 대신 직원 id를 저장해야 하는데, 그 결정은 아직 하지 않았다. (인증 절 참고)
+
+**`CareRecipient.code`가 내부 ID다.** 가명처리용 필드를 따로 두지 않는다.
+LLM 호출 전에 실명을 바꿔 넣는 값이 이 `code`이고, 화면에 그릴 때만 실명으로 되돌린다.
+동명이인을 화면에서 구분하는 식별번호와 같은 값이며, 형식은 **접두어 `IB-` + 순번**이다.
+발급은 `RecipientCodeIssuer`가 하고, 순번은 개수가 아니라 **이미 쓰인 최대 순번 + 1**이다. ([#42](https://github.com/ieobom-team/ieobom/issues/42))
+
+**어르신 명단은 화면에서 관리한다.** 관리자가 `/admin/care-recipients`에서 등록·이름 수정·이용 종료
+표시를 한다. **삭제는 없다** — 기존 인계 기록과 카드가 어르신을 가리키고 있어서, 지우면 이미 남긴
+기록이 대상을 잃는다. 이용 종료로 표시한 어르신은 새 입력의 대상 목록에서만 빠지고,
+AI가 발화를 어르신별로 분리할 때 쓰는 이름 대조 후보(`CardDraftVerifier`)에는 그대로 남는다.
+
 **어르신 시드.** `CareRecipientSeeder`가 기동 시 데모용 어르신 20명(`IB-001`~`IB-020`)을 채운다.
 식별번호 단위로 확인하고 넣으므로 여러 번 기동해도 중복이 쌓이지 않는다. 이름은 모두 가상 인물이다.
+화면에서 등록한 어르신은 `IB-021`부터 이어지므로 시드와 겹치지 않는다.
+
+**직원 시드.** `StaffSeeder`가 같은 방식으로 데모용 직원 8명(`ST-001`~`ST-008`)을 채운다.
+명단이 비면 진입 화면에서 본인을 고를 수 없어 앱 전체가 시작되지 않는다.
 
 **`HandoverCard.careRecipient`가 비어 있을 수 있는 이유.** 대상 어르신을 분리할 수 없는 원문은
 확정 카드로 만들지 않고 사람에게 넘긴다. 이때 어르신 없이 `검토 필요` 상태로 남는다.
@@ -157,9 +220,21 @@ HandoverCard ───┐ N          1 ┌─── Handover      원본 인계 
 - 기기 하나를 여러 직원이 돌려 쓰므로 홈 헤더에 **본인 바꾸기**를 둔다.
   이게 없으면 앞사람 이름으로 입력이 남는다.
 
-**직원 명단은 프론트 상수(mock)다.** (`features/session/staffDirectory.ts`)
-서버에 직원 엔티티가 없고, API는 직원을 `reporterName` · `assigneeName` · `completedByName`
-같은 **이름 문자열**로만 받는다. 명단을 서버가 관리해야 하면 별도 Issue로 뺀다.
+**직원 명단은 서버가 관리한다.** (`GET /api/staff`, [#33](https://github.com/ieobom-team/ieobom/issues/33))
+진입 화면이 명단을 받아 본인 선택 목록을 그리고, 후속 업무 배정 화면(`F-IVFNPC`)은 담당 직종에 맞는 직원 드롭다운을 그린다.
+받아 온 명단을 기기에 캐시해 두고, 브라우저에는 **사번만** 저장하므로 선택값을 되살릴 때 이 캐시에서 이름을 다시 찾는다.
+(`features/session/staffApi.ts` · `staffDirectory.ts`)
+
+- **연결이 끊겨도 진입을 막지 않는다.** 명단을 받지 못하면 마지막으로 캐시해 둔 명단으로 고르게 하고,
+  캐시까지 비어 있을 때만 오류로 알린다. 여기서 막으면 현장 근무자가 입력 자체를 못 한다.
+- **직원 명단 관리 화면은 만들지 않는다.** 유저플로우 "AI 인계 도구 내비게이션 맵"에 그 화면이 없다.
+  입·퇴사는 `StaffSeeder`와 DB로 반영한다. 어르신 명단([#42](https://github.com/ieobom-team/ieobom/issues/42))과 다른 점이다.
+- API는 직원을 여전히 `reporterName` · `assigneeName` · `completedByName` 같은 **이름 문자열**로 받는다.
+  사번을 함께 저장할지는 동명이인 구분이 실제로 필요해지는 시점에 다시 판단한다.
+
+**어르신 명단 등록은 이 원칙의 예외가 아니다.** 등록되는 것은 어르신(데이터)이지 근무자(계정)가
+아니다. 비밀번호도 로그인도 없고, 어르신이 서비스에 접속하지도 않는다. 데이터 세팅이다.
+([#42](https://github.com/ieobom-team/ieobom/issues/42), Manyfast `F-LUDCWW` permissions)
 
 ## AI 구조화 규칙
 
@@ -196,3 +271,5 @@ HandoverCard ───┐ N          1 ┌─── Handover      원본 인계 
 - **판단 근거가 부족하면 직종을 비워 두고 직원이 지정하게 한다.** 억지로 채우지 않는다.
 - 다음 행동 · 담당 직종 · 기한은 모두 **AI 제안값을 미리 채운 상태**로 배정 화면에 띄우고,
   직원이 그대로 확정하거나 수정한다. 빈 입력으로 시작하지 않는다.
+- 조치·다음 행동 칸에는 AI가 발화 맥락에서 추론한 **추천 액션 칩(최대 3개)**을 함께 제시한다.
+  칩은 원문 근거가 있는 내용만으로 만들고, 직접 입력 경로도 동등하게 열어 둔다. (RFC [#62](https://github.com/ieobom-team/ieobom/issues/62))

@@ -37,6 +37,10 @@ public class TaskService {
 	static final String TASK_ALREADY_CREATED = "TASK_ALREADY_CREATED";
 	static final String TASK_NOT_FOUND = "TASK_NOT_FOUND";
 
+	/** 전체 목록용 정렬: 미처리를 먼저, 그 안에서는 기한이 이른 순. 완료는 뒤에 두고 기한 순으로 묶는다. */
+	private static final Comparator<Task> PENDING_FIRST_BY_DUE_TIME =
+			Comparator.comparing(Task::isDone).thenComparing(Task::getDueTime);
+
 	/**
 	 * 미처리는 기한이 이른 것부터. 하원 전에 무엇부터 확인해야 하는지가 그대로 순서다.
 	 *
@@ -90,30 +94,27 @@ public class TaskService {
 		return TaskResponse.from(task);
 	}
 
-	/** 업무 하나. (유저플로우 n34 업무 상세) */
+	/** 업무 하나. (유저플로우 "새 플로우 3" n34 업무 상세) */
 	@Transactional(readOnly = true)
 	public TaskResponse find(Long taskId) {
 		return TaskResponse.from(findTask(taskId));
 	}
 
 	/**
-	 * 그날 업무를 미처리와 완료로 나눠 돌려준다. (Manyfast F-HQTFLK action, 유저플로우 "AI 인계 도구 내비게이션 맵" n42 관리자 대시보드 ·
-	 * n43 당일 인계·업무 현황)
-	 *
-	 * <p>이 파일의 배정·완료 쪽 번호(n21 · n34 등)는 아직 "새 플로우 3" 기준이다. 두 플로우에서 같은 번호가 다른 화면을 가리킨다.
-	 *
-	 * <p>인계 카드를 여기 같이 담지 않는다. 대시보드는 인계와 업무를 <b>따로</b> 불러서 한쪽이 실패해도 성공한 쪽을 그대로 보여 줘야 한다.
-	 * (Manyfast F-HQTFLK exceptions) 한 응답으로 합치면 부분 실패를 구분할 자리가 사라진다.
+	 * 그날 업무를 돌려준다. 현장 근무자 목록용 tasks와 대시보드용 pending/done을 모두 담는다.
+	 * (Manyfast F-IVFNPC display, Manyfast F-HQTFLK action)
 	 */
 	@Transactional(readOnly = true)
 	public TaskListResponse findByDate(LocalDate date) {
 		List<Task> tasks = findCreatedOn(date);
 
+		List<TaskResponse> all =
+				tasks.stream().sorted(PENDING_FIRST_BY_DUE_TIME).map(TaskResponse::from).toList();
 		List<TaskResponse> pending = sortedResponses(tasks, task -> !task.isDone(), BY_DUE_TIME);
 		List<TaskResponse> done = sortedResponses(tasks, Task::isDone, BY_COMPLETED_AT_DESC);
 
 		logDashboardViewed(date, pending.size(), done.size());
-		return TaskListResponse.of(date, pending, done);
+		return TaskListResponse.of(date, all, pending, done);
 	}
 
 	/**
@@ -210,7 +211,7 @@ public class TaskService {
 	/**
 	 * 업무를 만들 수 있는 카드인지. (Manyfast F-IVFNPC preconditions)
 	 *
-	 * <p>검토 완료까지는 요구하지 않는다. 유저플로우에서 카드 상세(n21)는 검토와 배정 두 갈래로 함께 열려 있고, Manyfast 도 "검토 가능한"
+	 * <p>검토 완료까지는 요구하지 않는다. 유저플로우 "새 플로우 3"에서 카드 상세(n21)는 검토와 배정 두 갈래로 함께 열려 있고, Manyfast 도 "검토 가능한"
 	 * 카드라고만 한다. 문구 생성과 다른 지점이다 — 문구는 보호자에게 나가지만 업무는 내부에서 닫힌다.
 	 *
 	 * <p>대상 어르신은 막는다. 누구의 일인지 모르는 업무는 담당자가 받아도 수행할 수 없고, 완료 확인은 더 못 한다.

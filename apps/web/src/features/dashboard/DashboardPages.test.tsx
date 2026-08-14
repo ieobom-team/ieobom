@@ -7,7 +7,7 @@ import { AppRoutes } from '../../routes/AppRoutes'
 import { createQueryClient } from '../../shared/api/queryClient'
 import { SessionProvider } from '../session/SessionProvider'
 import { saveSession } from '../session/sessionStorage'
-import { STAFF_DIRECTORY } from '../session/staffDirectory'
+import { seedStaffCache, TEST_STAFF } from '../session/staffFixture'
 import type { HandoverCard } from '../handover-card/handoverCardApi'
 import type { TaskResponse } from '../task/taskApi'
 
@@ -21,7 +21,7 @@ import type { TaskResponse } from '../task/taskApi'
  * 노드 번호는 유저플로우 "AI 인계 도구 내비게이션 맵" 기준이다.
  */
 
-const 김하늘 = STAFF_DIRECTORY[0]
+const 김하늘 = TEST_STAFF[0]
 
 /** 카드 상세로 넘어가는 경로까지 보므로 카드도 실제 응답 모양 그대로 만든다. */
 function 카드(patch: Partial<HandoverCard> = {}): HandoverCard {
@@ -42,6 +42,8 @@ function 카드(patch: Partial<HandoverCard> = {}): HandoverCard {
     suggestedDueTime: '17:30',
     exportAllowed: false,
     exportBlockedReason: '검토 완료 후 생성할 수 있습니다.',
+    hasAudio: false,
+    suggestedActions: [],
     createdAt: '2026-08-13T13:11:02.401',
     ...patch,
   }
@@ -112,6 +114,14 @@ beforeEach(() => {
   vi.stubGlobal(
     'fetch',
     vi.fn((input: string) => {
+      if (input.includes('/api/staff')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ staff: TEST_STAFF }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        )
+      }
       const 응답 = 응답을_고른다(input)
       return Promise.resolve(
         new Response(JSON.stringify(응답.body), {
@@ -142,6 +152,7 @@ afterEach(() => {
 })
 
 function renderApp(initialPath = '/admin/dashboard', entryRole: 'FIELD_WORKER' | 'MANAGER' = 'MANAGER') {
+  seedStaffCache()
   saveSession({ entryRole, staff: 김하늘 })
   return render(
     <QueryClientProvider client={createQueryClient()}>

@@ -1,18 +1,18 @@
 package com.ieobom.api.handovercard;
 
 import com.ieobom.api.ai.StructuredCardDraft;
+import com.ieobom.api.ai.SuggestedActionDraft;
 import com.ieobom.api.common.JobRole;
 import com.ieobom.api.common.SafetyKeyword;
 import com.ieobom.api.handovercard.CardVerification.DiscardReason;
 import com.ieobom.api.handovercard.CardVerification.Discarded;
 import com.ieobom.api.recipient.CareRecipient;
+import com.ieobom.api.recipient.RecipientAliases;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -34,20 +34,23 @@ public class CardDraftVerifier {
 
 	private static final int EVIDENCE_LIMIT = 1000;
 
+	/** 추천 액션 칩 최대 개수. (Manyfast F-SNBVHR display) 스키마도 같은 상한을 요청하지만, 응답을 그대로 믿지 않고 여기서도 자른다. */
+	private static final int SUGGESTED_ACTIONS_LIMIT = 3;
+
 	/**
 	 * 초안을 판정해 통과분과 폐기분으로 가른다.
 	 *
-	 * @param rawText 인계 원문. 근거가 실제로 이 안에 있는지 대조한다
+	 * @param rawText 인계 원문. 근거가 실제로 이 안에 있는지 대조한다. <b>치환되지 않은 원본이고, 초안은 부르는 쪽에서 이미 실명으로
+	 *     되돌아온 상태여야 한다</b>
 	 * @param observedDate 관찰 시각에 붙일 날짜. 기한과 시각은 당일 단위로만 쓴다
-	 * @param candidates 고를 수 있는 어르신. 이 목록 밖의 이름은 가리지 못한 것으로 본다
+	 * @param aliases 실명과 내부 ID의 대조표. 이 표에서 가리지 못하는 ID는 대상을 못 가린 것으로 본다
 	 */
 	public CardVerification verify(
 			List<StructuredCardDraft> drafts,
 			String rawText,
 			LocalDate observedDate,
-			List<CareRecipient> candidates) {
+			RecipientAliases aliases) {
 
-		Map<String, CareRecipient> byName = uniqueNames(candidates);
 		List<CardBlueprint> accepted = new ArrayList<>();
 		List<Discarded> discarded = new ArrayList<>();
 
@@ -58,7 +61,7 @@ public class CardDraftVerifier {
 				log.warn("구조화 항목 폐기 — 사유={}, 근거={}", reason.label(), draft.evidenceText());
 				continue;
 			}
-			accepted.add(toBlueprint(draft, observedDate, byName));
+			accepted.add(toBlueprint(draft, rawText, observedDate, aliases));
 		}
 
 		log.info("구조화 검증 — 통과 {}개, 폐기 {}개", accepted.size(), discarded.size());
@@ -88,7 +91,7 @@ public class CardDraftVerifier {
 	}
 
 	private CardBlueprint toBlueprint(
-			StructuredCardDraft draft, LocalDate observedDate, Map<String, CareRecipient> byName) {
+			StructuredCardDraft draft, String rawText, LocalDate observedDate, RecipientAliases aliases) {
 
 		String nextAction = cut(trimToNull(draft.nextAction()), TEXT_LIMIT);
 		boolean hasNextAction = nextAction != null;
@@ -101,7 +104,7 @@ public class CardDraftVerifier {
 				isSafetyRelated(draft, statusChange, actionTaken, nextAction, evidence);
 
 		return new CardBlueprint(
-				resolveRecipient(draft.recipientName(), byName),
+				resolveRecipient(draft.recipientCode(), aliases),
 				observedAt(draft.observedTime(), observedDate),
 				statusChange,
 				actionTaken,
@@ -110,41 +113,73 @@ public class CardDraftVerifier {
 				safetyRelated,
 				safetyRelated ? SafetyFlagSource.KEYWORD : null,
 				hasNextAction ? jobRole(draft.suggestedJobRole()) : null,
-				hasNextAction ? time(draft.suggestedDueTime()) : null);
+				hasNextAction ? time(draft.suggestedDueTime()) : null,
+				suggestedActions(draft.suggestedActions(), rawText));
+	}
+
+	/**
+	 * 추천 액션 칩을 검증한다. (Manyfast F-SNBVHR action — "추천 칩은 원문 근거가 있는 내용으로만 생성")
+	 *
+	 * <p>카드 항목과 같은 기준이다 — 근거가 비었거나 원문에 없으면 그 칩만 버린다. 칩 하나가 근거를 지어냈다고 카드 전체를 버릴 이유는 없다. 최대
+	 * 개수도 스키마에 이미 요청했지만, 모델 응답을 그대로 믿지 않고 여기서도 자른다.
+	 */
+	private List<SuggestedAction> suggestedActions(List<SuggestedActionDraft> drafts, String rawText) {
+		List<SuggestedAction> result = new ArrayList<>();
+		for (SuggestedActionDraft draft : drafts) {
+			if (result.size() >= SUGGESTED_ACTIONS_LIMIT) {
+				break;
+			}
+			String text = trimToNull(draft.text());
+			String evidence = trimToNull(draft.evidenceText());
+			if (text == null || evidence == null) {
+				log.debug("추천 액션 칩 폐기 — 문구 또는 근거가 비었음");
+				continue;
+			}
+			if (!containsIgnoringWhitespace(rawText, evidence)) {
+				log.warn("추천 액션 칩 폐기 — 근거가 원문에 없음, 문구={}", text);
+				continue;
+			}
+			CardField targetField = targetField(draft.targetField());
+			if (targetField == null) {
+				log.debug("추천 액션 칩 폐기 — 대상 칸을 알 수 없음, 문구={}", text);
+				continue;
+			}
+			result.add(SuggestedAction.of(targetField, cut(text, TEXT_LIMIT)));
+		}
+		return result;
+	}
+
+	/** 목록 밖 값이면 칩을 버린다. 어느 칸인지 모르는 채로 채우면 엉뚱한 칸을 덮어쓸 수 있다. */
+	private CardField targetField(String value) {
+		String name = trimToNull(value);
+		if (name == null) {
+			return null;
+		}
+		try {
+			return CardField.valueOf(name);
+		} catch (IllegalArgumentException e) {
+			return null;
+		}
 	}
 
 	/**
 	 * 대상 어르신. 가릴 수 없으면 {@code null} 을 돌려주고 카드는 검토 대상으로 남는다.
 	 *
-	 * <p>이름이 후보 목록에 없거나 같은 이름이 둘 이상이면 가리지 못한 것으로 본다. 동명이인을 임의로 한 명 고르면 다른 어르신의 기록이 된다.
+	 * <p>대조하는 값은 <b>이름이 아니라 내부 ID</b>다. 모델은 치환된 원문을 받았으므로 어르신을 ID로 가리킨다.
+	 *
+	 * <p>후보 목록에 없는 ID이거나 같은 이름을 쓰는 어르신이 둘 이상이면 가리지 못한 것으로 본다. 동명이인을 임의로 한 명 고르면 다른 어르신의 기록이
+	 * 된다. 판정은 {@link RecipientAliases#resolve} 한 곳에 있다. <b>로그에 남는 것도 ID뿐이다.</b>
 	 */
-	private CareRecipient resolveRecipient(String recipientName, Map<String, CareRecipient> byName) {
-		String name = trimToNull(recipientName);
-		if (name == null) {
+	private CareRecipient resolveRecipient(String recipientCode, RecipientAliases aliases) {
+		String code = trimToNull(recipientCode);
+		if (code == null) {
 			return null;
 		}
-		CareRecipient found = byName.get(name);
+		CareRecipient found = aliases.resolve(code);
 		if (found == null) {
-			log.warn("후보 목록에 없거나 가릴 수 없는 어르신 이름 — {}", name);
+			log.warn("후보 목록에 없거나 가릴 수 없는 어르신 내부 ID — {}", code);
 		}
 		return found;
-	}
-
-	/** 이름이 겹치는 어르신은 아예 담지 않는다. 담으면 둘 중 하나가 임의로 뽑힌다. */
-	private Map<String, CareRecipient> uniqueNames(List<CareRecipient> candidates) {
-		Map<String, CareRecipient> byName = new HashMap<>();
-		Map<String, Integer> counts = new HashMap<>();
-		for (CareRecipient candidate : candidates) {
-			counts.merge(candidate.getName(), 1, Integer::sum);
-			byName.put(candidate.getName(), candidate);
-		}
-		counts.forEach(
-				(name, count) -> {
-					if (count > 1) {
-						byName.remove(name);
-					}
-				});
-		return byName;
 	}
 
 	/**

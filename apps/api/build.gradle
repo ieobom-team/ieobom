@@ -38,6 +38,12 @@ dependencies {
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testAnnotationProcessor 'org.projectlombok:lombok'
 
+	// .docx · .xlsx 파일 생성. (#45)
+	//
+	// Boot 의 의존성 관리가 잡아 주는 라이브러리가 아니라 버전을 직접 고정한다. POI 는 스프링에
+	// 기대지 않으므로 Boot 4.1 과 부딪히는 지점이 없다 — 확인은 build 로 한다.
+	implementation 'org.apache.poi:poi-ooxml:5.4.1'
+
 	// 테스트 전용. 로컬/배포 DB 는 MySQL 8.4 이고, H2 는 테스트에서만 쓴다.
 	// src/test/resources/application.yml 참고.
 	testRuntimeOnly 'com.h2database:h2'

@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.ieobom.api.ai.ExportInput;
 import com.ieobom.api.handover.Handover;
 import com.ieobom.api.handover.HandoverRepository;
 import com.ieobom.api.handover.InputMethod;
@@ -124,9 +125,74 @@ class ExportApiTest {
 		mockMvc.perform(post("/api/handover-cards/{id}/exports", card.getId()));
 
 		assertThat(문구생성.lastInput()).isNotNull();
-		assertThat(문구생성.lastInput().careRecipientName()).isEqualTo(김말순.getName());
+		assertThat(문구생성.lastInput().careRecipientCode()).isEqualTo(김말순.getCode());
 		assertThat(문구생성.lastInput().statusChange()).isEqualTo("점심 식사량 저하");
 		assertThat(문구생성.lastInput().evidenceText()).isEqualTo("점심을 거의 안 드셨어요");
+	}
+
+	/**
+	 * 이 호출 지점의 요청 페이로드에 어르신 실명이 없다는 것을 확인한다.
+	 *
+	 * <p>구조화와 같은 KPI 다. 어르신 칸만 보지 않는다. 근거 원문은 인계 원문에서 잘라 온 구간이고 상태·조치 칸은 직원이 고칠 수 있어서, 어느
+	 * 칸에나 이름이 섞일 수 있다. (Manyfast F-LUDCWW rules)
+	 */
+	@Test
+	void 문구_생성_요청_페이로드에_어르신_실명이_없다() throws Exception {
+		HandoverCard card =
+				cards.save(
+						HandoverCard.builder()
+								.handover(인계)
+								.careRecipient(김말순)
+								.observedAt(LocalDateTime.of(LocalDate.now(), LocalTime.of(12, 40)))
+								.statusChange("%s 어르신 점심 식사량 저하".formatted(김말순.getName()))
+								.actionTaken("죽으로 바꿔 드림")
+								.nextAction("%s 어르신도 저녁 식사량 확인".formatted(박순자.getName()))
+								.evidenceText("%s 어르신이 점심을 거의 안 드셨어요".formatted(김말순.getName()))
+								.safetyRelated(true)
+								.safetyFlagSource(SafetyFlagSource.KEYWORD)
+								.reviewStatus(ReviewStatus.REVIEWED)
+								.build());
+		문구생성.willReturn("점심 식사량 저하 보이심.", "점심 식사량이 줄었습니다.");
+
+		mockMvc.perform(post("/api/handover-cards/{id}/exports", card.getId()));
+
+		ExportInput 요청 = 문구생성.lastInput();
+		String 나가는_값 =
+				String.join(
+						" ",
+						요청.careRecipientCode(),
+						요청.statusChange(),
+						요청.actionTaken(),
+						요청.nextAction(),
+						요청.evidenceText());
+
+		assertThat(careRecipients.findAll())
+				.isNotEmpty()
+				.allSatisfy(어르신 -> assertThat(나가는_값).doesNotContain(어르신.getName()));
+		assertThat(요청.evidenceText()).contains(김말순.getCode());
+		assertThat(요청.nextAction()).contains(박순자.getCode());
+	}
+
+	/**
+	 * 치환된 문구를 실명으로 되돌린 뒤에 판정하고 저장한다.
+	 *
+	 * <p>보호자 전달 문구는 사람이 읽고 그대로 복사하는 글이라 이름이 있어야 말이 된다. 되돌리지 않고 저장하면 내부 ID 안의 숫자가 "카드에 없는
+	 * 숫자"로 잡히고, 직원이 화면에서 고친 문구만 실명이 되어 저장된 형식이 갈린다.
+	 */
+	@Test
+	void 치환된_문구를_실명으로_되돌려_저장한다() throws Exception {
+		HandoverCard card = 카드(ReviewStatus.REVIEWED);
+		문구생성.willReturn(
+				"%s 어르신 점심 식사량 저하 보이심.".formatted(김말순.getCode()),
+				"%s 어르신 점심 식사량이 줄었습니다.".formatted(김말순.getCode()));
+
+		mockMvc
+				.perform(post("/api/handover-cards/{id}/exports", card.getId()))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.phrases[0].text").value("%s 어르신 점심 식사량 저하 보이심.".formatted(김말순.getName())))
+				.andExpect(jsonPath("$.phrases[1].text").value("%s 어르신 점심 식사량이 줄었습니다.".formatted(김말순.getName())))
+				// 내부 ID 의 숫자가 "카드에 없는 숫자"로 잡히지 않는다.
+				.andExpect(jsonPath("$.needsReview").value(false));
 	}
 
 	@Test

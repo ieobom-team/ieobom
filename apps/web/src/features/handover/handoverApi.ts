@@ -4,12 +4,6 @@ import type { InputMethod } from './inputMethod'
 
 /** 계약은 `docs/contracts/handover-api.md` 에 있다. */
 
-export type CareRecipient = {
-  id: number
-  name: string
-  code: string
-}
-
 export type HandoverCreateRequest = {
   careRecipientId: number
   rawText: string
@@ -20,6 +14,8 @@ export type HandoverCreateRequest = {
   proxyInput: boolean
   /** 직접 관찰이면 보내지 않는다. 붙여 보내면 서버가 400 으로 되돌린다 */
   infoSource?: InfoSource
+  /** 녹음된 음성 파일 (base64 Data URL) */
+  audioData?: string
 }
 
 export type HandoverResponse = {
@@ -33,15 +29,6 @@ export type HandoverResponse = {
   proxyInput: boolean
   infoSource: InfoSource | null
   createdAt: string
-}
-
-type CareRecipientListResponse = {
-  careRecipients: CareRecipient[]
-}
-
-export async function fetchCareRecipients(): Promise<CareRecipient[]> {
-  const response = await apiFetch<CareRecipientListResponse>('/api/care-recipients')
-  return response.careRecipients
 }
 
 export function createHandover(request: HandoverCreateRequest): Promise<HandoverResponse> {

@@ -1,23 +1,44 @@
 import { describe, expect, it } from 'vitest'
-import { findStaffByCode, STAFF_DIRECTORY } from './staffDirectory'
+import { TEST_STAFF } from './staffFixture'
+import { cacheDirectory, findStaffByCode, readCachedDirectory, STAFF_CACHE_KEY } from './staffDirectory'
 
-describe('직원 명단', () => {
-  it('사번이 겹치지 않는다', () => {
-    // 저장된 선택값을 되살릴 때 사번으로 찾으므로 겹치면 다른 사람이 된다.
-    const codes = STAFF_DIRECTORY.map((staff) => staff.code)
-    expect(new Set(codes).size).toBe(codes.length)
+describe('직원 명단 캐시', () => {
+  it('받아 온 명단을 그대로 되살린다', () => {
+    cacheDirectory(TEST_STAFF)
+
+    expect(readCachedDirectory()).toEqual(TEST_STAFF)
   })
 
-  it('명단에 담당 직종을 두지 않는다', () => {
-    // 담당 직종은 업무 배정에만 쓰는 값이다. 여기 들어오면 진입 역할과 섞인다.
-    for (const staff of STAFF_DIRECTORY) {
-      expect(Object.keys(staff).sort()).toEqual(['code', 'name'])
-    }
+  it('아직 받아 온 적이 없으면 비어 있다', () => {
+    expect(readCachedDirectory()).toEqual([])
   })
 
-  it('없는 사번이면 찾지 못한다', () => {
-    expect(findStaffByCode('ST-001')?.name).toBe('김하늘')
-    expect(findStaffByCode('ST-999')).toBeUndefined()
-    expect(findStaffByCode(null)).toBeUndefined()
+  it('읽을 수 없는 값이 들어 있어도 진입을 막지 않는다', () => {
+    window.localStorage.setItem(STAFF_CACHE_KEY, '{깨진 값')
+
+    expect(readCachedDirectory()).toEqual([])
+  })
+
+  it('명단 모양이 아닌 항목은 걸러 낸다', () => {
+    // 캐시 형식이 바뀐 옛 값이 남아 있어도 그대로 화면에 올리지 않는다.
+    window.localStorage.setItem(
+      STAFF_CACHE_KEY,
+      JSON.stringify([{ code: 'ST-001', name: '김하늘' }, { staffId: 7 }]),
+    )
+
+    expect(readCachedDirectory()).toEqual([{ code: 'ST-001', name: '김하늘' }])
+  })
+})
+
+describe('사번으로 직원 찾기', () => {
+  it('명단에 있으면 그 사람을 준다', () => {
+    expect(findStaffByCode(TEST_STAFF, 'ST-001')?.name).toBe('김하늘')
+  })
+
+  it('명단에 없는 사번이면 찾지 못한다', () => {
+    // 퇴사 등으로 명단에서 빠진 사번이다. 저장된 선택값을 되살리면 안 된다.
+    expect(findStaffByCode(TEST_STAFF, 'ST-999')).toBeUndefined()
+    expect(findStaffByCode(TEST_STAFF, null)).toBeUndefined()
+    expect(findStaffByCode([], 'ST-001')).toBeUndefined()
   })
 })

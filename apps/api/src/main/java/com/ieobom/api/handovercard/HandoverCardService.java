@@ -3,6 +3,7 @@ package com.ieobom.api.handovercard;
 import com.ieobom.api.ai.HandoverStructuringClient;
 import com.ieobom.api.ai.StructuredCardDraft;
 import com.ieobom.api.ai.StructuringInput;
+import com.ieobom.api.ai.SuggestedActionDraft;
 import com.ieobom.api.common.ConflictException;
 import com.ieobom.api.common.NotFoundException;
 import com.ieobom.api.common.RequestValidationException;
@@ -15,6 +16,7 @@ import com.ieobom.api.handovercard.dto.HandoverCardStructureResponse;
 import com.ieobom.api.handovercard.dto.HandoverCardUpdateRequest;
 import com.ieobom.api.recipient.CareRecipient;
 import com.ieobom.api.recipient.CareRecipientRepository;
+import com.ieobom.api.recipient.RecipientAliases;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -71,12 +73,16 @@ public class HandoverCardService {
 			throw new ConflictException(ALREADY_STRUCTURED, "이미 구조화된 인계입니다. 카드 목록에서 확인해 주세요.");
 		}
 
-		List<CareRecipient> candidates = careRecipientRepository.findAll();
-		List<StructuredCardDraft> drafts = structuringClient.structure(inputOf(handover, candidates));
+		// 이용 종료한 어르신도 담는다. 새 입력의 대상 목록에서만 빠질 뿐, 원문에 이름이 나오면 그것도 가려야 한다.
+		// (Manyfast F-LUDCWW rules)
+		RecipientAliases aliases = RecipientAliases.of(careRecipientRepository.findAll());
+
+		List<StructuredCardDraft> drafts =
+				restore(structuringClient.structure(inputOf(handover, aliases)), aliases);
 
 		CardVerification verification =
 				verifier.verify(
-						drafts, handover.getRawText(), handover.getOccurredAt().toLocalDate(), candidates);
+						drafts, handover.getRawText(), handover.getOccurredAt().toLocalDate(), aliases);
 
 		List<HandoverCard> saved = cardRepository.saveAll(toCards(handover, verification.accepted()));
 		logStructured(handover, verification, saved);
@@ -285,12 +291,61 @@ public class HandoverCardService {
 				detail);
 	}
 
-	private StructuringInput inputOf(Handover handover, List<CareRecipient> candidates) {
+	/**
+	 * 모델에 넘길 것. <b>실명은 여기서 전부 내부 ID로 바뀐다.</b>
+	 *
+	 * <p>원문까지 치환하는 것이 핵심이다. 어르신 칸만 ID로 바꾸고 원문을 그대로 보내면 실명은 원문에 실려 그대로 나간다. 후보 목록도 명단 전체의 실명이
+	 * 아니라 내부 ID 목록이다. (Manyfast F-LUDCWW rules · PRD success — "LLM 요청에 어르신 실명이 포함되지 않는 비율 100%")
+	 */
+	private StructuringInput inputOf(Handover handover, RecipientAliases aliases) {
 		return new StructuringInput(
-				handover.getRawText(),
+				aliases.mask(handover.getRawText()),
 				handover.getOccurredAt(),
-				handover.getCareRecipient().getName(),
-				candidates.stream().map(CareRecipient::getName).toList());
+				handover.getCareRecipient().getCode(),
+				aliases.codes(),
+				handover.getInputMethod() != null ? handover.getInputMethod().name() : null);
+	}
+
+	/**
+	 * 모델이 돌려준 초안의 실명을 되돌린다. <b>마스킹은 LLM 경계에서만 일어난다.</b>
+	 *
+	 * <p>검증보다 먼저 해야 한다. {@link CardDraftVerifier} 는 근거가 실제로 원문 안에 있는지 글자를 대조하는데, 그 상대는 치환되지 않은
+	 * 인계 원문이다. 되돌리지 않고 대조하면 어르신 이름이 들어간 정상 근거가 전부 "원문에 없는 근거"로 폐기된다.
+	 *
+	 * <p><b>어르신 식별자({@code recipientCode})는 되돌리지 않는다.</b> 카드가 어르신을 가리키는 방식은 문자열이 아니라 내부 ID로 찾은
+	 * 어르신 행이다.
+	 */
+	private List<StructuredCardDraft> restore(
+			List<StructuredCardDraft> drafts, RecipientAliases aliases) {
+
+		return drafts.stream()
+				.map(
+						draft ->
+								new StructuredCardDraft(
+										draft.recipientCode(),
+										aliases.restore(draft.statusChange()),
+										aliases.restore(draft.actionTaken()),
+										aliases.restore(draft.nextAction()),
+										aliases.restore(draft.evidenceText()),
+										draft.suggestedJobRole(),
+										draft.suggestedDueTime(),
+										draft.observedTime(),
+										draft.safetyCategory(),
+										restoreSuggestedActions(draft.suggestedActions(), aliases)))
+				.toList();
+	}
+
+	/** 추천 액션 칩의 문구·근거도 카드의 다른 항목과 같은 자리에서 실명으로 되돌린다. */
+	private List<SuggestedActionDraft> restoreSuggestedActions(
+			List<SuggestedActionDraft> drafts, RecipientAliases aliases) {
+		return drafts.stream()
+				.map(
+						draft ->
+								new SuggestedActionDraft(
+										draft.targetField(),
+										aliases.restore(draft.text()),
+										aliases.restore(draft.evidenceText())))
+				.toList();
 	}
 
 	/**
@@ -316,6 +371,7 @@ public class HandoverCardService {
 										.reviewStatus(ReviewStatus.NEEDS_REVIEW)
 										.suggestedJobRole(blueprint.suggestedJobRole())
 										.suggestedDueTime(blueprint.suggestedDueTime())
+										.suggestedActions(blueprint.suggestedActions())
 										.build())
 				.toList();
 	}

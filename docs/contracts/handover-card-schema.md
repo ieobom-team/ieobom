@@ -3,8 +3,9 @@
 AI 구조화 결과의 JSON 스키마와 카드 API.
 
 - Manyfast: `R-ONESTC` 어르신별 인계 정보 정리 / `F-SNBVHR` 어르신별 인계 카드 정리
+- 가명처리 규칙은 `R-LIEATL` / `F-LUDCWW` rules · dataSpec 에서 온다
 - 문구 생성 허용 판정만 `R-TUBGKD` / `F-GUSOFG` preconditions 에서 온다
-- 기준 버전: `v0.1-core-flow`
+- 기준 버전: `v0.5-action-chips-rfc62`
 
 > 제품이 **왜** 이렇게 동작하는지는 Manyfast가 기준이다. 여기에는 **JSON이 어떻게 생겼는지**만 적는다.
 
@@ -32,6 +33,64 @@ PATCH /api/handover-cards/{id}/safety         직원이 직접 하는 안전 표
 
 ---
 
+## 가명처리 — 실명은 LLM 경계를 넘지 않는다
+
+돌봄 기록은 어르신의 건강 상태를 담으므로 **실명을 LLM에 보내지 않는다.**
+(Manyfast `F-LUDCWW` rules · PRD success — "LLM 요청에 어르신 실명이 포함되지 않는 비율 100%")
+
+기술적 충돌이 하나 있고 **순서로 푼다.** AI의 첫 역할이 "여러 어르신이 섞인 발화를 어르신별로 분리"인데
+이름을 지우면 분리 단서가 사라진다. 그래서 지우는 대신 **LLM 앞단에서 룰 기반으로 내부 ID로 바꾸고**,
+LLM은 그 ID를 어르신 식별자로 그대로 쓴다. 사전 등록 명단과 문자열을 대조하는 일이라 AI가 필요 없다.
+
+```
+DB(실명 그대로)
+  ↓  mask()          RecipientAliases — 등록된 실명 → 내부 ID
+LLM 요청             ← 여기부터 실명이 없다
+  ↓
+LLM 응답 (내부 ID)
+  ↓  restore()       내부 ID → 실명
+서버 검증 · 저장 · 화면
+```
+
+| 어디서 | 무엇이 |
+|---|---|
+| `RecipientAliases` | 실명↔내부 ID 대조표. **치환과 복원이 일어나는 유일한 지점** |
+| `HandoverCardService` | 구조화 호출 앞에서 `mask`, 응답 직후 `restore` |
+| `ExportPhraseService` | 문구 생성 호출 앞에서 `mask`, 응답 직후 `restore` ([export-api.md](export-api.md)) |
+
+**나가는 값 전부를 치환한다.** 어르신 칸만 ID로 바꾸고 원문을 그대로 보내면 실명은 원문에 실려 그대로
+나간다. 후보 목록도 마찬가지다. 예전에는 이 자리에 **매 호출마다 명단 전체의 실명**이 실려 나갔고,
+지금은 내부 ID 목록이 나간다.
+
+**되돌리는 자리는 검증보다 앞이다.** 근거 대조의 상대는 치환되지 않은 인계 원문이라, 되돌리지 않고
+대조하면 어르신 이름이 들어간 정상 근거가 전부 "원문에 없는 근거"로 폐기된다.
+어르신 식별자(`recipientCode`)만 되돌리지 않는다. 카드가 어르신을 가리키는 방식은 문자열이 아니라
+**내부 ID로 찾은 어르신 행**이기 때문이다.
+
+| 규칙 | 이유 |
+|---|---|
+| 대조표는 서버 안에만 두고 요청에 넣지 않는다 | 표를 보내면 치환한 의미가 없다 (`F-LUDCWW` dataSpec) |
+| **이용 종료한 어르신도 대조 후보에 남는다** | 새 입력의 선택 목록에서만 빠진다. 원문에 이름이 나오면 그것도 가려야 한다 (`F-LUDCWW` rules) |
+| 긴 이름을 먼저 치환한다 | "김말"을 먼저 바꾸면 "김말순"이 `IB-009순`이 되어 긴 이름이 영영 걸리지 않는다 |
+| **DB에는 실명을 그대로 보관한다** | 마스킹은 LLM 경계에서만 일어난다. `Handover.rawText`는 손대지 않는다 |
+| 근무자 이름은 치환하지 않는다 | 입력자 식별은 내부 데이터이고 LLM에 보낼 이유가 없다 |
+
+### 이 장치가 하지 못하는 것
+
+**명단에 없는 이름은 찾지 못한다.** 룰 기반 문자열 대조라 등록된 이름만 걸리고,
+원문에 등록되지 않은 사람 이름이 섞여 있으면 **그대로 나간다.** 이것을 잡으려면 이름을 알아보는 모델이
+필요한데, 그건 "치환을 LLM에 맡기지 않는다"와 정면으로 어긋난다. **명단 등록이 이 장치의 전제다.**
+
+**동명이인은 치환하되 되짚지 않는다.** 같은 이름을 쓰는 어르신이 둘 이상이면 치환은 반드시 하고(실명이
+나가는 것과 누구인지 못 가리는 것은 다른 문제다) 먼저 등록된 어르신의 ID 하나로 모은다. 대신 그 ID로는
+어르신을 확정하지 않아 카드가 대상 없이 `NEEDS_REVIEW`로 남는다. 임의로 한 명 고르면 다른 어르신의
+기록이 된다.
+
+> 개인정보에 대한 **법적 판단은 하지 않는다.** 법률 자문을 받은 적이 없으므로
+> "법적으로 문제없다"가 아니라 "이렇게 설계했다"까지만 적는다. (Manyfast `F-LUDCWW` rules)
+
+---
+
 ## LLM에 강제하는 스키마
 
 Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하므로 모델이 자유 텍스트로 답할 수 없다.
@@ -39,11 +98,14 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 
 정의는 `com.ieobom.api.ai.HandoverStructuringSchema`에 있고, 아래는 그 함수 인자의 모양이다.
 
+모델이 받는 원문은 **치환이 끝난 것**이고, 어르신은 이름이 아니라 내부 ID로 오간다.
+(위 [가명처리](#가명처리--실명은-llm-경계를-넘지-않는다))
+
 ```json
 {
   "cards": [
     {
-      "recipientName": "김말순",
+      "recipientCode": "IB-001",
       "statusChange": "점심 식사량 저하",
       "actionTaken": null,
       "nextAction": "저녁 식사량 확인",
@@ -51,7 +113,10 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
       "suggestedJobRole": "CAREGIVER",
       "suggestedDueTime": "17:00",
       "observedTime": "12:40",
-      "safetyCategory": "POOR_INTAKE"
+      "safetyCategory": "POOR_INTAKE",
+      "suggestedActions": [
+        { "targetField": "NEXT_ACTION", "text": "저녁 식사량 확인", "evidenceText": "점심을 거의 안 드셨어요" }
+      ]
     }
   ]
 }
@@ -59,7 +124,7 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 
 | 필드 | 타입 | 비고 |
 |---|---|---|
-| `recipientName` | string \| null | **후보 목록에 있는 이름만.** 대상을 가릴 수 없으면 `null` |
+| `recipientCode` | string \| null | **후보 목록에 있는 내부 ID만.** 대상을 가릴 수 없으면 `null` |
 | `statusChange` | string \| null | 상태 변화 |
 | `actionTaken` | string \| null | 현장에서 이미 한 조치 |
 | `nextAction` | string \| null | 남아 있는 다음 행동 |
@@ -68,6 +133,31 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 | `suggestedDueTime` | string \| null | 당일 `HH:MM` |
 | `observedTime` | string \| null | 당일 `HH:MM` |
 | `safetyCategory` | enum | `FALL` `FEVER` `POOR_INTAKE` `MEDICATION_CHANGE` `NONE` |
+| `suggestedActions` | array | AI 추천 액션 칩. 최대 3개. 아래 [추천 액션 칩](#추천-액션-칩--suggestedactions) 참고 |
+
+### 추천 액션 칩 — `suggestedActions`
+
+조치·다음 행동 칸에 직원이 한 번 탭해서 채울 수 있는 짧은 문구다. (Manyfast `F-SNBVHR` action · display — RFC #62 방향 A)
+"상태 변화만 말하고 조치·다음 행동은 말하지 않는" 발화가 대부분이라, 근무자가 매번 손으로 타이핑하는
+부담을 줄이기 위해 넣는다. **선택과 확정은 근무자에게 있다** — 칩은 입력란을 채울 뿐 자동으로 카드를
+확정하지 않는다.
+
+```json
+{ "targetField": "NEXT_ACTION", "text": "저녁 식사량 확인", "evidenceText": "점심을 거의 안 드셨어요" }
+```
+
+| 필드 | 타입 | 비고 |
+|---|---|---|
+| `targetField` | enum | `ACTION_TAKEN` \| `NEXT_ACTION`. 탭했을 때 채워질 칸 |
+| `text` | string | 칩에 보일 문구이자 채워질 값 |
+| `evidenceText` | string | 근거 원문 구간. **카드에는 저장하지 않는다** — 검증에만 쓰고 버린다. 근거는 이미 카드 상단의 `evidenceText`로 보이므로 칩까지 따로 들고 있을 이유가 없다 |
+
+카드의 다른 항목과 같은 근거 규칙을 쓴다. `evidenceText`가 비었거나 원문에 없으면 **그 칩 하나만
+버리고 카드는 그대로 남는다** — 칩 하나가 근거를 지어냈다고 카드 전체를 버릴 이유는 없다. `targetField`가
+`ACTION_TAKEN`·`NEXT_ACTION` 밖의 값이면 어느 칸인지 알 수 없으므로 역시 그 칩만 버린다. 응답에
+3개보다 많이 와도 서버가 앞에서부터 3개만 남긴다.
+
+추천할 것이 없으면 빈 배열이다. 카드 응답에도 빈 배열로 내려가고, 화면은 그때 칩 영역을 그리지 않는다.
 
 `strict` 모드는 모든 속성이 `required`에 있어야 한다. 그래서 "값이 없을 수 있음"을 필드 생략이 아니라
 `["string", "null"]` 타입으로 표현한다. `suggestedJobRole`에 `UNKNOWN`, `safetyCategory`에 `NONE`이
@@ -75,6 +165,9 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 
 `suggestedJobRole`의 선택지는 `JobRole` enum에서, `safetyCategory`는 `SafetyKeyword` enum에서 직접 뽑는다.
 스키마에 목록을 손으로 다시 적지 않는다.
+
+필드 이름이 `recipientName`이 아니라 `recipientCode`인 것도 같은 이유다. **프롬프트가 ID를 요구해도
+필드 이름이 `name`이면 모델이 이름 자리로 읽는다.** 실명이 나가지 않게 하는 장치를 필드 이름 하나로 무르지 않는다.
 
 ---
 
@@ -88,11 +181,14 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 | `evidenceText`가 비었다 | **항목 폐기.** 카드가 되지 않고 목록에 나가지 않는다 |
 | `evidenceText`가 원문에 없다 | **항목 폐기.** 근거를 지어낸 것으로 본다 |
 | 변화·조치·다음 행동이 모두 비었다 | 항목 폐기. 담을 내용이 없다 |
-| `recipientName`이 `null`이거나 후보 목록에 없다 | 카드는 만들되 **어르신 없이 `NEEDS_REVIEW`** |
+| `recipientCode`가 `null`이거나 후보 목록에 없다 | 카드는 만들되 **어르신 없이 `NEEDS_REVIEW`** |
 | 같은 이름의 어르신이 둘 이상이다 | 위와 같다. 임의로 한 명 고르지 않는다 |
 | `suggestedJobRole`이 `UNKNOWN`이거나 목록 밖 값이다 | **직종을 비운다.** 직원이 지정한다 |
 | `nextAction`이 없다 | 제안 직종·제안 기한을 붙이지 않는다 |
 | 시각을 `HH:MM`으로 읽을 수 없다 | 그 시각만 비운다 |
+| 추천 액션 칩의 `evidenceText`가 비었거나 원문에 없다 | **그 칩만 폐기.** 카드는 그대로 남는다 |
+| 추천 액션 칩의 `targetField`가 목록 밖 값이다 | **그 칩만 폐기.** 어느 칸인지 모르는 채로 채우지 않는다 |
+| 추천 액션 칩이 3개보다 많다 | 앞에서부터 3개만 남긴다 |
 
 근거 대조는 **띄어쓰기를 무시하고** 한다. 줄바꿈이나 공백 차이로 정상 근거가 버려지면 안 된다.
 
@@ -132,7 +228,11 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
       "suggestedDueTime": "17:00",
       "exportAllowed": false,
       "exportBlockedReason": "검토 완료 후 생성할 수 있습니다.",
-      "createdAt": "2026-08-11T13:11:02.401"
+      "createdAt": "2026-08-11T13:11:02.401",
+      "hasAudio": true,
+      "suggestedActions": [
+        { "targetField": "NEXT_ACTION", "text": "저녁 식사량 확인" }
+      ]
     }
   ]
 }
@@ -140,11 +240,19 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 
 이 카드 모양은 **모든 카드 API가 함께 쓴다.** 아래 수정 · 검토 상태 전환 · 안전 표시도 같은 형태의 카드 하나를 돌려준다.
 
+`suggestedActions`의 카드 응답 모양은 LLM 스키마와 다르다 — `evidenceText`가 빠진다. 근거는 검증에만
+쓰고 저장하지 않으므로 응답에도 실려 나가지 않는다. `targetField`·`text`만 남는다.
+
 `exportAllowed`는 **이 카드로 출력 문구를 만들어도 되는지에 대한 서버의 판정**이다. 화면이 `reviewStatus`를 보고
 직접 계산하지 않는다. 조건이 화면과 서버 두 군데에 있으면 한쪽만 고쳐진 채로 검토되지 않은 내용이 보호자에게 나갈 수 있다.
 판정은 `HandoverCard.canGenerateExport()` 하나뿐이고 문구 생성 API도 같은 것을 쓴다.
 
 `suggestedDueTime`은 `HH:MM`이다. 초를 붙이지 않는다. 이 제품의 기한은 당일 시각 단위다.
+
+`hasAudio`는 **원문에 저장된 원본 음성이 있는지**이고, 화면은 이 값으로만 재생을 그린다
+(`GET /api/handovers/{handoverId}/audio`). **입력 방식이 `VOICE`인 것과 같지 않다** —
+마이크 권한을 거부했거나 녹음을 지원하지 않는 브라우저의 입력도 `VOICE`로 저장되고,
+그 카드에는 들을 음성이 없다. 방식으로 판단하면 재생이 안 되는 재생 버튼이 생긴다.
 
 `discardedCount`는 **정상 동작의 결과**다. 근거가 없어 사라진 항목 수이고, 이 값이 0이 아닌 것은 오류가 아니다.
 0인 것과 구분되어야 "AI가 아무것도 못 만든 것"과 "만든 것이 전부 걸러진 것"을 나눠 볼 수 있다.
@@ -221,6 +329,7 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 | `observedAt` | 위와 같다. 원문에서 읽은 값이다 |
 | `reviewStatus` · `safetyRelated` | 아래 두 API로 뗐다 |
 | `safetyFlagSource` | 요청으로 받지 않는다. 클라이언트가 보낼 수 있으면 키워드 자동 판정을 사람이 사칭할 수 있다 |
+| `suggestedActions` | 요청으로 받지 않는다. 카드를 고쳐도 칩은 그대로 남는다 — 직원이 조치·다음 행동을 다시 고쳐 쓴 뒤에도 다른 칩을 참고할 수 있어야 한다 |
 
 ### 규칙
 

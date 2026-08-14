@@ -2,11 +2,9 @@ import { Link } from 'react-router'
 import { SessionHeader } from '../session/SessionHeader'
 
 /**
- * 유저플로우 n5 관리자 홈. 여기서 "AI 인계 도구 내비게이션 맵" n42 관리자 대시보드로 들어간다.
- * (n5 는 아직 "새 플로우 3" 기준 번호다. 내비게이션 맵에는 관리자 홈이 없고 역할 선택이 곧장 n42 로 간다)
+ * 유저플로우 "새 플로우 3" n5 · "AI 인계 도구 내비게이션 맵" n42 — 관리자 홈.
  *
- * 홈이 현황을 직접 그리지 않고 한 겹 두는 이유는 유저플로우가 그렇게 갈라져 있기 때문이다. 관리자 홈은
- * 진입 결과를 확인하는 자리이고, 당일 현황과 하원 미처리 브리핑은 각자 화면을 갖는다.
+ * 관리자 홈에서 당일 운영 현황 대시보드(/admin/dashboard)와 어르신 명단 관리(/admin/care-recipients)로 이동한다.
  */
 export function AdminHomePage() {
   return (
@@ -17,12 +15,23 @@ export function AdminHomePage() {
         <p className="mt-4 text-xl text-slate-600">
           오늘 등록된 인계와 아직 닫히지 않은 업무를 한 화면에서 확인합니다.
         </p>
-        <Link
-          to="/admin/dashboard"
-          className="mt-6 inline-block rounded-2xl bg-teal-700 px-6 py-4 text-xl font-semibold text-white"
-        >
-          당일 운영 현황 보기
-        </Link>
+
+        <div className="mt-8 flex flex-col gap-4">
+          <Link
+            to="/admin/dashboard"
+            className="flex min-h-20 w-full items-center rounded-2xl bg-teal-700 px-6 py-5 text-2xl font-semibold text-white hover:bg-teal-800"
+          >
+            당일 운영 현황 보기
+          </Link>
+
+          {/* n58 — 어르신 명단 화면(n49)으로 이동한다. */}
+          <Link
+            to="/admin/care-recipients"
+            className="flex min-h-20 w-full items-center rounded-2xl border-2 border-slate-300 bg-white px-6 py-5 text-2xl font-semibold text-slate-900 hover:border-teal-600 hover:bg-teal-50"
+          >
+            어르신 명단
+          </Link>
+        </div>
       </main>
     </div>
   )

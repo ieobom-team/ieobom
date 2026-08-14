@@ -7,10 +7,10 @@ import { createQueryClient } from '../../shared/api/queryClient'
 import { AppRoutes } from '../../routes/AppRoutes'
 import { SessionProvider } from '../session/SessionProvider'
 import { saveSession } from '../session/sessionStorage'
-import { STAFF_DIRECTORY } from '../session/staffDirectory'
+import { seedStaffCache, TEST_STAFF } from '../session/staffFixture'
 import type { HandoverCreateRequest } from './handoverApi'
 
-const 김하늘 = STAFF_DIRECTORY[0]
+const 김하늘 = TEST_STAFF[0]
 
 const 어르신들 = [
   { id: 6, name: '강복순', code: 'IB-006' },
@@ -96,6 +96,8 @@ afterEach(() => {
 })
 
 function renderApp(initialPath = '/field/handovers/new') {
+  // 입력자 이름은 저장된 사번을 받아 둔 명단에서 다시 찾아 만든다. (#33)
+  seedStaffCache()
   saveSession({ entryRole: 'FIELD_WORKER', staff: 김하늘 })
   return render(
     <QueryClientProvider client={createQueryClient()}>

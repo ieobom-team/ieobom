@@ -278,6 +278,35 @@ class HandoverCreateApiTest {
 		assertThat(handovers.count()).isEqualTo(before);
 	}
 
+	/**
+	 * 입력자 이름 상한. 계약({@code docs/contracts/handover-api.md})과 {@code Handover.reporterName} 의 컬럼
+	 * 길이가 모두 50 이다. 검증이 빠지면 안내 대신 DB 예외(500)가 나간다.
+	 */
+	@Test
+	void 입력자_이름이_50자를_넘으면_저장하지_않는다() throws Exception {
+		long before = handovers.count();
+
+		mockMvc
+				.perform(
+						post("/api/handovers")
+								.contentType(MediaType.APPLICATION_JSON)
+								.content(
+										"""
+										{
+										  "careRecipientId": %d,
+										  "rawText": "오후 내내 기침을 하셨어요.",
+										  "inputMethod": "TEXT",
+										  "occurredAt": "2026-08-11T13:10:00",
+										  "reporterName": "%s"
+										}
+										"""
+												.formatted(시드_어르신_id(), "김".repeat(51))))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.fields[0].field").value("reporterName"));
+
+		assertThat(handovers.count()).isEqualTo(before);
+	}
+
 	private Long 시드_어르신_id() {
 		return careRecipients.findAll().stream()
 				.map(CareRecipient::getId)

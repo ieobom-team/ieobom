@@ -10,6 +10,20 @@ export type SafetyFlagSource = 'KEYWORD' | 'STAFF'
 /** 담당 직종. PRD 역할 목록 5종뿐이고, 판단 근거가 부족하면 서버가 비워서 내려준다. */
 export type JobRole = 'CAREGIVER' | 'NURSE_AIDE' | 'SOCIAL_WORKER' | 'DRIVER' | 'CENTER_HEAD'
 
+/** 추천 액션 칩이 채울 칸. */
+export type CardField = 'ACTION_TAKEN' | 'NEXT_ACTION'
+
+/**
+ * AI 추천 액션 칩 하나. (Manyfast F-SNBVHR action · display — RFC #62 방향 A)
+ *
+ * 근거 원문은 여기 실려 오지 않는다. 근거 검증은 서버가 저장 전에 이미 끝냈고, 화면은 "어느 칸에 채울
+ * 어떤 문구인가"만 있으면 된다.
+ */
+export type SuggestedAction = {
+  targetField: CardField
+  text: string
+}
+
 /**
  * 구조화된 카드 하나.
  *
@@ -36,6 +50,13 @@ export type HandoverCard = {
   exportAllowed: boolean
   exportBlockedReason: string | null
   createdAt: string
+  /**
+   * 재생할 원본 음성이 저장돼 있는지. 입력 방식이 음성인지와 다르다 —
+   * 마이크 권한을 거부한 입력도 `VOICE` 로 저장되고 그 카드에는 들을 음성이 없다
+   */
+  hasAudio: boolean
+  /** AI 추천 액션 칩. 최대 3개. 추천할 내용이 없으면 빈 배열이다 */
+  suggestedActions: SuggestedAction[]
 }
 
 export type RecipientCards = {
@@ -48,7 +69,7 @@ export type RecipientCards = {
  * 하루치 카드.
  *
  * `unresolved` 는 대상 어르신을 가리지 못한 항목이라 `recipients` 안에 섞여 오지 않는다.
- * 화면도 섞지 않고 검토 필요 항목 화면(유저플로우 n24)에서 따로 보여 준다.
+ * 화면도 섞지 않고 검토 필요 항목 화면(유저플로우 "새 플로우 3" n24)에서 따로 보여 준다.
  */
 export type HandoverCardList = {
   date: string
@@ -69,6 +90,62 @@ export function fetchHandoverCards(date?: string): Promise<HandoverCardList> {
   return apiFetch<HandoverCardList>(
     date ? `/api/handover-cards?date=${date}` : '/api/handover-cards',
   )
+}
+
+/**
+ * 직원이 검토하며 고친 내용.
+ *
+ * **고칠 수 있는 항목을 통째로 보낸다.** 일부만 보내는 방식으로는 "조치를 지운다"와 "조치는 건드리지 않는다"가
+ * 요청에서 똑같이 보인다. 보내지 않은 항목은 지운 것으로 처리된다.
+ * 근거 원문과 관찰 시각은 여기 없다. 원문에서 뽑아 원문과 대조해 통과시킨 값이라 사람이 고치지 않는다.
+ */
+export type HandoverCardUpdateRequest = {
+  /** `null` 은 아직 누구 이야기인지 가리지 못했다는 뜻이다 */
+  careRecipientId: number | null
+  statusChange: string | null
+  actionTaken: string | null
+  nextAction: string | null
+  suggestedJobRole: JobRole | null
+  /** `HH:MM` */
+  suggestedDueTime: string | null
+}
+
+export function updateHandoverCard(
+  cardId: number,
+  request: HandoverCardUpdateRequest,
+): Promise<HandoverCard> {
+  return apiFetch<HandoverCard>(`/api/handover-cards/${cardId}`, {
+    method: 'PUT',
+    body: JSON.stringify(request),
+  })
+}
+
+/**
+ * 검토 필요 ↔ 검토 완료.
+ *
+ * 되돌리는 방향도 열려 있다. 잘못 눌러 검토 완료가 된 카드에서 빠져나올 길이 없으면
+ * 그 카드로 문구가 나가 버린다.
+ */
+export function changeReviewStatus(
+  cardId: number,
+  reviewStatus: ReviewStatus,
+): Promise<HandoverCard> {
+  return apiFetch<HandoverCard>(`/api/handover-cards/${cardId}/review-status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ reviewStatus }),
+  })
+}
+
+/**
+ * 직원이 직접 하는 안전 관련 표시. (Manyfast F-SNBVHR rules)
+ *
+ * 켜면 판정 출처가 `STAFF` 가 되고, 끄면 비워진다. 화면은 판정을 계산하지 않고 응답을 그대로 쓴다.
+ */
+export function markSafety(cardId: number, safetyRelated: boolean): Promise<HandoverCard> {
+  return apiFetch<HandoverCard>(`/api/handover-cards/${cardId}/safety`, {
+    method: 'PATCH',
+    body: JSON.stringify({ safetyRelated }),
+  })
 }
 
 /**

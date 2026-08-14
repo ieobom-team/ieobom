@@ -9,6 +9,7 @@ import com.ieobom.api.handover.InputMethod;
 import com.ieobom.api.handovercard.HandoverCard;
 import com.ieobom.api.handovercard.ReviewStatus;
 import com.ieobom.api.recipient.CareRecipient;
+import com.ieobom.api.recipient.RecipientAliases;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Tag;
@@ -44,6 +45,14 @@ class OpenAiExportPhraseLiveTest {
 
 	private static final List<String> 다른_어르신 = List.of("박순자", "이영순");
 
+	/** 문구 생성도 구조화와 같은 대조표를 거친다. 실명은 모델에 가지 않는다. (Manyfast F-LUDCWW rules) */
+	private static final RecipientAliases 대조표 =
+			RecipientAliases.of(
+					List.of(
+							CareRecipient.builder().name("김말순").code("IB-001").build(),
+							CareRecipient.builder().name("박순자").code("IB-002").build(),
+							CareRecipient.builder().name("이영순").code("IB-003").build()));
+
 	@Autowired private ExportPhraseClient client;
 
 	private final ExportPhraseVerifier verifier = new ExportPhraseVerifier();
@@ -53,7 +62,7 @@ class OpenAiExportPhraseLiveTest {
 		HandoverCard 카드 =
 				카드("점심 식사량 저하", "죽으로 바꿔 드림", "저녁 식사량 확인", "점심을 거의 안 드셨어요");
 
-		ExportPhraseDraft draft = client.generate(입력(카드));
+		ExportPhraseDraft draft = 복원한(client.generate(입력(카드)));
 
 		assertThat(draft.recordPhrase()).as("전산 기록 문구가 비면 안 된다").isNotBlank();
 		assertThat(draft.guardianPhrase()).as("보호자 전달 문구가 비면 안 된다").isNotBlank();
@@ -77,7 +86,7 @@ class OpenAiExportPhraseLiveTest {
 		HandoverCard 카드 =
 				카드("오전에 미열 있으심", "이마 짚어 보고 안정 취하도록 함", "보호자께 연락", "오전에 열이 좀 있는 것 같았어요");
 
-		ExportPhraseDraft draft = client.generate(입력(카드));
+		ExportPhraseDraft draft = 복원한(client.generate(입력(카드)));
 
 		assertThat(draft.recordPhrase()).isNotBlank();
 		assertThat(draft.guardianPhrase()).isNotBlank();
@@ -99,14 +108,21 @@ class OpenAiExportPhraseLiveTest {
 				.isFalse();
 	}
 
+	/** 서비스와 같다. 어르신은 내부 ID로, 나머지 칸도 치환해서 넘긴다. */
 	private ExportInput 입력(HandoverCard 카드) {
 		return new ExportInput(
-				카드.getCareRecipient().getName(),
+				카드.getCareRecipient().getCode(),
 				카드.getObservedAt(),
-				카드.getStatusChange(),
-				카드.getActionTaken(),
-				카드.getNextAction(),
-				카드.getEvidenceText());
+				대조표.mask(카드.getStatusChange()),
+				대조표.mask(카드.getActionTaken()),
+				대조표.mask(카드.getNextAction()),
+				대조표.mask(카드.getEvidenceText()));
+	}
+
+	/** 서비스와 같다. 응답을 받은 자리에서 곧바로 되돌리고, 판정은 실명으로 된 문구에 한다. */
+	private ExportPhraseDraft 복원한(ExportPhraseDraft draft) {
+		return new ExportPhraseDraft(
+				대조표.restore(draft.recordPhrase()), 대조표.restore(draft.guardianPhrase()));
 	}
 
 	/** 검토 완료 카드 한 장. 문구 생성은 DB 를 거치지 않으므로 저장하지 않는다. */

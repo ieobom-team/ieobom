@@ -63,23 +63,101 @@ class HandoverStructuringSchemaTest {
 
 		assertThat(prompt).contains("원문에 없는 사실을 만들지 않는다");
 		assertThat(prompt).contains("의료적 판단·진단·투약 권고를 만들지 않는다");
-		assertThat(prompt).contains("후보 목록에 있는 이름만 쓴다");
+		assertThat(prompt).contains("후보 목록에 있는 ID만 쓴다");
+	}
+
+	@Test
+	void 어르신을_가리키는_자리는_이름이_아니라_내부_ID다() {
+		assertThat(properties()).containsKey(HandoverStructuringSchema.RECIPIENT_PROPERTY);
+		assertThat(properties()).doesNotContainKey("recipientName");
+
+		// 필드 이름이 name 이면 프롬프트가 ID 를 요구해도 모델이 이름 자리로 읽는다.
+		assertThat(HandoverStructuringSchema.RECIPIENT_PROPERTY).doesNotContain("Name");
+		assertThat(HandoverStructuringSchema.systemPrompt())
+				.contains("내부 ID를 사람 이름으로 바꿔 적지 않는다");
+	}
+
+	@Test
+	void 추천_액션_칩은_최대_3개이고_항목마다_근거를_요구한다() {
+		@SuppressWarnings("unchecked")
+		Map<String, Object> suggestedActions =
+				(Map<String, Object>) properties().get(HandoverStructuringSchema.SUGGESTED_ACTIONS_PROPERTY);
+
+		assertThat(suggestedActions.get("maxItems")).isEqualTo(HandoverStructuringSchema.SUGGESTED_ACTIONS_LIMIT);
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> item = (Map<String, Object>) suggestedActions.get("items");
+		assertThat(item.get("additionalProperties")).isEqualTo(false);
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> itemProperties = (Map<String, Object>) item.get("properties");
+		assertThat(itemProperties).containsKeys("targetField", "text", HandoverStructuringSchema.EVIDENCE_PROPERTY);
+
+		@SuppressWarnings("unchecked")
+		List<String> required = (List<String>) item.get("required");
+		assertThat(required).containsExactlyInAnyOrderElementsOf(itemProperties.keySet());
+	}
+
+	@Test
+	void 프롬프트는_추천_액션_칩_생성_규칙을_안내한다() {
+		String prompt = HandoverStructuringSchema.systemPrompt();
+
+		assertThat(prompt).contains("suggestedActions");
+		assertThat(prompt).contains("최대 3개까지 제안한다");
 	}
 
 	@Test
 	void 사용자_프롬프트에_원문과_후보_목록이_들어간다() {
-		StructuringInput input =
-				new StructuringInput(
-						"점심을 거의 안 드셨어요.",
-						java.time.LocalDateTime.of(2026, 8, 11, 13, 10),
-						"김말순",
-						List.of("김말순", "박순자"));
+		String prompt = HandoverStructuringSchema.userPrompt(입력());
+
+		assertThat(prompt).contains("IB-001 어르신은 점심을 거의 안 드셨어요.");
+		assertThat(prompt).contains("IB-001, IB-002");
+		assertThat(prompt).contains("13:10");
+	}
+
+	@Test
+	void 프롬프트는_체크_입력_방식의_상태변화_분류를_안내한다() {
+		String prompt = HandoverStructuringSchema.systemPrompt();
+
+		assertThat(prompt).contains("체크 항목: ...");
+		assertThat(prompt).contains("체크 항목은 그 자체가 관찰된 상태 변화(statusChange)다");
+	}
+
+	@Test
+	void 체크_입력_방식이면_사용자_프롬프트에_입력_방식이_들어간다() {
+		StructuringInput input = new StructuringInput(
+				"체크 항목: 식사 거부 또는 소량 섭취",
+				java.time.LocalDateTime.of(2026, 8, 11, 13, 10),
+				"IB-001",
+				List.of("IB-001", "IB-002"),
+				"CHECK");
 
 		String prompt = HandoverStructuringSchema.userPrompt(input);
 
-		assertThat(prompt).contains("점심을 거의 안 드셨어요.");
-		assertThat(prompt).contains("김말순, 박순자");
-		assertThat(prompt).contains("13:10");
+		assertThat(prompt).contains("입력 방식: CHECK");
+		assertThat(prompt).contains("체크 항목: 식사 거부 또는 소량 섭취");
+	}
+
+	/**
+	 * 이 호출 지점의 요청 페이로드에 어르신 실명이 없다는 것을 프롬프트 문자열에서 직접 확인한다.
+	 *
+	 * <p>PRD success 의 KPI 가 100% 라서 "대체로 안 나간다"로는 부족하다. 나가는 문자열 자체를 본다. 예전에는 이 자리에 <b>명단 전체의
+	 * 실명</b>이 후보 목록으로 실려 나갔다. 서비스 단에서 치환이 실제로 걸리는지는 {@code HandoverCardApiTest} 가 본다.
+	 */
+	@Test
+	void 요청_페이로드에_어르신_실명이_없다() {
+		String prompt = HandoverStructuringSchema.userPrompt(입력());
+
+		assertThat(prompt).doesNotContain("김말순").doesNotContain("박순자");
+	}
+
+	/** 치환이 끝난 뒤의 입력. 서비스가 {@code RecipientAliases} 로 만들어 넘기는 모양 그대로다. */
+	private static StructuringInput 입력() {
+		return new StructuringInput(
+				"IB-001 어르신은 점심을 거의 안 드셨어요.",
+				java.time.LocalDateTime.of(2026, 8, 11, 13, 10),
+				"IB-001",
+				List.of("IB-001", "IB-002"));
 	}
 
 	private static List<String> concat(List<String> values, String extra) {

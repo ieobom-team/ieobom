@@ -20,6 +20,7 @@ import java.time.LocalDateTime;
  * @param reporterName 입력자 이름. 로그인이 없으므로 진입 시 고른 직원 식별을 그대로 받는다
  * @param proxyInput 다른 사람에게 들은 내용을 대신 남기는지 여부. 생략하면 직접 입력으로 본다
  * @param infoSource 대리 입력일 때 그 내용을 실제로 전한 사람
+ * @param audioData 음성으로 남긴 입력의 원본 녹음. Base64 Data URL 이고 음성 입력일 때만 붙일 수 있다 (Manyfast F-SNBVHR)
  */
 public record HandoverCreateRequest(
 		@NotNull(message = "대상 어르신을 선택해 주세요.") Long careRecipientId,
@@ -32,7 +33,8 @@ public record HandoverCreateRequest(
 				@Size(max = 50, message = "입력자 이름은 50자까지 넣을 수 있습니다.")
 				String reporterName,
 		Boolean proxyInput,
-		InfoSource infoSource) {
+		InfoSource infoSource,
+		String audioData) {
 
 	/** 생략된 대리 입력 여부는 직접 입력으로 본다. */
 	public boolean isProxyInput() {

@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   cardEntries,
+  chipTextsFor,
   dateLabel,
   findCard,
   observedTimeLabel,
   safetyFirst,
   suggestionLabel,
   totalCardCount,
+  uncertainFieldLabels,
+  withUpdatedCard,
 } from './handoverCard'
 import type { HandoverCard, HandoverCardList } from './handoverCardApi'
 
@@ -29,6 +32,8 @@ function 카드(patch: Partial<HandoverCard> = {}): HandoverCard {
     exportAllowed: false,
     exportBlockedReason: '검토 완료 후 생성할 수 있습니다.',
     createdAt: '2026-08-11T13:11:02.401',
+    hasAudio: false,
+    suggestedActions: [],
     ...patch,
   }
 }
@@ -78,6 +83,25 @@ describe('제안값 표시', () => {
   })
 })
 
+describe('AI 추천 액션 칩 (F-SNBVHR display)', () => {
+  const 칩카드 = 카드({
+    suggestedActions: [
+      { targetField: 'ACTION_TAKEN', text: '죽으로 바꿔 드림' },
+      { targetField: 'NEXT_ACTION', text: '저녁 식사량 재확인' },
+      { targetField: 'NEXT_ACTION', text: '보호자에게 안내' },
+    ],
+  })
+
+  it('대상 칸으로 나눠 문구만 돌려준다', () => {
+    expect(chipTextsFor(칩카드, 'ACTION_TAKEN')).toEqual(['죽으로 바꿔 드림'])
+    expect(chipTextsFor(칩카드, 'NEXT_ACTION')).toEqual(['저녁 식사량 재확인', '보호자에게 안내'])
+  })
+
+  it('추천이 없으면 빈 배열이다', () => {
+    expect(chipTextsFor(카드({ suggestedActions: [] }), 'ACTION_TAKEN')).toEqual([])
+  })
+})
+
 describe('시각과 날짜', () => {
   it('관찰 시각은 분까지만 보여 준다', () => {
     expect(observedTimeLabel('2026-08-11T12:40:00')).toBe('12:40')
@@ -89,6 +113,86 @@ describe('시각과 날짜', () => {
 
   it('조회 기준일을 사람이 읽는 형태로 바꾼다', () => {
     expect(dateLabel('2026-08-11')).toBe('8월 11일')
+  })
+})
+
+describe('AI 가 채우지 못한 자리', () => {
+  it('다 채워진 카드에는 아무것도 알리지 않는다', () => {
+    expect(uncertainFieldLabels(카드())).toEqual([])
+  })
+
+  it('어르신을 가리지 못했으면 알린다', () => {
+    expect(uncertainFieldLabels(카드({ careRecipientId: null, careRecipientName: null }))).toEqual([
+      '대상 어르신',
+    ])
+  })
+
+  it('원문에서 시각을 읽지 못했으면 알린다', () => {
+    expect(uncertainFieldLabels(카드({ observedAt: null }))).toEqual(['관찰 시각'])
+  })
+
+  it('다음 행동이 있는데 직종과 기한을 비웠으면 둘 다 알린다', () => {
+    expect(
+      uncertainFieldLabels(카드({ suggestedJobRole: null, suggestedDueTime: null })),
+    ).toEqual(['제안 담당 직종', '제안 기한'])
+  })
+
+  it('다음 행동이 없으면 제안값이 비어 있어도 빈 자리로 보지 않는다', () => {
+    const 다음행동없음 = 카드({
+      nextAction: null,
+      suggestedJobRole: null,
+      suggestedDueTime: null,
+    })
+
+    expect(uncertainFieldLabels(다음행동없음)).toEqual([])
+  })
+})
+
+describe('고쳐진 카드를 목록에 되꽂기', () => {
+  const list: HandoverCardList = {
+    date: '2026-08-11',
+    recipients: [{ careRecipientId: 1, careRecipientName: '김말순', cards: [카드({ id: 31 })] }],
+    unresolved: [카드({ id: 40, careRecipientId: null, careRecipientName: null })],
+  }
+
+  it('같은 어르신 안에서 고친 내용으로 갈아 끼운다', () => {
+    const 고침 = 카드({ id: 31, statusChange: '점심과 저녁 모두 저하' })
+
+    const 결과 = withUpdatedCard(list, 고침)
+
+    expect(결과.recipients).toHaveLength(1)
+    expect(결과.recipients[0].cards).toHaveLength(1)
+    expect(결과.recipients[0].cards[0].statusChange).toBe('점심과 저녁 모두 저하')
+  })
+
+  it('어르신을 지정하면 검토 필요 항목에서 빼고 그 어르신 묶음으로 옮긴다', () => {
+    const 확정 = 카드({ id: 40, careRecipientId: 1, careRecipientName: '김말순' })
+
+    const 결과 = withUpdatedCard(list, 확정)
+
+    expect(결과.unresolved).toEqual([])
+    expect(결과.recipients[0].cards.map((card) => card.id)).toEqual([31, 40])
+  })
+
+  it('목록에 없던 어르신이면 묶음을 새로 만든다', () => {
+    const 확정 = 카드({ id: 40, careRecipientId: 2, careRecipientName: '박순자' })
+
+    const 결과 = withUpdatedCard(list, 확정)
+
+    expect(결과.recipients.map((recipient) => recipient.careRecipientName)).toEqual([
+      '김말순',
+      '박순자',
+    ])
+    expect(결과.unresolved).toEqual([])
+  })
+
+  it('어르신을 비우면 검토 필요 항목으로 돌아가고 빈 묶음은 사라진다', () => {
+    const 비움 = 카드({ id: 31, careRecipientId: null, careRecipientName: null })
+
+    const 결과 = withUpdatedCard(list, 비움)
+
+    expect(결과.recipients).toEqual([])
+    expect(결과.unresolved.map((card) => card.id)).toEqual([40, 31])
   })
 })
 

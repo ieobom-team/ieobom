@@ -1,4 +1,10 @@
-import { cardEntries, observedTimeLabel, suggestionLabel } from './handoverCard'
+import { apiUrl } from '../../shared/api/client'
+import {
+  cardEntries,
+  observedTimeLabel,
+  suggestionLabel,
+  uncertainFieldLabels,
+} from './handoverCard'
 import type { HandoverCard } from './handoverCardApi'
 
 /**
@@ -21,6 +27,8 @@ export function HandoverCardBody({ card }: { card: HandoverCard }) {
         )}
       </div>
 
+      <CardUncertainNotes card={card} />
+
       <dl className="flex flex-col gap-3">
         {cardEntries(card).map((entry) => (
           <div key={entry.key} className="flex flex-col gap-1">
@@ -35,10 +43,7 @@ export function HandoverCardBody({ card }: { card: HandoverCard }) {
         ))}
       </dl>
 
-      <figure className="rounded-xl border-l-4 border-slate-300 bg-slate-50 px-4 py-3">
-        <figcaption className="text-lg font-semibold text-slate-500">근거 원문</figcaption>
-        <blockquote className="mt-1 text-xl text-slate-800">“{card.evidenceText}”</blockquote>
-      </figure>
+      <CardEvidence card={card} />
     </div>
   )
 }
@@ -68,5 +73,54 @@ export function CardBadges({ card }: { card: HandoverCard }) {
         </span>
       )}
     </>
+  )
+}
+
+/**
+ * AI 가 확신하지 못하고 비워 둔 자리. (Manyfast F-SNBVHR display)
+ *
+ * 카드 어딘가에 "확신도 60%" 같은 값이 있는 게 아니라, 판단 근거가 부족하면 서버가 그 칸을 비워서
+ * 내려준다. 빈 칸은 조용히 지나가기 쉬우므로 무엇이 비었는지 한 줄로 모아 앞에 세운다.
+ */
+export function CardUncertainNotes({ card }: { card: HandoverCard }) {
+  const labels = uncertainFieldLabels(card)
+  if (labels.length === 0) {
+    return null
+  }
+
+  return (
+    <p className="rounded-xl border-l-4 border-amber-400 bg-amber-50 px-4 py-3 text-lg text-amber-900">
+      AI가 채우지 못한 곳: <span className="font-bold">{labels.join(' · ')}</span> — 직원이 확인해
+      주세요.
+    </p>
+  )
+}
+
+/**
+ * 근거 원문. 카드 화면과 검토·수정 화면(n25)이 같은 것을 쓴다.
+ *
+ * 음성으로 남긴 입력이면 그 아래에 원본 음성을 붙인다(n26). 요약이 담지 못한 뉘앙스를
+ * 어투 판정이 아니라 원본으로 받는다는 결정이라(Manyfast F-SNBVHR rules), 텍스트 근거를
+ * 대체하지 않고 **함께** 둔다. 재생 단위는 입력 한 건 전체다.
+ */
+export function CardEvidence({ card }: { card: HandoverCard }) {
+  return (
+    <figure className="rounded-xl border-l-4 border-slate-300 bg-slate-50 px-4 py-3">
+      <figcaption className="text-lg font-semibold text-slate-500">근거 원문</figcaption>
+      <blockquote className="mt-1 text-xl text-slate-800">“{card.evidenceText}”</blockquote>
+      {card.hasAudio && (
+        <div className="mt-3">
+          <p className="text-lg font-semibold text-slate-500">남기신 원본 음성</p>
+          {/* preload="none": 카드가 여러 장 있는 목록에서 누르지도 않은 음성을 미리 받지 않는다. */}
+          <audio
+            controls
+            preload="none"
+            aria-label="원본 음성 재생"
+            src={apiUrl(`/api/handovers/${card.handoverId}/audio`)}
+            className="mt-1 h-10 w-full"
+          />
+        </div>
+      )}
+    </figure>
   )
 }

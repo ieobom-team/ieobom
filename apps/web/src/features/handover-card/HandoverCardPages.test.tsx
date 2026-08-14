@@ -7,10 +7,10 @@ import { AppRoutes } from '../../routes/AppRoutes'
 import { createQueryClient } from '../../shared/api/queryClient'
 import { SessionProvider } from '../session/SessionProvider'
 import { saveSession } from '../session/sessionStorage'
-import { STAFF_DIRECTORY } from '../session/staffDirectory'
+import { seedStaffCache, TEST_STAFF } from '../session/staffFixture'
 import type { HandoverCard } from './handoverCardApi'
 
-const 김하늘 = STAFF_DIRECTORY[0]
+const 김하늘 = TEST_STAFF[0]
 
 function 카드(patch: Partial<HandoverCard> = {}): HandoverCard {
   return {
@@ -31,6 +31,8 @@ function 카드(patch: Partial<HandoverCard> = {}): HandoverCard {
     exportAllowed: false,
     exportBlockedReason: '검토 완료 후 생성할 수 있습니다.',
     createdAt: '2026-08-11T13:11:02.401',
+    hasAudio: false,
+    suggestedActions: [],
     ...patch,
   }
 }
@@ -57,7 +59,19 @@ beforeEach(() => {
 
   vi.stubGlobal(
     'fetch',
-    vi.fn((input: string) => {
+    vi.fn((input: string, init?: RequestInit) => {
+      // 안전 표시는 고쳐진 카드 한 장을 돌려준다. 판정 출처는 서버가 붙인다
+      if (input.endsWith('/safety')) {
+        const { safetyRelated } = JSON.parse(String(init?.body)) as { safetyRelated: boolean }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(
+              카드({ safetyRelated, safetyFlagSource: safetyRelated ? 'STAFF' : null }),
+            ),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        )
+      }
       if (input.includes('/api/handover-cards')) {
         return Promise.resolve(
           new Response(JSON.stringify(목록_응답.body), {
@@ -79,6 +93,7 @@ function renderApp(
   initialPath = '/handover-cards',
   entryRole: 'FIELD_WORKER' | 'MANAGER' = 'FIELD_WORKER',
 ) {
+  seedStaffCache()
   saveSession({ entryRole, staff: 김하늘 })
   return render(
     <QueryClientProvider client={createQueryClient()}>
@@ -139,6 +154,43 @@ describe('인계 카드 목록 (n18 · n19)', () => {
     const card = await screen.findByRole('link', { name: /점심 식사량 저하/ })
     expect(within(card).getByText('근거 원문')).toBeInTheDocument()
     expect(within(card).getByText(/점심을 거의 안 드셨어요/)).toBeInTheDocument()
+  })
+
+  /**
+   * 원본 음성 재생. (#44 · Manyfast F-SNBVHR)
+   *
+   * 재생 여부는 입력 방식이 아니라 저장된 음성이 있는지(`hasAudio`)로 갈린다 — 마이크 권한을
+   * 거부한 음성 입력에도 방식은 `VOICE` 로 남기 때문이다.
+   */
+  it('원본 음성이 있으면 근거 원문과 함께 재생할 수 있게 둔다', async () => {
+    목록_응답 = {
+      status: 200,
+      body: {
+        date: '2026-08-11',
+        recipients: [
+          {
+            careRecipientId: 1,
+            careRecipientName: '김말순',
+            cards: [카드({ hasAudio: true })],
+          },
+        ],
+        unresolved: [],
+      },
+    }
+    renderApp()
+
+    const card = await screen.findByRole('link', { name: /점심 식사량 저하/ })
+    // 텍스트 근거를 대체하지 않고 함께 둔다
+    expect(within(card).getByText(/점심을 거의 안 드셨어요/)).toBeInTheDocument()
+    const player = within(card).getByLabelText('원본 음성 재생')
+    expect(player).toHaveAttribute('src', '/api/handovers/12/audio')
+  })
+
+  it('저장된 원본 음성이 없으면 재생을 내보이지 않는다', async () => {
+    renderApp()
+
+    const card = await screen.findByRole('link', { name: /점심 식사량 저하/ })
+    expect(within(card).queryByLabelText('원본 음성 재생')).not.toBeInTheDocument()
   })
 
   it('안전 관련 항목을 카드 묶음 맨 위에 둔다', async () => {
@@ -303,6 +355,40 @@ describe('인계 카드 상세 (n20 → n21 · n22)', () => {
     renderApp('/handover-cards/999')
 
     expect(await screen.findByText(/그 인계 카드를 찾지 못했습니다/)).toBeInTheDocument()
+  })
+
+  it('카드를 고치지 않고 안전 관련 표시만 켤 수 있다', async () => {
+    const user = userEvent.setup()
+    renderApp('/handover-cards/31')
+
+    await user.click(await screen.findByRole('button', { name: '안전 관련으로 표시하기' }))
+
+    expect(await screen.findByText('안전 관련')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '안전 관련 표시 해제하기' })).toBeInTheDocument()
+  })
+
+  it('안전 관련 표시를 해제할 수도 있다', async () => {
+    목록_응답 = {
+      status: 200,
+      body: {
+        date: '2026-08-11',
+        recipients: [
+          {
+            careRecipientId: 1,
+            careRecipientName: '김말순',
+            cards: [카드({ safetyRelated: true, safetyFlagSource: 'KEYWORD' })],
+          },
+        ],
+        unresolved: [],
+      },
+    }
+    const user = userEvent.setup()
+    renderApp('/handover-cards/31')
+
+    await user.click(await screen.findByRole('button', { name: '안전 관련 표시 해제하기' }))
+
+    expect(await screen.findByRole('button', { name: '안전 관련으로 표시하기' })).toBeInTheDocument()
+    expect(screen.queryByText('안전 관련')).not.toBeInTheDocument()
   })
 
   it('관리자로 들어와도 같은 상세를 본다', async () => {

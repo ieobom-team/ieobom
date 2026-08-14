@@ -4,9 +4,9 @@ import { useOfflineQueue } from '../handover/useOfflineQueue'
 import { SessionHeader } from '../session/SessionHeader'
 
 /**
- * 유저플로우 n4 — 현장 근무자 홈.
+ * 유저플로우 "새 플로우 3" n4 — 현장 근무자 홈.
  *
- * n6 특이사항 남기기(#6)와 n18 인계 카드 목록(#11)이 붙어 있다. 내 할 일(#15)이 여기에 더 붙는다.
+ * n6 특이사항 남기기(#6), n18 인계 카드 목록(#11), n61 → n31 업무 목록(#15)이 붙어 있다.
  */
 export function FieldHomePage() {
   const navigate = useNavigate()
@@ -40,7 +40,12 @@ export function FieldHomePage() {
           </span>
         </BigButton>
 
-        <p className="text-xl text-slate-600">내 할 일 확인이 이 화면에 들어옵니다.</p>
+        <BigButton tone="plain" onClick={() => navigate('/tasks')}>
+          <span className="block">내 할 일 확인</span>
+          <span className="mt-1 block text-lg font-normal text-slate-500">
+            오늘 배정된 업무의 미처리·완료를 확인합니다
+          </span>
+        </BigButton>
       </main>
     </div>
   )

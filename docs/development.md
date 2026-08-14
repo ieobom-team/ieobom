@@ -9,6 +9,9 @@
 | Docker | Desktop 또는 Engine | 로컬 MySQL 8.4 |
 | GitHub CLI | 최신 | `gh auth status`로 인증 확인 |
 
+> 💡 **빠른 로컬 실행 (DB + 백엔드 + 프론트엔드)**  
+> `./scripts/dev-run.sh` (Git Bash / Linux / macOS) 또는 `pwsh ./scripts/dev-run.ps1` (Windows)를 실행하면 한 번에 뜹니다. 접속은 `http://localhost:5173` 입니다.
+
 ## 1. 환경변수
 
 ```bash
@@ -23,10 +26,27 @@ cp .env.example .env
 | `DB_URL` `DB_USERNAME` `DB_PASSWORD` | `apps/api` | `application.yml`이 읽는다 |
 | `SERVER_PORT` | `apps/api` | 기본 8080 |
 | `LLM_API_KEY` `LLM_BASE_URL` `LLM_MODEL` `LLM_TIMEOUT` | `apps/api` | **백엔드에서만 쓴다.** 프론트로 내려보내지 않는다. 비어 있어도 앱은 뜨고 테스트도 통과한다 |
-| `VITE_API_BASE_URL` | `apps/web` | `VITE_` 접두사 값은 브라우저 번들에 그대로 들어간다 |
+| `VITE_API_BASE_URL` | `apps/web` | **로컬도 배포도 비워 둔다.** 아래 설명을 읽는다 |
 
 배포 환경에서는 `.env` 대신 플랫폼의 환경변수 주입 기능을 쓴다.
 `application-prod.yml`에 접속 정보나 키를 직접 적지 않는다.
+
+### `VITE_API_BASE_URL`을 채우지 않는 이유
+
+**프론트와 API를 같은 출처에 두기로 했다.** ([architecture.md 배포 배치](./architecture.md#배포-배치))
+개발은 `apps/web/vite.config.ts`의 `/api` 프록시가, 배포는 Caddy가 같은 일을 한다.
+그래서 브라우저 기준으로 양쪽 다 출처가 하나고, **백엔드 주소를 프론트에 알려 줄 일이 없다.**
+
+값이 비면 `shared/api/client.ts`가 상대경로 `/api`로 호출한다. 이게 의도한 동작이다.
+
+- **로컬** — 채우지 않는다. `npm run dev`만으로 `localhost:8080`에 붙는다.
+- **배포** — 주입하지 않는다. 배포 주소를 브라우저 번들에 굳혀 넣지 않아도 된다.
+
+⚠️ **여기에 `http://localhost:8080` 같은 절대 주소를 넣으면 오히려 깨진다.**
+프록시를 우회해 다른 출처로 나가게 되고, 백엔드에 CORS 설정이 없으므로 브라우저가 막는다.
+
+> Vite는 저장소 루트의 `.env`를 읽지 않는다(`envDir` 기본값이 `apps/web`).
+> 프론트에 값을 넘겨야 할 일이 생기면 `apps/web/.env`에 둔다.
 
 ## 2. 데이터베이스
 
@@ -121,8 +141,10 @@ npm run test:watch    # vitest watch
 npm run build         # tsc -b + vite build
 ```
 
-`VITE_API_BASE_URL`로 백엔드 주소를 넘긴다. **`VITE_` 접두사 값은 브라우저 번들에 그대로 들어가므로
-API 키나 비밀값을 넣지 않는다.**
+백엔드는 `vite.config.ts`의 `/api` 프록시로 붙는다. **`VITE_API_BASE_URL`은 비워 둔다.**
+([위 설명](#vite_api_base_url을-채우지-않는-이유))
+
+**`VITE_` 접두사 값은 브라우저 번들에 그대로 들어가므로 API 키나 비밀값을 넣지 않는다.**
 
 ### 디렉터리
 

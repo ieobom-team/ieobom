@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ApiError, NETWORK_UNAVAILABLE, type ApiFieldError } from '../../shared/api/client'
 import { BigButton } from '../../shared/ui/BigButton'
 import {
@@ -8,8 +8,10 @@ import {
   type HandoverCardStructureResult,
 } from '../handover-card/handoverCardApi'
 import { HANDOVER_CARDS_KEY } from '../handover-card/useHandoverCards'
+import type { CareRecipient } from '../recipient/recipientApi'
+import { useActiveRecipients } from '../recipient/useRecipients'
 import { useSession } from '../session/sessionContext'
-import { createHandover, fetchCareRecipients, type CareRecipient } from './handoverApi'
+import { createHandover } from './handoverApi'
 import { INFO_SOURCES, infoSourceLabel, type InfoSource } from './infoSource'
 import { CHECK_ITEMS } from './checkItems'
 import { INPUT_METHODS, type InputMethod } from './inputMethod'
@@ -29,12 +31,12 @@ import {
 } from './handoverForm'
 
 /**
- * 유저플로우 n7~n16 — 현장 특이사항 입력.
+ * 유저플로우 "새 플로우 3" n7~n16 — 현장 특이사항 입력.
  *
  *   n7 입력 화면 → n8 대리 입력 여부? → n9 정보 출처 → n11 입력 방식? → n12 음성 입력 / n13 텍스트 입력
  *   → n15 어르신·입력 시점 선택 → n16 저장 성공?
  *
- * 유저플로우는 n7 · n9 · n13 을 각각 page 노드로 그렸지만 **라우트는 하나**로 두고 단계만 넘긴다.
+ * 유저플로우 "새 플로우 3"는 n7 · n9 · n13 을 각각 page 노드로 그렸지만 **라우트는 하나**로 두고 단계만 넘긴다.
  * 큰 버튼 기준으로 주소를 다섯 개로 쪼개면 뒤로가기가 단계마다 걸려 한 손 입력이 되지 않는다.
  *
  * 텍스트(#6)·음성(#8)·체크(#7) 방식을 만들었다. 저장 중 연결이 끊기면 대기열에 넣고
@@ -57,8 +59,11 @@ export function HandoverCreatePage() {
   const [errors, setErrors] = useState<ApiFieldError[]>([])
   const [notice, setNotice] = useState<string | null>(null)
   const [savedName, setSavedName] = useState<string>('')
+  /** 연결이 끊겨 대기열에 넣으면서 원본 음성을 빼야 했는지. */
+  const [queuedAudioDropped, setQueuedAudioDropped] = useState(false)
 
-  const recipients = useQuery({ queryKey: ['care-recipients'], queryFn: fetchCareRecipients })
+  // 새 입력의 대상 목록이므로 이용 종료한 어르신은 빠진다. (Manyfast F-LUDCWW rules)
+  const recipients = useActiveRecipients()
   const queryClient = useQueryClient()
 
   /** n16 저장 성공 → 인계 카드 정리. 결과는 안내에만 쓰고 입력 흐름을 막지 않는다. */
@@ -85,10 +90,15 @@ export function HandoverCreatePage() {
       // 연결이 끊긴 것뿐이면 실패로 끝내지 않는다. 대기열에 넣고 회복되면 자동으로 다시 보낸다.
       // (Manyfast F-YJJJUX exceptions — 재입력을 요구하지 않는다)
       if (error.code === NETWORK_UNAVAILABLE) {
-        enqueue(toCreateRequest(draft, reporterName))
+        // 대기열은 기기 저장소(localStorage)에 남는다. 원본 음성까지 넣으면 한 건이 저장
+        // 한도를 채워 **대기열 전체가 조용히 저장되지 않는다**(offlineQueue.ts 의 writeRaw).
+        // 그래서 음성은 빼고 텍스트만 다시 보낸다. 뺐다는 사실은 화면에 그대로 알린다.
+        const { audioData, ...queued } = toCreateRequest(draft, reporterName)
+        enqueue(queued)
         queryClient.invalidateQueries({ queryKey: OFFLINE_QUEUE_KEY })
         setErrors([])
         setNotice(null)
+        setQueuedAudioDropped(audioData !== undefined)
         setStep('queued')
         return
       }
@@ -209,7 +219,7 @@ export function HandoverCreatePage() {
   }
 
   if (step === 'queued') {
-    return <QueuedNotice onAnother={startAnother} />
+    return <QueuedNotice audioDropped={queuedAudioDropped} onAnother={startAnother} />
   }
 
   return (
@@ -242,8 +252,8 @@ export function HandoverCreatePage() {
       )}
       {step === 'voice' && (
         <VoiceStep
-          value={draft.rawText}
-          onChange={(rawText) => update({ rawText })}
+          draft={draft}
+          onChange={update}
           onNext={goToTarget}
         />
       )}
@@ -430,42 +440,83 @@ function TextStep({
  * 지원 여부는 `pickMethod`에서 이미 걸러 이 화면은 지원하는 브라우저에서만 뜬다.
  */
 function VoiceStep({
-  value,
+  draft,
   onChange,
   onNext,
 }: {
-  value: string
-  onChange: (value: string) => void
+  draft: HandoverDraft
+  onChange: (patch: Partial<HandoverDraft>) => void
   onNext: () => void
 }) {
   const [listening, setListening] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  /** 녹음을 마무리하는 중. 이때 화면을 넘기면 방금 말한 음성이 draft 에 닿기 전에 저장된다. */
+  const [finishing, setFinishing] = useState(false)
   const recognizerRef = useRef<SpeechRecognizer | null>(null)
+  /** 마무리를 기다렸다가 다음 화면으로 넘어가야 하는지. */
+  const goingNextRef = useRef(false)
+  /**
+   * 인식기는 마이크를 누른 시점의 `onNext` 를 붙들고 있다. 그 시점의 `onNext` 는 아직 빈
+   * 원문을 보고 있어서 그대로 부르면 "입력 내용을 남겨 주세요"에 막힌다. 지금 것을 부른다.
+   */
+  const onNextRef = useRef(onNext)
+  onNextRef.current = onNext
 
   useEffect(() => {
     return () => {
+      goingNextRef.current = false
       recognizerRef.current?.stop()
     }
   }, [])
 
+  /** 인식·녹음이 모두 끝났을 때. 음성을 얻었으면 draft 에 붙인다. */
+  const handleEnd = (audioBase64: string | null) => {
+    setListening(false)
+    setFinishing(false)
+    if (audioBase64 !== null) {
+      onChange({ audioData: audioBase64 })
+    }
+    if (goingNextRef.current) {
+      goingNextRef.current = false
+      onNextRef.current()
+    }
+  }
+
   const toggleListening = () => {
     if (listening) {
+      setFinishing(true)
       recognizerRef.current?.stop()
-      setListening(false)
       return
     }
     const recognizer = createSpeechRecognizer(
-      (transcript) => onChange(transcript),
-      () => setListening(false),
+      (transcript) => onChange({ rawText: transcript }),
+      handleEnd,
       (message) => {
         setNotice(message)
-        setListening(false)
       },
     )
     recognizerRef.current = recognizer
+    // 새로 말하면 앞서 녹음한 음성은 더 이상 지금 글의 원본이 아니다.
+    onChange({ audioData: undefined })
     recognizer?.start()
     setListening(true)
     setNotice(null)
+  }
+
+  /**
+   * 듣는 중에 눌렀으면 먼저 멈추고, 음성이 draft 에 닿은 뒤에 넘어간다.
+   *
+   * 녹음을 Data URL 로 바꾸는 일이 비동기라, 그냥 넘어가면 다음 화면에서 저장을 눌렀을 때
+   * 음성만 빠진 채 저장될 수 있다.
+   */
+  const handleNext = () => {
+    if (listening || finishing) {
+      goingNextRef.current = true
+      setFinishing(true)
+      recognizerRef.current?.stop()
+      return
+    }
+    onNext()
   }
 
   return (
@@ -481,6 +532,12 @@ function VoiceStep({
         {listening ? '듣고 있어요 · 눌러서 멈추기' : '눌러서 말하기'}
       </BigButton>
 
+      {!listening && !finishing && draft.audioData !== undefined && (
+        <p role="status" className="text-xl text-slate-600">
+          말씀하신 원본 음성도 함께 저장됩니다. 카드에서 다시 들으실 수 있습니다.
+        </p>
+      )}
+
       {notice !== null && (
         <p className="rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4 text-xl text-amber-900">
           {notice}
@@ -492,16 +549,16 @@ function VoiceStep({
       </label>
       <textarea
         id="voiceText"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
+        value={draft.rawText}
+        onChange={(event) => onChange({ rawText: event.target.value })}
         rows={6}
         maxLength={RAW_TEXT_MAX_LENGTH}
         className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
       />
       <p className="text-lg text-slate-500">
-        {value.length} / {RAW_TEXT_MAX_LENGTH}자
+        {draft.rawText.length} / {RAW_TEXT_MAX_LENGTH}자
       </p>
-      <BigButton onClick={onNext}>다음</BigButton>
+      <BigButton onClick={handleNext}>{finishing ? '음성 저장 중…' : '다음'}</BigButton>
     </section>
   )
 }
@@ -679,7 +736,13 @@ function SavedNotice({
  * 들어갔고, 연결이 회복되면 `OfflineQueueSync`가 알아서 다시 보낸다. 여기서 할 일은
  * 그 사실을 안심시키고 다음으로 넘어가게 하는 것뿐이다.
  */
-function QueuedNotice({ onAnother }: { onAnother: () => void }) {
+function QueuedNotice({
+  audioDropped,
+  onAnother,
+}: {
+  audioDropped: boolean
+  onAnother: () => void
+}) {
   const navigate = useNavigate()
 
   return (
@@ -692,6 +755,11 @@ function QueuedNotice({ onAnother }: { onAnother: () => void }) {
         <p className="mt-2 text-xl text-amber-800">
           연결이 회복되면 자동으로 다시 보내 드립니다. 다시 입력하지 않으셔도 됩니다.
         </p>
+        {audioDropped && (
+          <p className="mt-2 text-xl text-amber-800">
+            다만 녹음한 원본 음성은 함께 보관하지 못했습니다. 인식된 글은 그대로 보내집니다.
+          </p>
+        )}
       </section>
 
       <BigButton onClick={() => navigate('/field')}>현장 홈으로</BigButton>
