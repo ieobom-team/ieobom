@@ -1,5 +1,6 @@
 package com.ieobom.api.staff;
 
+import com.ieobom.api.common.JobRole;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,8 +25,18 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class StaffSeeder implements ApplicationRunner {
 
-	private static final List<String> DEMO_NAMES =
-			List.of("김하늘", "이도윤", "박서연", "최민재", "정유진", "강태호", "윤소라", "임현우");
+	private record DemoStaff(String name, JobRole jobRole) {}
+
+	private static final List<DemoStaff> DEMO_STAFF =
+			List.of(
+					new DemoStaff("김하늘", JobRole.CAREGIVER),
+					new DemoStaff("이도윤", JobRole.CAREGIVER),
+					new DemoStaff("박서연", JobRole.CAREGIVER),
+					new DemoStaff("최민재", JobRole.NURSE_AIDE),
+					new DemoStaff("정유진", JobRole.NURSE_AIDE),
+					new DemoStaff("강태호", JobRole.SOCIAL_WORKER),
+					new DemoStaff("윤소라", JobRole.DRIVER),
+					new DemoStaff("임현우", JobRole.CENTER_HEAD));
 
 	private final StaffRepository staffRepository;
 
@@ -33,12 +44,22 @@ public class StaffSeeder implements ApplicationRunner {
 	@Transactional
 	public void run(ApplicationArguments args) {
 		int inserted = 0;
-		for (int i = 0; i < DEMO_NAMES.size(); i++) {
+		for (int i = 0; i < DEMO_STAFF.size(); i++) {
 			String code = "ST-%03d".formatted(i + 1);
-			if (staffRepository.existsByCode(code)) {
+			DemoStaff demo = DEMO_STAFF.get(i);
+			Staff existing = staffRepository.findByCode(code).orElse(null);
+			if (existing != null) {
+				if (existing.getJobRole() != demo.jobRole()) {
+					existing.assignJobRole(demo.jobRole());
+				}
 				continue;
 			}
-			staffRepository.save(Staff.builder().name(DEMO_NAMES.get(i)).code(code).build());
+			staffRepository.save(
+					Staff.builder()
+							.name(demo.name())
+							.code(code)
+							.jobRole(demo.jobRole())
+							.build());
 			inserted++;
 		}
 		log.info("직원 시드 확인 — 새로 넣은 인원 {}명, 전체 {}명", inserted, staffRepository.count());

@@ -8,9 +8,35 @@ import { createQueryClient } from '../../shared/api/queryClient'
 import { SessionProvider } from '../session/SessionProvider'
 import { saveSession } from '../session/sessionStorage'
 import { seedStaffCache, TEST_STAFF } from '../session/staffFixture'
+import type { HandoverCard, JobRole } from '../handover-card/handoverCardApi'
 import type { TaskResponse } from './taskApi'
 
 const 김하늘 = TEST_STAFF[0]
+
+function 카드(patch: Partial<HandoverCard> = {}): HandoverCard {
+  return {
+    id: 31,
+    handoverId: 12,
+    careRecipientId: 1,
+    careRecipientName: '김말순',
+    observedAt: '2026-08-11T12:40:00',
+    statusChange: '점심 식사량 저하',
+    actionTaken: null,
+    nextAction: '저녁 식사량 확인',
+    evidenceText: '점심을 거의 안 드셨어요',
+    safetyRelated: false,
+    safetyFlagSource: null,
+    reviewStatus: 'REVIEWED',
+    suggestedJobRole: 'NURSE_AIDE',
+    suggestedDueTime: '17:00',
+    exportAllowed: true,
+    exportBlockedReason: null,
+    createdAt: '2026-08-11T13:11:02.401',
+    hasAudio: false,
+    suggestedActions: [],
+    ...patch,
+  }
+}
 
 function 업무(patch: Partial<TaskResponse> = {}): TaskResponse {
   return {
@@ -54,6 +80,59 @@ beforeEach(() => {
   vi.stubGlobal(
     'fetch',
     vi.fn((input: string, init?: RequestInit) => {
+      if (input.includes('/api/handover-cards/31/tasks')) {
+        const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {}
+        const assigneeName =
+          typeof body.assigneeName === 'string' && body.assigneeName.trim() !== ''
+            ? body.assigneeName.trim()
+            : null
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(
+              업무({
+                content: String(body.content ?? '저녁 식사량 확인'),
+                assigneeName,
+                assigneeJobRole: (body.assigneeJobRole as JobRole) ?? 'NURSE_AIDE',
+                assigneeJobRoleLabel: '간호조무사',
+                dueTime: String(body.dueTime ?? '17:00'),
+              }),
+            ),
+            {
+              status: 201,
+              headers: { 'Content-Type': 'application/json' },
+            },
+          ),
+        )
+      }
+      if (input.includes('/api/handover-cards')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              date: '2026-08-11',
+              recipients: [
+                {
+                  careRecipientId: 1,
+                  careRecipientName: '김말순',
+                  cards: [카드()],
+                },
+              ],
+              unresolved: [],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            },
+          ),
+        )
+      }
+      if (input.includes('/api/staff')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ staff: TEST_STAFF }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        )
+      }
       if (input.includes('/complete')) {
         return Promise.resolve(
           new Response(JSON.stringify(완료_응답.body), {
@@ -187,5 +266,55 @@ describe('업무 상세와 완료 처리 (n35 · n59 · n60 · n33)', () => {
       await screen.findByRole('heading', { name: '이미 완료 처리된 업무입니다' }),
     ).toBeInTheDocument()
     expect(screen.getByText(/완료 확인자와 시각을 확인해 주세요/)).toBeInTheDocument()
+  })
+})
+
+describe('후속 업무 배정 (n26 → n27 · n28 · n29 · n30)', () => {
+  it('카드의 제안값으로 채워져 열리며 제안된 직종의 소속 직원만 드롭다운에 노출된다', async () => {
+    renderApp('/handover-cards/31/tasks/new')
+
+    expect(await screen.findByLabelText('다음 행동')).toHaveValue('저녁 식사량 확인')
+    expect(screen.getByLabelText('기한')).toHaveValue('17:00')
+
+    const select = screen.getByLabelText('담당자 (선택)') as HTMLSelectElement
+    expect(select).toHaveValue('')
+    expect(screen.getByRole('option', { name: '직종만 배정 (특정인 미지정)' })).toBeInTheDocument()
+    // 제안 직종이 간호조무사이므로 간호조무사 직원만 노출
+    expect(screen.getByRole('option', { name: '최민재 (ST-004)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '정유진 (ST-005)' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '김하늘 (ST-001)' })).not.toBeInTheDocument()
+  })
+
+  it('직종을 바꾸면 해당 직종의 직원 목록으로 바뀌고 직원을 골라 배정할 수 있다', async () => {
+    const user = userEvent.setup()
+    renderApp('/handover-cards/31/tasks/new')
+
+    // 요양보호사 버튼 클릭
+    await user.click(await screen.findByRole('button', { name: '요양보호사' }))
+
+    const select = screen.getByLabelText('담당자 (선택)')
+    // 요양보호사 직원(김하늘) 선택
+    expect(screen.getByRole('option', { name: '김하늘 (ST-001)' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '최민재 (ST-004)' })).not.toBeInTheDocument()
+
+    await user.selectOptions(select, '김하늘')
+
+    await user.click(screen.getByRole('button', { name: '업무로 배정하기' }))
+
+    const notice = await screen.findByRole('status')
+    expect(within(notice).getByRole('heading', { name: '업무를 배정했습니다' })).toBeInTheDocument()
+    expect(within(notice).getByText(/담당 김하늘 \(간호조무사\)/)).toBeInTheDocument()
+  })
+
+  it('담당자를 특정하지 않고 직종으로만 배정할 수 있다', async () => {
+    const user = userEvent.setup()
+    renderApp('/handover-cards/31/tasks/new')
+
+    const button = await screen.findByRole('button', { name: '업무로 배정하기' })
+    await user.click(button)
+
+    const notice = await screen.findByRole('status')
+    expect(within(notice).getByRole('heading', { name: '업무를 배정했습니다' })).toBeInTheDocument()
+    expect(within(notice).getByText(/담당 간호조무사 · 17:00까지/)).toBeInTheDocument()
   })
 })
