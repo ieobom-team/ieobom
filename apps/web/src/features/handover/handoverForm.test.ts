@@ -101,6 +101,20 @@ describe('요청으로 바꾸기', () => {
     expect(request.infoSource).toBe('GUARDIAN')
   })
 
+  it('음성으로 남겼을 때만 원본 음성을 함께 보낸다', () => {
+    const 음성 = 'data:audio/webm;base64,GkXf'
+
+    expect(toCreateRequest(채운_폼({ inputMethod: 'VOICE', audioData: 음성 }), 입력자).audioData).toBe(
+      음성,
+    )
+    // 서버가 음성 입력이 아닌 건에 붙은 음성을 400 으로 되돌린다
+    expect(
+      'audioData' in toCreateRequest(채운_폼({ inputMethod: 'TEXT', audioData: 음성 }), 입력자),
+    ).toBe(false)
+    // 녹음하지 못한 음성 입력(마이크 권한 거부 등)
+    expect('audioData' in toCreateRequest(채운_폼({ inputMethod: 'VOICE' }), 입력자)).toBe(false)
+  })
+
   it('입력 시점은 계약 예시와 같게 초까지 붙여 보낸다', () => {
     expect(toCreateRequest(채운_폼(), 입력자).occurredAt).toBe('2026-08-11T13:10:00')
   })

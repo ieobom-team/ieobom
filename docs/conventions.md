@@ -29,6 +29,8 @@ Notion 논의
 → 동작·정책이 바뀌었으면 Manyfast 갱신 후 새 버전 저장
 ```
 
+**RFC(Discussion) Issue**: 확정된 부분만 Manyfast Feature 슬롯에 반영하고 버전 저장한다. 미결정·가설은 Issue에 남기고 Manyfast에 넣지 않는다. MVP 범위를 넓히는 요소는 별도 팀 승인을 거친다.
+
 ## 브랜치
 
 `main`에 직접 커밋하지 않는다.
@@ -62,6 +64,7 @@ chore(ci): add secret scan guard
 - 모든 구현 Issue에 Manyfast Requirement · Feature/Spec ID · **기준 버전**을 적는다.
   이 정보가 없으면 AI 에이전트는 구현하지 않고 보완을 요청한다.
 - 현재 Issue의 완료 조건에 없는 개선점은 **즉시 구현하지 않는다.** Backlog Issue로 분리한다.
+- **RFC·제안 Issue**: 논의 중 확정된 단위만 Manyfast 갱신 후 새 구현 Issue(`[feat]`)로 분리해 구현하고, 미확정 안건은 기존 RFC 이슈에 남겨둔다.
 - MVP 범위를 늘리는 변경은 Manyfast PRD/Requirement 변경과 팀 승인을 거친다.
 
 템플릿: `기능 구현` / `버그` / `인프라·문서·백로그`
@@ -101,6 +104,7 @@ chore(ci): add secret scan guard
 | AI 카드 필드 · API · JSON 구조 변경 | Feature/Spec 갱신 | 코드·docs 동시 갱신 | 필요 시 기록 |
 | MVP 범위 축소·확장 | PRD 갱신 + 버전 저장 | Issue 재정렬 | 기획 결정 기록 |
 | 구현 중 발견한 후속 개선 | 바꾸지 않음 | Backlog Issue 생성 | 필요 시 기록 |
+| RFC 이슈에서 확정된 UX·정책 변경 | 확정분만 Feature 슬롯 갱신 | 이슈에 반영 내역 댓글 | 필요 시 기록 |
 | 버그가 명세/구현 중 어디 문제인지 불명확 | 구현 중단, 비교·판단 | Bug Issue 또는 댓글 | 필요 시 논의 |
 
 ## 표기 규칙

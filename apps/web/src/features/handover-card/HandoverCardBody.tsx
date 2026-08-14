@@ -1,3 +1,4 @@
+import { apiUrl } from '../../shared/api/client'
 import {
   cardEntries,
   observedTimeLabel,
@@ -95,12 +96,31 @@ export function CardUncertainNotes({ card }: { card: HandoverCard }) {
   )
 }
 
-/** 근거 원문. 카드 화면과 검토·수정 화면(n25)이 같은 것을 쓴다. */
+/**
+ * 근거 원문. 카드 화면과 검토·수정 화면(n25)이 같은 것을 쓴다.
+ *
+ * 음성으로 남긴 입력이면 그 아래에 원본 음성을 붙인다(n26). 요약이 담지 못한 뉘앙스를
+ * 어투 판정이 아니라 원본으로 받는다는 결정이라(Manyfast F-SNBVHR rules), 텍스트 근거를
+ * 대체하지 않고 **함께** 둔다. 재생 단위는 입력 한 건 전체다.
+ */
 export function CardEvidence({ card }: { card: HandoverCard }) {
   return (
     <figure className="rounded-xl border-l-4 border-slate-300 bg-slate-50 px-4 py-3">
       <figcaption className="text-lg font-semibold text-slate-500">근거 원문</figcaption>
       <blockquote className="mt-1 text-xl text-slate-800">“{card.evidenceText}”</blockquote>
+      {card.hasAudio && (
+        <div className="mt-3">
+          <p className="text-lg font-semibold text-slate-500">남기신 원본 음성</p>
+          {/* preload="none": 카드가 여러 장 있는 목록에서 누르지도 않은 음성을 미리 받지 않는다. */}
+          <audio
+            controls
+            preload="none"
+            aria-label="원본 음성 재생"
+            src={apiUrl(`/api/handovers/${card.handoverId}/audio`)}
+            className="mt-1 h-10 w-full"
+          />
+        </div>
+      )}
     </figure>
   )
 }
