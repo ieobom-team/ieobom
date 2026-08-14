@@ -1,22 +1,23 @@
+import type { JobRole } from '../handover-card/handoverCardApi'
+
 /**
- * 직원 명단 — 본인 식별에 쓰는 목록.
+ * 직원 명단 — 본인 식별 및 업무 배정 담당자 선택에 쓰는 목록.
  *
  * **명단은 서버가 관리한다.** (`GET /api/staff`, #33) 화면은 받아 온 명단을 기기에 캐시해 두고,
  * 저장된 선택값(사번)을 되살릴 때 이 캐시에서 이름을 다시 찾는다.
- * 연결이 끊긴 채 앱을 다시 열어도 본인 선택이 유지돼야 하기 때문이다.
- * (Manyfast F-YJJJUX exceptions — 돌봄 중인 근무자에게 다시 고르라고 요구하지 않는다)
- *
- * 담당 직종은 **일부러 넣지 않았다.** 담당 직종은 업무 배정에만 쓰는 값이라
- * 여기에 두면 진입 역할과 섞인다.
+ * (Manyfast F-YJJJUX permissions, F-IVFNPC display)
  */
 export type Staff = {
   /** 사번. 명단 안에서 유일하며 저장된 선택값을 되살릴 때 이 값을 쓴다. */
   code: string
   name: string
+  /** 담당 직종. 후속 업무 배정 시 직종별 필터링에 쓴다. */
+  jobRole?: JobRole
+  jobRoleLabel?: string
 }
 
 /** 캐시 형식이 바뀌면 뒤의 번호를 올려 옛 값과 섞이지 않게 한다. */
-export const STAFF_CACHE_KEY = 'ieobom.staff-directory.v1'
+export const STAFF_CACHE_KEY = 'ieobom.staff-directory.v2'
 
 function isStaff(value: unknown): value is Staff {
   return (

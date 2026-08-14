@@ -1,8 +1,11 @@
 package com.ieobom.api.staff;
 
 import com.ieobom.api.common.BaseTimeEntity;
+import com.ieobom.api.common.JobRole;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -14,12 +17,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 직원. 진입 화면의 본인 선택 목록이 여기서 온다. (Manyfast F-YJJJUX permissions)
+ * 직원. 진입 화면의 본인 선택 목록 및 업무 배정 담당자 목록이 여기서 온다. (Manyfast F-YJJJUX permissions, F-IVFNPC display)
  *
  * <p>계정이 아니다. 비밀번호도 권한도 없고, 센터가 미리 등록해 둔 명단일 뿐이다.
- *
- * <p>담당 직종은 **일부러 넣지 않았다.** 담당 직종은 업무 배정에만 쓰는 값이라 여기에 두면 진입 역할과 섞인다.
- * ({@code docs/architecture.md} 인증 절)
  */
 @Getter
 @Entity
@@ -40,9 +40,19 @@ public class Staff extends BaseTimeEntity {
 	@Column(nullable = false, length = 30)
 	private String code;
 
+	/** 담당 직종. 후속 업무 배정 시 직종별 직원 필터링에 쓴다. */
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false, length = 30)
+	private JobRole jobRole;
+
 	@Builder
-	private Staff(String name, String code) {
+	private Staff(String name, String code, JobRole jobRole) {
 		this.name = name;
 		this.code = code;
+		this.jobRole = jobRole;
+	}
+
+	public void assignJobRole(JobRole jobRole) {
+		this.jobRole = jobRole;
 	}
 }

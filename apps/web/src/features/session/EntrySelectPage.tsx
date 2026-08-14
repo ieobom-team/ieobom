@@ -1,10 +1,28 @@
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router'
 import { BigButton } from '../../shared/ui/BigButton'
+import type { JobRole } from '../handover-card/handoverCardApi'
 import { ENTRY_ROLES, findEntryRole, homePathOf, type EntryRole } from './entryRole'
 import { useSession } from './sessionContext'
 import type { Staff } from './staffDirectory'
 import { useStaffDirectory } from './useStaffDirectory'
+
+const JOB_ROLE_PRIORITY: Record<JobRole, number> = {
+  CAREGIVER: 1,
+  NURSE_AIDE: 2,
+  SOCIAL_WORKER: 3,
+  DRIVER: 4,
+  CENTER_HEAD: 5,
+}
+
+function compareStaff(a: Staff, b: Staff): number {
+  const orderA = a.jobRole ? JOB_ROLE_PRIORITY[a.jobRole] ?? 99 : 99
+  const orderB = b.jobRole ? JOB_ROLE_PRIORITY[b.jobRole] ?? 99 : 99
+  if (orderA !== orderB) {
+    return orderA - orderB
+  }
+  return a.name.localeCompare(b.name, 'ko')
+}
 
 /**
  * 유저플로우 "새 플로우 3" n2 — 역할·본인 식별 선택 화면.
@@ -21,6 +39,7 @@ export function EntrySelectPage() {
   const [pickedRole, setPickedRole] = useState<EntryRole | null>(null)
   const directory = useStaffDirectory()
   const staffList = directory.data ?? []
+  const sortedStaff = [...staffList].sort(compareStaff)
 
   // 이미 고른 상태로 다시 들어오면 자기 홈으로 보낸다. 바꾸려면 홈에서 '본인 바꾸기'를 누른다.
   if (session) {
@@ -77,17 +96,22 @@ export function EntrySelectPage() {
                 명단 다시 불러오기
               </BigButton>
             </div>
-          ) : staffList.length === 0 ? (
+          ) : sortedStaff.length === 0 ? (
             <p className="text-xl text-slate-700">
               등록된 직원이 없습니다. 센터 관리자에게 명단 등록을 요청해 주세요.
             </p>
           ) : (
             <ul className="flex flex-col gap-4">
-              {staffList.map((staff) => (
+              {sortedStaff.map((staff) => (
                 <li key={staff.code}>
                   <BigButton tone="plain" onClick={() => handlePickStaff(staff)}>
                     <span className="flex flex-wrap items-baseline gap-x-3">
                       <span>{staff.name}</span>
+                      {staff.jobRoleLabel && (
+                        <span className="rounded-lg bg-teal-100 px-2.5 py-0.5 text-base font-semibold text-teal-800">
+                          {staff.jobRoleLabel}
+                        </span>
+                      )}
                       <span className="text-lg font-normal text-slate-500">{staff.code}</span>
                     </span>
                   </BigButton>

@@ -11,8 +11,8 @@
 
 ## `GET /api/staff`
 
-진입 화면이 **본인을 고르기 위해** 부른다.
-`F-YJJJUX` permissions("본인 선택 목록은 센터가 사전 등록한 직원 명단에서 온다")를 채우는 조회다.
+진입 화면이 **본인을 고르기 위해**, 배정 화면이 **직종별 담당자를 고르기 위해** 부른다.
+`F-YJJJUX` permissions("본인 선택 목록은 센터가 사전 등록한 직원 명단에서 온다")와 `F-IVFNPC` display를 채우는 조회다.
 
 한 센터 직원 수 기준이라 페이지를 나누지 않고 전원을 내려준다.
 
@@ -21,16 +21,18 @@
 ```json
 {
   "staff": [
-    { "name": "강태호", "code": "ST-006" },
-    { "name": "김하늘", "code": "ST-001" }
+    { "name": "강태호", "code": "ST-006", "jobRole": "SOCIAL_WORKER", "jobRoleLabel": "사회복지사" },
+    { "name": "김하늘", "code": "ST-001", "jobRole": "CAREGIVER", "jobRoleLabel": "요양보호사" }
   ]
 }
 ```
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
-| `name` | string | 이름. `POST /api/handovers` 의 `reporterName` 에 그대로 들어간다 |
+| `name` | string | 이름. `POST /api/handovers` 의 `reporterName`, `POST /api/.../tasks` 의 `assigneeName` 에 들어간다 |
 | `code` | string | 사번. 명단 안에서 유일하다. 동명이인을 화면에서 구분하고, 브라우저에 저장한 선택값을 되살릴 때 쓴다 |
+| `jobRole` | string | 담당 직종 코드 (`CAREGIVER`, `NURSE_AIDE`, `SOCIAL_WORKER`, `DRIVER`, `CENTER_HEAD`). 후속 업무 배정 시 직종별 직원 필터링에 쓴다 |
+| `jobRoleLabel` | string | 담당 직종 한글 라벨 |
 
 **이름 가나다순이고, 이름이 같으면 사번순이다.**
 

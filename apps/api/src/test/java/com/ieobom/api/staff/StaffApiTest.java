@@ -47,13 +47,15 @@ class StaffApiTest {
 	}
 
 	@Test
-	void 이름과_사번만_내려준다() throws Exception {
-		// 담당 직종이 섞이면 진입 역할과 구분되지 않는다. 서버 id 는 저장할 곳이 없어 내리지 않는다. (#33)
+	void 이름_사번_직종을_내려주고_서버_id는_내리지_않는다() throws Exception {
+		// 서버 id 는 저장할 곳이 없어 내리지 않는다. (#33)
 		mockMvc
 				.perform(get("/api/staff"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.staff[0].length()").value(2))
-				.andExpect(jsonPath("$.staff[0].id").doesNotExist())
-				.andExpect(jsonPath("$.staff[0].jobRole").doesNotExist());
+				.andExpect(jsonPath("$.staff[0].name").isNotEmpty())
+				.andExpect(jsonPath("$.staff[0].code").isNotEmpty())
+				.andExpect(jsonPath("$.staff[0].jobRole").isNotEmpty())
+				.andExpect(jsonPath("$.staff[0].jobRoleLabel").isNotEmpty())
+				.andExpect(jsonPath("$.staff[0].id").doesNotExist());
 	}
 }
