@@ -1,5 +1,7 @@
 package com.ieobom.api.ai;
 
+import java.util.List;
+
 /**
  * AI 가 돌려준 카드 항목 하나. <b>검증 전</b> 초안이다.
  *
@@ -19,6 +21,7 @@ package com.ieobom.api.ai;
  * @param suggestedDueTime 제안 기한. 당일 {@code HH:MM}
  * @param observedTime 상황이 있었던 시각. 당일 {@code HH:MM}
  * @param safetyCategory 지정 키워드 4종 중 하나 또는 {@code NONE}
+ * @param suggestedActions 조치·다음 행동에 채울 추천 액션 칩. 최대 3개. 없으면 빈 배열
  */
 public record StructuredCardDraft(
 		String recipientCode,
@@ -29,4 +32,12 @@ public record StructuredCardDraft(
 		String suggestedJobRole,
 		String suggestedDueTime,
 		String observedTime,
-		String safetyCategory) {}
+		String safetyCategory,
+		List<SuggestedActionDraft> suggestedActions) {
+
+	public StructuredCardDraft {
+		if (suggestedActions == null) {
+			suggestedActions = List.of();
+		}
+	}
+}

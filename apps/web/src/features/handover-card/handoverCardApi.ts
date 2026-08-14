@@ -10,6 +10,20 @@ export type SafetyFlagSource = 'KEYWORD' | 'STAFF'
 /** 담당 직종. PRD 역할 목록 5종뿐이고, 판단 근거가 부족하면 서버가 비워서 내려준다. */
 export type JobRole = 'CAREGIVER' | 'NURSE_AIDE' | 'SOCIAL_WORKER' | 'DRIVER' | 'CENTER_HEAD'
 
+/** 추천 액션 칩이 채울 칸. */
+export type CardField = 'ACTION_TAKEN' | 'NEXT_ACTION'
+
+/**
+ * AI 추천 액션 칩 하나. (Manyfast F-SNBVHR action · display — RFC #62 방향 A)
+ *
+ * 근거 원문은 여기 실려 오지 않는다. 근거 검증은 서버가 저장 전에 이미 끝냈고, 화면은 "어느 칸에 채울
+ * 어떤 문구인가"만 있으면 된다.
+ */
+export type SuggestedAction = {
+  targetField: CardField
+  text: string
+}
+
 /**
  * 구조화된 카드 하나.
  *
@@ -41,6 +55,8 @@ export type HandoverCard = {
    * 마이크 권한을 거부한 입력도 `VOICE` 로 저장되고 그 카드에는 들을 음성이 없다
    */
   hasAudio: boolean
+  /** AI 추천 액션 칩. 최대 3개. 추천할 내용이 없으면 빈 배열이다 */
+  suggestedActions: SuggestedAction[]
 }
 
 export type RecipientCards = {

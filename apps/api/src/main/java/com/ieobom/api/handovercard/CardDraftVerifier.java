@@ -1,6 +1,7 @@
 package com.ieobom.api.handovercard;
 
 import com.ieobom.api.ai.StructuredCardDraft;
+import com.ieobom.api.ai.SuggestedActionDraft;
 import com.ieobom.api.common.JobRole;
 import com.ieobom.api.common.SafetyKeyword;
 import com.ieobom.api.handovercard.CardVerification.DiscardReason;
@@ -33,6 +34,9 @@ public class CardDraftVerifier {
 
 	private static final int EVIDENCE_LIMIT = 1000;
 
+	/** 추천 액션 칩 최대 개수. (Manyfast F-SNBVHR display) 스키마도 같은 상한을 요청하지만, 응답을 그대로 믿지 않고 여기서도 자른다. */
+	private static final int SUGGESTED_ACTIONS_LIMIT = 3;
+
 	/**
 	 * 초안을 판정해 통과분과 폐기분으로 가른다.
 	 *
@@ -57,7 +61,7 @@ public class CardDraftVerifier {
 				log.warn("구조화 항목 폐기 — 사유={}, 근거={}", reason.label(), draft.evidenceText());
 				continue;
 			}
-			accepted.add(toBlueprint(draft, observedDate, aliases));
+			accepted.add(toBlueprint(draft, rawText, observedDate, aliases));
 		}
 
 		log.info("구조화 검증 — 통과 {}개, 폐기 {}개", accepted.size(), discarded.size());
@@ -87,7 +91,7 @@ public class CardDraftVerifier {
 	}
 
 	private CardBlueprint toBlueprint(
-			StructuredCardDraft draft, LocalDate observedDate, RecipientAliases aliases) {
+			StructuredCardDraft draft, String rawText, LocalDate observedDate, RecipientAliases aliases) {
 
 		String nextAction = cut(trimToNull(draft.nextAction()), TEXT_LIMIT);
 		boolean hasNextAction = nextAction != null;
@@ -109,7 +113,53 @@ public class CardDraftVerifier {
 				safetyRelated,
 				safetyRelated ? SafetyFlagSource.KEYWORD : null,
 				hasNextAction ? jobRole(draft.suggestedJobRole()) : null,
-				hasNextAction ? time(draft.suggestedDueTime()) : null);
+				hasNextAction ? time(draft.suggestedDueTime()) : null,
+				suggestedActions(draft.suggestedActions(), rawText));
+	}
+
+	/**
+	 * 추천 액션 칩을 검증한다. (Manyfast F-SNBVHR action — "추천 칩은 원문 근거가 있는 내용으로만 생성")
+	 *
+	 * <p>카드 항목과 같은 기준이다 — 근거가 비었거나 원문에 없으면 그 칩만 버린다. 칩 하나가 근거를 지어냈다고 카드 전체를 버릴 이유는 없다. 최대
+	 * 개수도 스키마에 이미 요청했지만, 모델 응답을 그대로 믿지 않고 여기서도 자른다.
+	 */
+	private List<SuggestedAction> suggestedActions(List<SuggestedActionDraft> drafts, String rawText) {
+		List<SuggestedAction> result = new ArrayList<>();
+		for (SuggestedActionDraft draft : drafts) {
+			if (result.size() >= SUGGESTED_ACTIONS_LIMIT) {
+				break;
+			}
+			String text = trimToNull(draft.text());
+			String evidence = trimToNull(draft.evidenceText());
+			if (text == null || evidence == null) {
+				log.debug("추천 액션 칩 폐기 — 문구 또는 근거가 비었음");
+				continue;
+			}
+			if (!containsIgnoringWhitespace(rawText, evidence)) {
+				log.warn("추천 액션 칩 폐기 — 근거가 원문에 없음, 문구={}", text);
+				continue;
+			}
+			CardField targetField = targetField(draft.targetField());
+			if (targetField == null) {
+				log.debug("추천 액션 칩 폐기 — 대상 칸을 알 수 없음, 문구={}", text);
+				continue;
+			}
+			result.add(SuggestedAction.of(targetField, cut(text, TEXT_LIMIT)));
+		}
+		return result;
+	}
+
+	/** 목록 밖 값이면 칩을 버린다. 어느 칸인지 모르는 채로 채우면 엉뚱한 칸을 덮어쓸 수 있다. */
+	private CardField targetField(String value) {
+		String name = trimToNull(value);
+		if (name == null) {
+			return null;
+		}
+		try {
+			return CardField.valueOf(name);
+		} catch (IllegalArgumentException e) {
+			return null;
+		}
 	}
 
 	/**

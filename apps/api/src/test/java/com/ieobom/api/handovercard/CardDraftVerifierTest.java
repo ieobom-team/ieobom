@@ -3,6 +3,7 @@ package com.ieobom.api.handovercard;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ieobom.api.ai.StructuredCardDraft;
+import com.ieobom.api.ai.SuggestedActionDraft;
 import com.ieobom.api.common.JobRole;
 import com.ieobom.api.handovercard.CardVerification.DiscardReason;
 import com.ieobom.api.recipient.CareRecipient;
@@ -317,6 +318,93 @@ class CardDraftVerifierTest {
 		assertThat(result.accepted().get(1).observedAt()).isNull();
 	}
 
+	@Test
+	void 근거가_원문에_있는_추천_칩은_통과한다() {
+		List<StructuredCardDraft> drafts =
+				List.of(
+						초안()
+								.recipientCode("IB-001")
+								.statusChange("낙상 위험")
+								.evidenceText("미끄러지실 뻔했어요")
+								.suggestedActions(
+										List.of(
+												new SuggestedActionDraft(
+														"NEXT_ACTION", "보행 상태 확인", "미끄러지실 뻔했어요")))
+								.build());
+
+		CardVerification result = verifier.verify(drafts, 원문, 관찰일, 대조표);
+
+		assertThat(result.accepted()).singleElement().satisfies(card ->
+				assertThat(card.suggestedActions()).singleElement().satisfies(action -> {
+					assertThat(action.getTargetField()).isEqualTo(CardField.NEXT_ACTION);
+					assertThat(action.getText()).isEqualTo("보행 상태 확인");
+				}));
+	}
+
+	@Test
+	void 근거가_원문에_없는_추천_칩은_그_칩만_버리고_카드는_남는다() {
+		List<StructuredCardDraft> drafts =
+				List.of(
+						초안()
+								.recipientCode("IB-001")
+								.statusChange("낙상 위험")
+								.evidenceText("미끄러지실 뻔했어요")
+								.suggestedActions(
+										List.of(
+												new SuggestedActionDraft(
+														"NEXT_ACTION", "혈압약 용량 줄이기", "혈압약을 줄이라고 하셨어요")))
+								.build());
+
+		CardVerification result = verifier.verify(drafts, 원문, 관찰일, 대조표);
+
+		assertThat(result.accepted()).singleElement().satisfies(card ->
+				assertThat(card.suggestedActions()).isEmpty());
+		assertThat(result.discarded()).isEmpty();
+	}
+
+	@Test
+	void 대상_칸을_알_수_없는_추천_칩은_버린다() {
+		List<StructuredCardDraft> drafts =
+				List.of(
+						초안()
+								.recipientCode("IB-001")
+								.statusChange("낙상 위험")
+								.evidenceText("미끄러지실 뻔했어요")
+								.suggestedActions(
+										List.of(
+												new SuggestedActionDraft(
+														"STATUS_CHANGE", "낙상 위험", "미끄러지실 뻔했어요")))
+								.build());
+
+		CardVerification result = verifier.verify(drafts, 원문, 관찰일, 대조표);
+
+		assertThat(result.accepted()).singleElement().satisfies(card ->
+				assertThat(card.suggestedActions()).isEmpty());
+	}
+
+	@Test
+	void 추천_칩은_최대_3개까지만_남는다() {
+		List<SuggestedActionDraft> 네개 =
+				List.of(
+						new SuggestedActionDraft("NEXT_ACTION", "제안1", "미끄러지실 뻔했어요"),
+						new SuggestedActionDraft("NEXT_ACTION", "제안2", "미끄러지실 뻔했어요"),
+						new SuggestedActionDraft("NEXT_ACTION", "제안3", "미끄러지실 뻔했어요"),
+						new SuggestedActionDraft("NEXT_ACTION", "제안4", "미끄러지실 뻔했어요"));
+		List<StructuredCardDraft> drafts =
+				List.of(
+						초안()
+								.recipientCode("IB-001")
+								.statusChange("낙상 위험")
+								.evidenceText("미끄러지실 뻔했어요")
+								.suggestedActions(네개)
+								.build());
+
+		CardVerification result = verifier.verify(drafts, 원문, 관찰일, 대조표);
+
+		assertThat(result.accepted()).singleElement().satisfies(card ->
+				assertThat(card.suggestedActions()).hasSize(3));
+	}
+
 	private static CareRecipient 어르신(String name, String code) {
 		return CareRecipient.builder().name(name).code(code).build();
 	}
@@ -336,6 +424,7 @@ class CardDraftVerifierTest {
 		private String suggestedDueTime;
 		private String observedTime;
 		private String safetyCategory = "NONE";
+		private List<SuggestedActionDraft> suggestedActions = List.of();
 
 		DraftBuilder recipientCode(String value) {
 			this.recipientCode = value;
@@ -382,6 +471,11 @@ class CardDraftVerifierTest {
 			return this;
 		}
 
+		DraftBuilder suggestedActions(List<SuggestedActionDraft> value) {
+			this.suggestedActions = value;
+			return this;
+		}
+
 		StructuredCardDraft build() {
 			return new StructuredCardDraft(
 					recipientCode,
@@ -392,7 +486,8 @@ class CardDraftVerifierTest {
 					suggestedJobRole,
 					suggestedDueTime,
 					observedTime,
-					safetyCategory);
+					safetyCategory,
+					suggestedActions);
 		}
 	}
 }

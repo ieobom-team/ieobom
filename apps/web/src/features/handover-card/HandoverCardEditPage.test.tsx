@@ -32,6 +32,7 @@ function 카드(patch: Partial<HandoverCard> = {}): HandoverCard {
     exportBlockedReason: '검토 완료 후 생성할 수 있습니다.',
     createdAt: '2026-08-11T13:11:02.401',
     hasAudio: false,
+    suggestedActions: [],
     ...patch,
   }
 }
@@ -220,6 +221,38 @@ describe('검토·수정 화면으로 들어가기 (n21 · n24 → n25)', () => 
 
     expect(await screen.findByText(/점심을 거의 안 드셨어요/)).toBeInTheDocument()
     expect(screen.getByText(/원문에서 읽은 값이라 고치지 않습니다/)).toBeInTheDocument()
+  })
+})
+
+describe('AI 추천 액션 칩 (F-SNBVHR action · display — RFC #62 방향 A)', () => {
+  it('칩을 탭하면 해당 칸이 채워지고 직접 수정할 수 있다', async () => {
+    저장된_카드들 = [
+      카드({
+        suggestedActions: [
+          { targetField: 'ACTION_TAKEN', text: '죽으로 바꿔 드림' },
+          { targetField: 'NEXT_ACTION', text: '저녁 식사량 재확인' },
+        ],
+      }),
+    ]
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(await screen.findByRole('button', { name: '죽으로 바꿔 드림' }))
+    expect(await screen.findByLabelText('조치')).toHaveValue('죽으로 바꿔 드림')
+
+    await user.click(screen.getByRole('button', { name: '저녁 식사량 재확인' }))
+    expect(screen.getByLabelText('다음 행동')).toHaveValue('저녁 식사량 재확인')
+
+    // 탭한 뒤에도 textarea 를 직접 고칠 수 있다.
+    await user.type(screen.getByLabelText('조치'), ' — 절반 드심')
+    expect(screen.getByLabelText('조치')).toHaveValue('죽으로 바꿔 드림 — 절반 드심')
+  })
+
+  it('추천할 내용이 없으면 칩 영역이 보이지 않는다', async () => {
+    renderApp()
+
+    await screen.findByLabelText('조치')
+    expect(screen.queryByRole('button', { name: '죽으로 바꿔 드림' })).not.toBeInTheDocument()
   })
 })
 

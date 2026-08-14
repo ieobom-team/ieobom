@@ -148,7 +148,15 @@ class OpenAiStructuringLiveTest {
 										draft.suggestedJobRole(),
 										draft.suggestedDueTime(),
 										draft.observedTime(),
-										draft.safetyCategory()))
+										draft.safetyCategory(),
+										draft.suggestedActions().stream()
+												.map(
+														action ->
+																new SuggestedActionDraft(
+																		action.targetField(),
+																		대조표.restore(action.text()),
+																		대조표.restore(action.evidenceText())))
+												.toList()))
 				.toList();
 	}
 

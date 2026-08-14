@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   cardEntries,
+  chipTextsFor,
   dateLabel,
   findCard,
   observedTimeLabel,
@@ -32,6 +33,7 @@ function 카드(patch: Partial<HandoverCard> = {}): HandoverCard {
     exportBlockedReason: '검토 완료 후 생성할 수 있습니다.',
     createdAt: '2026-08-11T13:11:02.401',
     hasAudio: false,
+    suggestedActions: [],
     ...patch,
   }
 }
@@ -78,6 +80,25 @@ describe('제안값 표시', () => {
     expect(suggestionLabel(카드({ suggestedJobRole: null, suggestedDueTime: null }))).toBe(
       '제안 · 담당 직종 미정 · 기한 미정',
     )
+  })
+})
+
+describe('AI 추천 액션 칩 (F-SNBVHR display)', () => {
+  const 칩카드 = 카드({
+    suggestedActions: [
+      { targetField: 'ACTION_TAKEN', text: '죽으로 바꿔 드림' },
+      { targetField: 'NEXT_ACTION', text: '저녁 식사량 재확인' },
+      { targetField: 'NEXT_ACTION', text: '보호자에게 안내' },
+    ],
+  })
+
+  it('대상 칸으로 나눠 문구만 돌려준다', () => {
+    expect(chipTextsFor(칩카드, 'ACTION_TAKEN')).toEqual(['죽으로 바꿔 드림'])
+    expect(chipTextsFor(칩카드, 'NEXT_ACTION')).toEqual(['저녁 식사량 재확인', '보호자에게 안내'])
+  })
+
+  it('추천이 없으면 빈 배열이다', () => {
+    expect(chipTextsFor(카드({ suggestedActions: [] }), 'ACTION_TAKEN')).toEqual([])
   })
 })
 

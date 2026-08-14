@@ -1,4 +1,10 @@
-import type { HandoverCard, HandoverCardList, RecipientCards, JobRole } from './handoverCardApi'
+import type {
+  CardField,
+  HandoverCard,
+  HandoverCardList,
+  RecipientCards,
+  JobRole,
+} from './handoverCardApi'
 
 /**
  * 카드를 화면에 그리는 규칙.
@@ -107,6 +113,18 @@ export function uncertainFieldLabels(card: HandoverCard): string[] {
     labels.push('제안 기한')
   }
   return labels
+}
+
+/**
+ * 조치 또는 다음 행동 칸에 붙는 추천 액션 칩의 문구만 뽑는다. (Manyfast F-SNBVHR display —
+ * "조치·다음행동 입력란 하단에 AI 추천 액션 칩을 나란히 표시")
+ *
+ * 서버가 이미 근거 검증과 최대 3개 제한을 끝냈으므로, 화면은 대상 칸으로 나누기만 한다.
+ */
+export function chipTextsFor(card: HandoverCard, field: CardField): string[] {
+  return card.suggestedActions
+    .filter((action) => action.targetField === field)
+    .map((action) => action.text)
 }
 
 /**

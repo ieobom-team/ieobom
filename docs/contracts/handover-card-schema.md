@@ -5,7 +5,7 @@ AI 구조화 결과의 JSON 스키마와 카드 API.
 - Manyfast: `R-ONESTC` 어르신별 인계 정보 정리 / `F-SNBVHR` 어르신별 인계 카드 정리
 - 가명처리 규칙은 `R-LIEATL` / `F-LUDCWW` rules · dataSpec 에서 온다
 - 문구 생성 허용 판정만 `R-TUBGKD` / `F-GUSOFG` preconditions 에서 온다
-- 기준 버전: `v0.3-plan-0813`
+- 기준 버전: `v0.5-action-chips-rfc62`
 
 > 제품이 **왜** 이렇게 동작하는지는 Manyfast가 기준이다. 여기에는 **JSON이 어떻게 생겼는지**만 적는다.
 
@@ -113,7 +113,10 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
       "suggestedJobRole": "CAREGIVER",
       "suggestedDueTime": "17:00",
       "observedTime": "12:40",
-      "safetyCategory": "POOR_INTAKE"
+      "safetyCategory": "POOR_INTAKE",
+      "suggestedActions": [
+        { "targetField": "NEXT_ACTION", "text": "저녁 식사량 확인", "evidenceText": "점심을 거의 안 드셨어요" }
+      ]
     }
   ]
 }
@@ -130,6 +133,31 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 | `suggestedDueTime` | string \| null | 당일 `HH:MM` |
 | `observedTime` | string \| null | 당일 `HH:MM` |
 | `safetyCategory` | enum | `FALL` `FEVER` `POOR_INTAKE` `MEDICATION_CHANGE` `NONE` |
+| `suggestedActions` | array | AI 추천 액션 칩. 최대 3개. 아래 [추천 액션 칩](#추천-액션-칩--suggestedactions) 참고 |
+
+### 추천 액션 칩 — `suggestedActions`
+
+조치·다음 행동 칸에 직원이 한 번 탭해서 채울 수 있는 짧은 문구다. (Manyfast `F-SNBVHR` action · display — RFC #62 방향 A)
+"상태 변화만 말하고 조치·다음 행동은 말하지 않는" 발화가 대부분이라, 근무자가 매번 손으로 타이핑하는
+부담을 줄이기 위해 넣는다. **선택과 확정은 근무자에게 있다** — 칩은 입력란을 채울 뿐 자동으로 카드를
+확정하지 않는다.
+
+```json
+{ "targetField": "NEXT_ACTION", "text": "저녁 식사량 확인", "evidenceText": "점심을 거의 안 드셨어요" }
+```
+
+| 필드 | 타입 | 비고 |
+|---|---|---|
+| `targetField` | enum | `ACTION_TAKEN` \| `NEXT_ACTION`. 탭했을 때 채워질 칸 |
+| `text` | string | 칩에 보일 문구이자 채워질 값 |
+| `evidenceText` | string | 근거 원문 구간. **카드에는 저장하지 않는다** — 검증에만 쓰고 버린다. 근거는 이미 카드 상단의 `evidenceText`로 보이므로 칩까지 따로 들고 있을 이유가 없다 |
+
+카드의 다른 항목과 같은 근거 규칙을 쓴다. `evidenceText`가 비었거나 원문에 없으면 **그 칩 하나만
+버리고 카드는 그대로 남는다** — 칩 하나가 근거를 지어냈다고 카드 전체를 버릴 이유는 없다. `targetField`가
+`ACTION_TAKEN`·`NEXT_ACTION` 밖의 값이면 어느 칸인지 알 수 없으므로 역시 그 칩만 버린다. 응답에
+3개보다 많이 와도 서버가 앞에서부터 3개만 남긴다.
+
+추천할 것이 없으면 빈 배열이다. 카드 응답에도 빈 배열로 내려가고, 화면은 그때 칩 영역을 그리지 않는다.
 
 `strict` 모드는 모든 속성이 `required`에 있어야 한다. 그래서 "값이 없을 수 있음"을 필드 생략이 아니라
 `["string", "null"]` 타입으로 표현한다. `suggestedJobRole`에 `UNKNOWN`, `safetyCategory`에 `NONE`이
@@ -158,6 +186,9 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 | `suggestedJobRole`이 `UNKNOWN`이거나 목록 밖 값이다 | **직종을 비운다.** 직원이 지정한다 |
 | `nextAction`이 없다 | 제안 직종·제안 기한을 붙이지 않는다 |
 | 시각을 `HH:MM`으로 읽을 수 없다 | 그 시각만 비운다 |
+| 추천 액션 칩의 `evidenceText`가 비었거나 원문에 없다 | **그 칩만 폐기.** 카드는 그대로 남는다 |
+| 추천 액션 칩의 `targetField`가 목록 밖 값이다 | **그 칩만 폐기.** 어느 칸인지 모르는 채로 채우지 않는다 |
+| 추천 액션 칩이 3개보다 많다 | 앞에서부터 3개만 남긴다 |
 
 근거 대조는 **띄어쓰기를 무시하고** 한다. 줄바꿈이나 공백 차이로 정상 근거가 버려지면 안 된다.
 
@@ -198,13 +229,19 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
       "exportAllowed": false,
       "exportBlockedReason": "검토 완료 후 생성할 수 있습니다.",
       "createdAt": "2026-08-11T13:11:02.401",
-      "hasAudio": true
+      "hasAudio": true,
+      "suggestedActions": [
+        { "targetField": "NEXT_ACTION", "text": "저녁 식사량 확인" }
+      ]
     }
   ]
 }
 ```
 
 이 카드 모양은 **모든 카드 API가 함께 쓴다.** 아래 수정 · 검토 상태 전환 · 안전 표시도 같은 형태의 카드 하나를 돌려준다.
+
+`suggestedActions`의 카드 응답 모양은 LLM 스키마와 다르다 — `evidenceText`가 빠진다. 근거는 검증에만
+쓰고 저장하지 않으므로 응답에도 실려 나가지 않는다. `targetField`·`text`만 남는다.
 
 `exportAllowed`는 **이 카드로 출력 문구를 만들어도 되는지에 대한 서버의 판정**이다. 화면이 `reviewStatus`를 보고
 직접 계산하지 않는다. 조건이 화면과 서버 두 군데에 있으면 한쪽만 고쳐진 채로 검토되지 않은 내용이 보호자에게 나갈 수 있다.
@@ -292,6 +329,7 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 | `observedAt` | 위와 같다. 원문에서 읽은 값이다 |
 | `reviewStatus` · `safetyRelated` | 아래 두 API로 뗐다 |
 | `safetyFlagSource` | 요청으로 받지 않는다. 클라이언트가 보낼 수 있으면 키워드 자동 판정을 사람이 사칭할 수 있다 |
+| `suggestedActions` | 요청으로 받지 않는다. 카드를 고쳐도 칩은 그대로 남는다 — 직원이 조치·다음 행동을 다시 고쳐 쓴 뒤에도 다른 칩을 참고할 수 있어야 한다 |
 
 ### 규칙
 

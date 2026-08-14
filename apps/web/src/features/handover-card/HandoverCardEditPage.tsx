@@ -14,7 +14,7 @@ import {
   type CardEditDraft,
 } from './cardEditForm'
 import { CardsLoadFailed, CardsLoading } from './CardsLoadState'
-import { findCard, jobRoleLabel, JOB_ROLE_LABELS, observedTimeLabel } from './handoverCard'
+import { chipTextsFor, findCard, jobRoleLabel, JOB_ROLE_LABELS, observedTimeLabel } from './handoverCard'
 import {
   changeReviewStatus,
   markSafety,
@@ -312,6 +312,10 @@ function CardEditForm({
         maxLength={500}
         className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
       />
+      <SuggestedActionChips
+        texts={chipTextsFor(card, 'ACTION_TAKEN')}
+        onSelect={(text) => onChange({ actionTaken: text })}
+      />
 
       <label htmlFor="nextAction" className="text-2xl font-bold text-slate-900">
         다음 행동
@@ -323,6 +327,10 @@ function CardEditForm({
         rows={2}
         maxLength={500}
         className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
+      />
+      <SuggestedActionChips
+        texts={chipTextsFor(card, 'NEXT_ACTION')}
+        onSelect={(text) => onChange({ nextAction: text })}
       />
 
       <fieldset className="flex flex-col gap-4">
@@ -389,6 +397,40 @@ function CardEditForm({
         </BigButton>
       )}
     </section>
+  )
+}
+
+/**
+ * AI 추천 액션 칩. (Manyfast F-SNBVHR action · display — RFC #62 방향 A)
+ *
+ * 탭하면 해당 칸을 칩의 문구로 **채운다.** 직접 입력을 지우는 것이 아니라, 지금까지 쓴 내용을
+ * 대신할 출발점을 주는 것이고 탭한 뒤에도 textarea 에서 바로 고칠 수 있다. 추천할 내용이 없으면
+ * 영역 자체를 그리지 않는다 — 빈 칩 줄은 "AI 가 아무것도 못 찾았다"는 신호를 주지 못한다.
+ */
+function SuggestedActionChips({
+  texts,
+  onSelect,
+}: {
+  texts: string[]
+  onSelect: (text: string) => void
+}) {
+  if (texts.length === 0) {
+    return null
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {texts.map((text) => (
+        <button
+          key={text}
+          type="button"
+          onClick={() => onSelect(text)}
+          className="min-h-12 rounded-full border-2 border-teal-600 bg-teal-50 px-4 py-2 text-lg font-semibold text-teal-900 hover:bg-teal-100 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300"
+        >
+          {text}
+        </button>
+      ))}
+    </div>
   )
 }
 
