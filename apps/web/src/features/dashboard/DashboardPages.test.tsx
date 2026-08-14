@@ -390,6 +390,25 @@ describe('대리 완료 표시', () => {
   })
 })
 
+describe('업무 목록에서의 화면 이동 (n46 인계 카드, n35 업무 상세, n36 기록 문구)', () => {
+  it('업무 항목에서 업무 상세, 인계 카드, 기록 문구 출력으로 이동할 수 있다', async () => {
+    renderApp()
+
+    const 미처리 = 영역('미처리 업무')
+    expect(await 미처리.findByText('저녁 식사량 확인')).toBeInTheDocument()
+
+    const 상세링크 = 미처리.getByRole('link', { name: '업무 상세' })
+    expect(상세링크).toHaveAttribute('href', '/tasks/4')
+
+    const 카드링크 = 미처리.getByRole('link', { name: '인계 카드 보기' })
+    expect(카드링크).toHaveAttribute('href', '/handover-cards/31')
+
+    const 문구링크 = 미처리.getByRole('link', { name: '기록 문구 출력' })
+    expect(문구링크).toHaveAttribute('href', '/handover-cards/31/export')
+  })
+})
+
+
 describe('진입 역할', () => {
   it('현장 근무자는 운영 현황을 주소로 열어도 자기 홈으로 간다', () => {
     renderApp('/admin/dashboard', 'FIELD_WORKER')
