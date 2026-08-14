@@ -1,16 +1,23 @@
 import { Link } from 'react-router'
 import type { TaskResponse } from '../task/taskApi'
 
+function formatAssignee(task: TaskResponse): string {
+  const parts = [task.assigneeName, task.assigneeJobRoleLabel].filter(
+    (part): part is string => part !== null,
+  )
+  return parts.length === 0 ? '담당 미정' : parts.join(' · ')
+}
+
 /**
  * 목록에 뜨는 업무 한 줄.
  *
  * 담당(직종 또는 이름) · 기한 · 상태를 **언제나 같이** 보여 준다. 셋 중 하나만 빠져도 "누가 언제까지
  * 무엇을" 이 안 닫힌다. (Manyfast F-IVFNPC display)
  *
- * 이동은 **인계 카드 상세 하나뿐이다.** (유저플로우 "AI 인계 도구 내비게이션 맵" n46 인계 카드로 이동
- * → n18 인계 카드 상세 화면) 업무 상세(n35 업무 상세 화면)와 기록 문구 화면(n36 기록 문구 출력 화면)은
- * 아직 화면이 없다. 각각 #15 · #18 이 만들고, 그 뒤에 여기서 링크를 연결한다. 없는 경로로 링크를 미리
- * 걸면 눌렀을 때 진입 선택 화면으로 튕긴다.
+ * 이동:
+ * - 업무 상세: 유저플로우 "AI 인계 도구 내비게이션 맵" n42/n44 → n35 업무 상세 화면
+ * - 인계 카드: 유저플로우 n46 인계 카드로 이동 → n18 인계 카드 상세 화면
+ * - 기록 문구 출력: 유저플로우 n47 기록 출력으로 이동 → n36 기록 문구 출력 화면
  */
 export function TaskRow({ task }: { task: TaskResponse }) {
   return (
@@ -23,7 +30,7 @@ export function TaskRow({ task }: { task: TaskResponse }) {
       <p className="mt-2 text-xl text-slate-900">{task.content}</p>
 
       <p className="mt-2 text-lg text-slate-600">
-        {assigneeLabel(task)} · {task.statusLabel}
+        {formatAssignee(task)} · {task.statusLabel}
       </p>
 
       {task.status === 'DONE' && task.completedByName !== null && (
@@ -41,25 +48,26 @@ export function TaskRow({ task }: { task: TaskResponse }) {
         </p>
       )}
 
-      <Link
-        to={`/handover-cards/${task.handoverCardId}`}
-        className="mt-3 inline-block text-lg font-semibold text-teal-800 underline underline-offset-4"
-      >
-        인계 카드 보기
-      </Link>
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-lg font-semibold">
+        <Link
+          to={`/tasks/${task.id}`}
+          className="text-teal-800 underline underline-offset-4"
+        >
+          업무 상세
+        </Link>
+        <Link
+          to={`/handover-cards/${task.handoverCardId}`}
+          className="text-teal-800 underline underline-offset-4"
+        >
+          인계 카드 보기
+        </Link>
+        <Link
+          to={`/handover-cards/${task.handoverCardId}/export`}
+          className="text-teal-800 underline underline-offset-4"
+        >
+          기록 문구 출력
+        </Link>
+      </div>
     </li>
   )
-}
-
-/**
- * 담당을 한 줄로.
- *
- * 직종과 이름 중 하나만 있어도 되고, 둘 다 있을 수도 있다. 수행자가 앱을 쓰지 않는 직종이면 사람을
- * 특정하지 않고 직종으로만 배정하는 것이 현장의 기본 경로다.
- */
-export function assigneeLabel(task: TaskResponse): string {
-  const parts = [task.assigneeName, task.assigneeJobRoleLabel].filter(
-    (part): part is string => part !== null,
-  )
-  return parts.length === 0 ? '담당 미정' : parts.join(' · ')
 }
