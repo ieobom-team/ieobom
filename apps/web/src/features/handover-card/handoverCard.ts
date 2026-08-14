@@ -53,15 +53,131 @@ export function cardEntries(card: HandoverCard): CardEntry[] {
   ]
 }
 
+export type CardFilterType = 'NEEDS_REVIEW' | 'SAFETY' | 'REVIEWED' | 'ALL'
+
+export type CardStats = {
+  needsReviewCount: number
+  safetyCount: number
+  reviewedCount: number
+  totalCount: number
+  unresolvedCount: number
+}
+
+export type RecipientOption = {
+  id: number
+  name: string
+}
+
 /**
- * 안전 관련 항목을 앞으로 보낸다.
- *
- * 서버도 같은 순서로 내려주지만(계약), 우선 배치는 **화면 요구**라서 화면이 스스로 지킨다.
- * 안전 여부를 다시 계산하는 게 아니라 서버가 준 `safetyRelated` 로 순서만 잡는 것이고,
- * 같은 무게면 받은 순서를 그대로 둔다.
+ * 어르신별로 묶인 카드를 하나의 평탄한(flat) 목록으로 모은다.
+ */
+export function flattenCards(list: HandoverCardList): HandoverCard[] {
+  return list.recipients.flatMap((recipient) => recipient.cards)
+}
+
+/**
+ * 인계 카드 목록의 기본 통계 건수를 계산한다.
+ */
+export function getCardStats(list: HandoverCardList): CardStats {
+  const all = flattenCards(list)
+  return {
+    needsReviewCount: all.filter((c) => c.reviewStatus === 'NEEDS_REVIEW').length,
+    safetyCount: all.filter((c) => c.safetyRelated).length,
+    reviewedCount: all.filter((c) => c.reviewStatus === 'REVIEWED').length,
+    totalCount: all.length + list.unresolved.length,
+    unresolvedCount: list.unresolved.length,
+  }
+}
+
+/**
+ * 필터 선택용 어르신 목록을 추출한다.
+ */
+export function extractRecipients(list: HandoverCardList): RecipientOption[] {
+  return list.recipients.map((r) => ({
+    id: r.careRecipientId,
+    name: r.careRecipientName,
+  }))
+}
+
+/**
+ * 카드를 시간순(최신 등록순)으로 정렬한다.
+ */
+export function sortLatestFirst(cards: readonly HandoverCard[]): HandoverCard[] {
+  return [...cards].sort((a, b) => {
+    if (a.createdAt && b.createdAt && a.createdAt !== b.createdAt) {
+      return b.createdAt.localeCompare(a.createdAt)
+    }
+    return b.id - a.id
+  })
+}
+
+/**
+ * Inbox 기본 정렬: [검토 필요 우선] → [안전 관련 우선] → [최신 등록순].
+ */
+export function sortInboxCards(cards: readonly HandoverCard[]): HandoverCard[] {
+  return [...cards].sort((a, b) => {
+    // 1. 검토 필요 우선
+    const statusOrderA = a.reviewStatus === 'NEEDS_REVIEW' ? 0 : 1
+    const statusOrderB = b.reviewStatus === 'NEEDS_REVIEW' ? 0 : 1
+    if (statusOrderA !== statusOrderB) {
+      return statusOrderA - statusOrderB
+    }
+
+    // 2. 안전 관련 우선
+    const safetyOrder = Number(b.safetyRelated) - Number(a.safetyRelated)
+    if (safetyOrder !== 0) {
+      return safetyOrder
+    }
+
+    // 3. 최신 등록순
+    if (a.createdAt && b.createdAt && a.createdAt !== b.createdAt) {
+      return b.createdAt.localeCompare(a.createdAt)
+    }
+    return b.id - a.id
+  })
+}
+
+/**
+ * 안전 관련 항목을 앞으로 보내고, 같은 상태면 최신순으로 정렬한다.
  */
 export function safetyFirst(cards: readonly HandoverCard[]): HandoverCard[] {
-  return [...cards].sort((a, b) => Number(b.safetyRelated) - Number(a.safetyRelated))
+  return [...cards].sort((a, b) => {
+    const safetyOrder = Number(b.safetyRelated) - Number(a.safetyRelated)
+    if (safetyOrder !== 0) {
+      return safetyOrder
+    }
+    if (a.createdAt && b.createdAt && a.createdAt !== b.createdAt) {
+      return b.createdAt.localeCompare(a.createdAt)
+    }
+    return b.id - a.id
+  })
+}
+
+/**
+ * 탭 필터 및 어르신 필터에 따라 카드를 정렬·추려낸다.
+ */
+export function filterCards(
+  cards: readonly HandoverCard[],
+  filter: CardFilterType,
+  careRecipientId: number | null = null,
+): HandoverCard[] {
+  let filtered =
+    careRecipientId !== null ? cards.filter((c) => c.careRecipientId === careRecipientId) : cards
+
+  switch (filter) {
+    case 'NEEDS_REVIEW':
+      filtered = filtered.filter((c) => c.reviewStatus === 'NEEDS_REVIEW')
+      return safetyFirst(filtered)
+    case 'SAFETY':
+      filtered = filtered.filter((c) => c.safetyRelated)
+      return sortLatestFirst(filtered)
+    case 'REVIEWED':
+      filtered = filtered.filter((c) => c.reviewStatus === 'REVIEWED')
+      return sortLatestFirst(filtered)
+    case 'ALL':
+    default:
+      return sortInboxCards(filtered)
+  }
 }
 
 /** 관찰 시각을 `HH:MM` 으로. 원문에서 시각을 읽지 못한 카드는 `null` 이다. */
@@ -70,6 +186,15 @@ export function observedTimeLabel(observedAt: string | null): string | null {
     return null
   }
   const matched = /T(\d{2}:\d{2})/.exec(observedAt)
+  return matched === null ? null : matched[1]
+}
+
+/** 등록 시각을 `HH:MM` 으로. */
+export function createdAtTimeLabel(createdAt: string | null): string | null {
+  if (createdAt === null) {
+    return null
+  }
+  const matched = /T(\d{2}:\d{2})/.exec(createdAt)
   return matched === null ? null : matched[1]
 }
 

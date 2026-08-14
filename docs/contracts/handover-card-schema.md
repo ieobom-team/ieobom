@@ -257,7 +257,7 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 `discardedCount`는 **정상 동작의 결과**다. 근거가 없어 사라진 항목 수이고, 이 값이 0이 아닌 것은 오류가 아니다.
 0인 것과 구분되어야 "AI가 아무것도 못 만든 것"과 "만든 것이 전부 걸러진 것"을 나눠 볼 수 있다.
 
-`cards`는 **안전 항목이 앞에 온다.** 같은 무게면 만들어진 순서다.
+`cards`는 **안전 항목이 앞에 온다.** 같은 무게면 최신 등록 순서(ID 내림차순)다.
 
 ### 규칙
 
@@ -296,7 +296,7 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 `recipients` 안에 섞지 않는다. 섞으면 화면이 "누구의 것인지 모르는 카드"를 어르신 목록 안에 그려야 한다.
 각 항목의 모양은 `recipients[].cards[]`와 같고 `careRecipientId`와 `careRecipientName`이 `null`이다.
 
-`recipients[].cards[]`와 `unresolved[]` 모두 안전 항목이 앞에 온다.
+`recipients[].cards[]`와 `unresolved[]` 모두 안전 항목이 앞에 오고, 같은 무게면 최신 등록 순서다.
 
 ---
 

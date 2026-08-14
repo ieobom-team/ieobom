@@ -116,7 +116,7 @@ describe('인계 카드 목록 (n18 · n19)', () => {
     expect(await screen.findByRole('heading', { name: '인계 카드' })).toBeInTheDocument()
   })
 
-  it('어르신별로 묶어서 보여 준다', async () => {
+  it('어르신 이름을 카드 헤더에 함께 보여 준다', async () => {
     목록_응답 = {
       status: 200,
       body: {
@@ -203,12 +203,13 @@ describe('인계 카드 목록 (n18 · n19)', () => {
             careRecipientId: 1,
             careRecipientName: '김말순',
             cards: [
-              카드({ id: 31, statusChange: '기침', safetyRelated: false }),
+              카드({ id: 31, statusChange: '기침', safetyRelated: false, createdAt: '2026-08-11T10:00:00' }),
               카드({
                 id: 32,
                 statusChange: '복도에서 넘어지심',
                 safetyRelated: true,
                 safetyFlagSource: 'KEYWORD',
+                createdAt: '2026-08-11T09:00:00',
               }),
             ],
           },
@@ -224,7 +225,8 @@ describe('인계 카드 목록 (n18 · n19)', () => {
     expect(cards[1]).toHaveTextContent('기침')
   })
 
-  it('검토 상태를 구분해 표시한다', async () => {
+  it('기본 진입 시 검토 필요 카드만 노출되고 완료 카드는 접어둔다', async () => {
+    const user = userEvent.setup()
     목록_응답 = {
       status: 200,
       body: {
@@ -245,9 +247,71 @@ describe('인계 카드 목록 (n18 · n19)', () => {
     renderApp()
 
     const 검토전 = await screen.findByRole('link', { name: /기침/ })
-    const 검토후 = screen.getByRole('link', { name: /식사량 저하/ })
     expect(within(검토전).getByText('검토 필요')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /식사량 저하/ })).not.toBeInTheDocument()
+
+    // 접힌 검토 완료 카드 열기
+    await user.click(screen.getByRole('button', { name: /검토 완료 카드 1건 보기/ }))
+    const 검토후 = await screen.findByRole('link', { name: /식사량 저하/ })
     expect(within(검토후).getByText('검토 완료')).toBeInTheDocument()
+  })
+
+  it('상단 탭 필터로 검토 완료나 안전 관련 카드를 모아볼 수 있다', async () => {
+    const user = userEvent.setup()
+    목록_응답 = {
+      status: 200,
+      body: {
+        date: '2026-08-11',
+        recipients: [
+          {
+            careRecipientId: 1,
+            careRecipientName: '김말순',
+            cards: [
+              카드({ id: 31, statusChange: '기침', reviewStatus: 'NEEDS_REVIEW', safetyRelated: false }),
+              카드({ id: 32, statusChange: '넘어지심', reviewStatus: 'REVIEWED', safetyRelated: true }),
+            ],
+          },
+        ],
+        unresolved: [],
+      },
+    }
+    renderApp()
+
+    await screen.findByRole('link', { name: /기침/ })
+
+    // 안전 관련 탭 클릭
+    await user.click(screen.getByRole('tab', { name: /안전 관련/ }))
+    expect(await screen.findByRole('link', { name: /넘어지심/ })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /기침/ })).not.toBeInTheDocument()
+
+    // 검토 완료 탭 클릭
+    await user.click(screen.getByRole('tab', { name: /검토 완료/ }))
+    expect(await screen.findByRole('link', { name: /넘어지심/ })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /기침/ })).not.toBeInTheDocument()
+  })
+
+  it('어르신 필터로 특정 어르신 카드만 모아볼 수 있다', async () => {
+    const user = userEvent.setup()
+    목록_응답 = {
+      status: 200,
+      body: {
+        date: '2026-08-11',
+        recipients: [
+          { careRecipientId: 1, careRecipientName: '김말순', cards: [카드({ id: 31, statusChange: '김말순 특이사항' })] },
+          { careRecipientId: 2, careRecipientName: '박순자', cards: [카드({ id: 32, careRecipientId: 2, careRecipientName: '박순자', statusChange: '박순자 특이사항' })] },
+        ],
+        unresolved: [],
+      },
+    }
+    renderApp()
+
+    await screen.findByRole('link', { name: /김말순 특이사항/ })
+    expect(screen.getByRole('link', { name: /박순자 특이사항/ })).toBeInTheDocument()
+
+    // 박순자 어르신 선택
+    await user.selectOptions(screen.getByLabelText(/어르신 선택/), '2')
+    expect(screen.queryByRole('link', { name: /김말순 특이사항/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /박순자 특이사항/ })).toBeInTheDocument()
   })
 
   it('당일 카드가 없으면 비어 있다고 알린다', async () => {
