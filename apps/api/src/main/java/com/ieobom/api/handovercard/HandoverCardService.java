@@ -3,6 +3,7 @@ package com.ieobom.api.handovercard;
 import com.ieobom.api.ai.HandoverStructuringClient;
 import com.ieobom.api.ai.StructuredCardDraft;
 import com.ieobom.api.ai.StructuringInput;
+import com.ieobom.api.ai.SuggestedActionDraft;
 import com.ieobom.api.common.ConflictException;
 import com.ieobom.api.common.NotFoundException;
 import com.ieobom.api.common.RequestValidationException;
@@ -329,7 +330,21 @@ public class HandoverCardService {
 										draft.suggestedJobRole(),
 										draft.suggestedDueTime(),
 										draft.observedTime(),
-										draft.safetyCategory()))
+										draft.safetyCategory(),
+										restoreSuggestedActions(draft.suggestedActions(), aliases)))
+				.toList();
+	}
+
+	/** 추천 액션 칩의 문구·근거도 카드의 다른 항목과 같은 자리에서 실명으로 되돌린다. */
+	private List<SuggestedActionDraft> restoreSuggestedActions(
+			List<SuggestedActionDraft> drafts, RecipientAliases aliases) {
+		return drafts.stream()
+				.map(
+						draft ->
+								new SuggestedActionDraft(
+										draft.targetField(),
+										aliases.restore(draft.text()),
+										aliases.restore(draft.evidenceText())))
 				.toList();
 	}
 
@@ -356,6 +371,7 @@ public class HandoverCardService {
 										.reviewStatus(ReviewStatus.NEEDS_REVIEW)
 										.suggestedJobRole(blueprint.suggestedJobRole())
 										.suggestedDueTime(blueprint.suggestedDueTime())
+										.suggestedActions(blueprint.suggestedActions())
 										.build())
 				.toList();
 	}

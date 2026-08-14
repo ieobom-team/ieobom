@@ -23,6 +23,13 @@ final class HandoverStructuringSchema {
 	static final String FUNCTION_NAME = "save_handover_cards";
 	static final String CARDS_PROPERTY = "cards";
 	static final String EVIDENCE_PROPERTY = "evidenceText";
+	static final String SUGGESTED_ACTIONS_PROPERTY = "suggestedActions";
+
+	/** 추천 액션 칩 최대 개수. (Manyfast F-SNBVHR display — "칩은 최대 3개까지 표시") */
+	static final int SUGGESTED_ACTIONS_LIMIT = 3;
+
+	/** 추천 액션 칩이 채울 칸. {@link com.ieobom.api.handovercard.CardField} 와 이름을 맞춘다. */
+	static final List<String> TARGET_FIELDS = List.of("ACTION_TAKEN", "NEXT_ACTION");
 
 	/**
 	 * 어르신을 가리키는 자리. <b>이름이 아니라 내부 ID다.</b>
@@ -97,6 +104,37 @@ final class HandoverStructuringSchema {
 						"type", "string",
 						"description", "지정 안전 키워드 중 해당하는 것. 없으면 " + NO_SAFETY_CATEGORY,
 						"enum", safetyCategoryNames()));
+		properties.put(
+				SUGGESTED_ACTIONS_PROPERTY,
+				Map.of(
+						"type", "array",
+						"description",
+								"조치·다음 행동 칸에 원클릭으로 채울 짧은 추천 문구. 최대 " + SUGGESTED_ACTIONS_LIMIT
+										+ "개. 근거를 원문에서 그대로 옮길 수 없으면 만들지 않는다. 제안할 것이 없으면 빈 배열",
+						"maxItems", SUGGESTED_ACTIONS_LIMIT,
+						"items", suggestedAction()));
+
+		return object(properties, List.copyOf(properties.keySet()));
+	}
+
+	private static Map<String, Object> suggestedAction() {
+		Map<String, Object> properties = new LinkedHashMap<>();
+		properties.put(
+				"targetField",
+				Map.of(
+						"type", "string",
+						"description", "이 문구를 채울 칸. 조치면 ACTION_TAKEN, 다음 행동이면 NEXT_ACTION",
+						"enum", TARGET_FIELDS));
+		properties.put(
+				"text",
+				Map.of(
+						"type", "string",
+						"description", "탭하면 해당 칸에 그대로 채워질 짧은 문장. 요약하지 않고 실행할 수 있는 말로 적는다"));
+		properties.put(
+				EVIDENCE_PROPERTY,
+				Map.of(
+						"type", "string",
+						"description", "이 추천의 근거가 된 원문 구간. 원문에 있는 글자를 그대로 옮긴다"));
 
 		return object(properties, List.copyOf(properties.keySet()));
 	}
@@ -157,13 +195,20 @@ final class HandoverStructuringSchema {
 				10. 원문이 "체크 항목: ..." 형태일 수 있다. 이는 직원이 사전 정의된 관찰 항목을 선택한 것이다.
 				    체크 항목은 그 자체가 관찰된 상태 변화(statusChange)다. evidenceText 에는 원문을 그대로 옮기고,
 				    statusChange 에 해당 항목을 적는다. actionTaken 과 nextAction 은 원문에 없으면 null 로 둔다.
+				11. suggestedActions 는 조치·다음 행동 칸에 직원이 한 번 탭해서 채울 수 있는 짧은 문구를 최대 %d개까지 제안한다.
+				    상태 변화만 말하고 조치나 다음 행동을 말하지 않은 발화에서 특히 도움이 된다.
+				    각 제안은 targetField 로 채울 칸(ACTION_TAKEN 또는 NEXT_ACTION)을 정하고, evidenceText 로 원문 근거를
+				    반드시 남긴다. 근거가 되는 구간을 원문에서 그대로 옮길 수 없으면 그 제안을 만들지 않는다.
+				    이미 만든 statusChange·actionTaken·nextAction 을 요약하거나 반복하지 않는다. 원문에 없는 조치나 일정을
+				    지어내지 않는다. 제안할 것이 없으면 빈 배열을 넘긴다.
 				"""
 				.formatted(
 						RECIPIENT_PROPERTY,
 						RECIPIENT_PROPERTY,
 						UNKNOWN_JOB_ROLE,
 						UNKNOWN_JOB_ROLE,
-						NO_SAFETY_CATEGORY);
+						NO_SAFETY_CATEGORY,
+						SUGGESTED_ACTIONS_LIMIT);
 	}
 
 	/**

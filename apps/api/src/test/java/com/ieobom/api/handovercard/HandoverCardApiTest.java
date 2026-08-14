@@ -311,6 +311,7 @@ class HandoverCardApiTest {
 				"UNKNOWN",
 				null,
 				null,
-				safetyCategory);
+				safetyCategory,
+				List.of());
 	}
 }

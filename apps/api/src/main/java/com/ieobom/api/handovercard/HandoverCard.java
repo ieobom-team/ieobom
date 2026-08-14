@@ -4,7 +4,9 @@ import com.ieobom.api.common.BaseTimeEntity;
 import com.ieobom.api.common.JobRole;
 import com.ieobom.api.handover.Handover;
 import com.ieobom.api.recipient.CareRecipient;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -15,9 +17,12 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -103,6 +108,22 @@ public class HandoverCard extends BaseTimeEntity {
 	/** 다음 행동에 붙일 기한 제안값. 당일 시각만 쓴다. */
 	private LocalTime suggestedDueTime;
 
+	/**
+	 * AI 추천 액션 칩. 최대 3개. (Manyfast F-SNBVHR action · display — RFC #62 방향 A)
+	 *
+	 * <p>수정할 때도 지우지 않는다. 직원이 조치·다음 행동을 고쳐 쓴 뒤에도 다른 칩을 다시 참고할 수 있어야 하고, 카드 자체를 지우는 기능이 없는
+	 * 것처럼 칩을 지우는 별도 동작도 두지 않는다.
+	 */
+	@ElementCollection(fetch = FetchType.EAGER)
+	@CollectionTable(
+			name = "handover_card_suggested_action",
+			joinColumns =
+					@JoinColumn(
+							name = "handover_card_id",
+							foreignKey = @ForeignKey(name = "fk_suggested_action_handover_card")))
+	@OrderColumn(name = "sort_order")
+	private List<SuggestedAction> suggestedActions = new ArrayList<>();
+
 	@Builder
 	private HandoverCard(
 			Handover handover,
@@ -116,7 +137,8 @@ public class HandoverCard extends BaseTimeEntity {
 			SafetyFlagSource safetyFlagSource,
 			ReviewStatus reviewStatus,
 			JobRole suggestedJobRole,
-			LocalTime suggestedDueTime) {
+			LocalTime suggestedDueTime,
+			List<SuggestedAction> suggestedActions) {
 		this.handover = handover;
 		this.careRecipient = careRecipient;
 		this.observedAt = observedAt;
@@ -129,6 +151,9 @@ public class HandoverCard extends BaseTimeEntity {
 		this.reviewStatus = reviewStatus;
 		this.suggestedJobRole = suggestedJobRole;
 		this.suggestedDueTime = suggestedDueTime;
+		if (suggestedActions != null) {
+			this.suggestedActions = suggestedActions;
+		}
 	}
 
 	/**

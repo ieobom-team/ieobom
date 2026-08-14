@@ -78,6 +78,35 @@ class HandoverStructuringSchemaTest {
 	}
 
 	@Test
+	void 추천_액션_칩은_최대_3개이고_항목마다_근거를_요구한다() {
+		@SuppressWarnings("unchecked")
+		Map<String, Object> suggestedActions =
+				(Map<String, Object>) properties().get(HandoverStructuringSchema.SUGGESTED_ACTIONS_PROPERTY);
+
+		assertThat(suggestedActions.get("maxItems")).isEqualTo(HandoverStructuringSchema.SUGGESTED_ACTIONS_LIMIT);
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> item = (Map<String, Object>) suggestedActions.get("items");
+		assertThat(item.get("additionalProperties")).isEqualTo(false);
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> itemProperties = (Map<String, Object>) item.get("properties");
+		assertThat(itemProperties).containsKeys("targetField", "text", HandoverStructuringSchema.EVIDENCE_PROPERTY);
+
+		@SuppressWarnings("unchecked")
+		List<String> required = (List<String>) item.get("required");
+		assertThat(required).containsExactlyInAnyOrderElementsOf(itemProperties.keySet());
+	}
+
+	@Test
+	void 프롬프트는_추천_액션_칩_생성_규칙을_안내한다() {
+		String prompt = HandoverStructuringSchema.systemPrompt();
+
+		assertThat(prompt).contains("suggestedActions");
+		assertThat(prompt).contains("최대 3개까지 제안한다");
+	}
+
+	@Test
 	void 사용자_프롬프트에_원문과_후보_목록이_들어간다() {
 		String prompt = HandoverStructuringSchema.userPrompt(입력());
 
