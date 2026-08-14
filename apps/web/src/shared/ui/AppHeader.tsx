@@ -84,18 +84,18 @@ export function AppHeader({
 
         {/* 우측: 세션 칩 & 본인 바꾸기 */}
         {showSession && session && role && (
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-base sm:text-lg">
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            <div className="flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-sm whitespace-nowrap sm:gap-2 sm:px-3 sm:py-1.5 sm:text-base">
               <span className="font-semibold text-slate-900">{session.staff.name}</span>
-              <span className="text-slate-500">{session.staff.code}</span>
-              <span className="rounded-full bg-teal-100 px-2 py-0.5 text-sm font-semibold text-teal-800">
+              <span className="hidden text-slate-500 sm:inline">{session.staff.code}</span>
+              <span className="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-800 sm:text-sm">
                 {role.label}
               </span>
             </div>
             <button
               type="button"
               onClick={leave}
-              className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-base font-semibold text-slate-700 hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300 sm:text-lg"
+              className="rounded-xl border border-slate-300 bg-white px-2.5 py-1 text-sm font-semibold text-slate-700 whitespace-nowrap hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300 sm:px-3 sm:py-1.5 sm:text-base"
             >
               본인 바꾸기
             </button>
