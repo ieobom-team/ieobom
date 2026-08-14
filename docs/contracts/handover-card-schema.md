@@ -197,7 +197,8 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
       "suggestedDueTime": "17:00",
       "exportAllowed": false,
       "exportBlockedReason": "검토 완료 후 생성할 수 있습니다.",
-      "createdAt": "2026-08-11T13:11:02.401"
+      "createdAt": "2026-08-11T13:11:02.401",
+      "hasAudio": true
     }
   ]
 }
@@ -210,6 +211,11 @@ Function Calling으로 강제한다. `tool_choice`로 함수 호출을 고정하
 판정은 `HandoverCard.canGenerateExport()` 하나뿐이고 문구 생성 API도 같은 것을 쓴다.
 
 `suggestedDueTime`은 `HH:MM`이다. 초를 붙이지 않는다. 이 제품의 기한은 당일 시각 단위다.
+
+`hasAudio`는 **원문에 저장된 원본 음성이 있는지**이고, 화면은 이 값으로만 재생을 그린다
+(`GET /api/handovers/{handoverId}/audio`). **입력 방식이 `VOICE`인 것과 같지 않다** —
+마이크 권한을 거부했거나 녹음을 지원하지 않는 브라우저의 입력도 `VOICE`로 저장되고,
+그 카드에는 들을 음성이 없다. 방식으로 판단하면 재생이 안 되는 재생 버튼이 생긴다.
 
 `discardedCount`는 **정상 동작의 결과**다. 근거가 없어 사라진 항목 수이고, 이 값이 0이 아닌 것은 오류가 아니다.
 0인 것과 구분되어야 "AI가 아무것도 못 만든 것"과 "만든 것이 전부 걸러진 것"을 나눠 볼 수 있다.

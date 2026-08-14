@@ -28,7 +28,7 @@ export type HandoverDraft = {
   checkedItems: readonly string[]
   /** `<input type="datetime-local">` 값. `YYYY-MM-DDTHH:mm` */
   occurredAt: string
-  /** 음성 입력 시 저장된 base64 오디오 데이터 */
+  /** 녹음한 원본 음성. Base64 Data URL 이고, 음성으로 남겼을 때만 채워진다 */
   audioData?: string
 }
 

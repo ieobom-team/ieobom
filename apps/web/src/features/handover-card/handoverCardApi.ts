@@ -36,7 +36,10 @@ export type HandoverCard = {
   exportAllowed: boolean
   exportBlockedReason: string | null
   createdAt: string
-  /** 음성 입력으로 생성되어 원본 음성 재생이 가능한지 여부 */
+  /**
+   * 재생할 원본 음성이 저장돼 있는지. 입력 방식이 음성인지와 다르다 —
+   * 마이크 권한을 거부한 입력도 `VOICE` 로 저장되고 그 카드에는 들을 음성이 없다
+   */
   hasAudio: boolean
 }
 

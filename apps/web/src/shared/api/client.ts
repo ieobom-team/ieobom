@@ -38,6 +38,17 @@ export const NETWORK_UNAVAILABLE = 'NETWORK_UNAVAILABLE'
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '')
 
+/**
+ * API 경로를 브라우저가 그대로 쓸 주소로 바꾼다.
+ *
+ * `fetch` 를 거치지 않고 브라우저가 직접 받아 오는 것(`<audio src>`, `<img src>`)에 쓴다.
+ * 이걸 안 거치고 `/api/...` 를 그대로 박으면 개발 서버(프록시)에서만 되고
+ * `VITE_API_BASE_URL` 로 다른 출처를 가리키는 환경에서 조용히 깨진다.
+ */
+export function apiUrl(path: string): string {
+  return `${BASE_URL}${path}`
+}
+
 function isFieldErrorList(value: unknown): value is ApiFieldError[] {
   return (
     Array.isArray(value) &&
@@ -71,7 +82,7 @@ async function toApiError(response: Response): Promise<ApiError> {
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response
   try {
-    response = await fetch(`${BASE_URL}${path}`, {
+    response = await fetch(apiUrl(path), {
       ...init,
       headers: {
         'Content-Type': 'application/json',
@@ -113,7 +124,7 @@ export type DownloadedFile = {
 export async function apiDownload(path: string): Promise<DownloadedFile> {
   let response: Response
   try {
-    response = await fetch(`${BASE_URL}${path}`)
+    response = await fetch(apiUrl(path))
   } catch {
     throw new ApiError(
       NETWORK_UNAVAILABLE,

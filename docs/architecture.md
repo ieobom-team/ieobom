@@ -112,9 +112,9 @@ CareRecipient   어르신
       │
       │ N
 HandoverCard ───┐ N          1 ┌─── Handover      원본 인계 입력 (발화 한 덩어리)
-   구조화 카드   │ ─────────────┘
-      │ 1
-      │
+   구조화 카드   │ ─────────────┘        │ 1
+      │ 1                                │ 0..1
+      │                             HandoverAudio   원본 음성 (음성 입력일 때만)
       │ N
     Task        후속 업무 (담당자 · 미처리/완료)
 ```
@@ -125,9 +125,15 @@ HandoverCard ───┐ N          1 ┌─── Handover      원본 인계 
 | 엔티티 | 필드 |
 |---|---|
 | `CareRecipient` | `name` 이름, **`code` 내부 ID(unique)**, `dischargedAt` 이용 종료 시점(선택) |
-| `Handover` | `careRecipient`, `rawText` 원문, `inputMethod`(`VOICE`/`TEXT`/`CHECK`), `occurredAt` 입력 시점, `reporterName` 입력자 이름, **`proxyInput` 대리 입력 여부**, **`infoSource` 정보 출처**(`GUARDIAN`/`DRIVER`/`COLLEAGUE`/`OTHER`, 선택), `audioData` 오디오 원본 데이터(`MEDIUMBLOB`, 선택) |
+| `Handover` | `careRecipient`, `rawText` 원문, `inputMethod`(`VOICE`/`TEXT`/`CHECK`), `occurredAt` 입력 시점, `reporterName` 입력자 이름, **`proxyInput` 대리 입력 여부**, **`infoSource` 정보 출처**(`GUARDIAN`/`DRIVER`/`COLLEAGUE`/`OTHER`, 선택), **`audioMimeType` 원본 음성 형식**(선택 — 있으면 들을 음성이 있다는 뜻) |
+| `HandoverAudio` | `handover`(unique), `data` 음성 바이트(`MEDIUMBLOB`) |
 | `HandoverCard` | `handover`, `careRecipient`(선택), `observedAt` 시각(선택), `statusChange` 변화(선택), `actionTaken` 조치(선택), `nextAction` 다음 행동(선택), **`evidenceText` 근거 원문 문장**, `safetyRelated` 안전 관련 여부, **`safetyFlagSource` 판정 출처**(`KEYWORD`/`STAFF`, 선택), **`reviewStatus` 검토 상태**(`NEEDS_REVIEW`/`REVIEWED`), `suggestedJobRole` 제안 직종(선택), `suggestedDueTime` 제안 기한(선택) |
 | `Task` | `handoverCard`, `content` 업무 내용, `assigneeJobRole` 담당 직종(선택), `assigneeName` 담당자 이름(선택), **`dueTime` 기한(`LocalTime`, 당일 HH:MM)**, `status`(`PENDING`/`DONE`), `completedAt` 완료 시각(선택), `completedByName` 완료 기록자(선택) |
+
+**원본 음성은 테이블을 나눠 둔다.** 카드 조회는 원문을 `join fetch`로 함께 읽는데(`HandoverCardRepository`),
+음성 바이트가 `Handover`에 있으면 카드 한 장을 볼 때마다 그날 녹음이 통째로 메모리에 올라온다.
+그래서 바이트는 `HandoverAudio`에 두고, "음성이 있는지"만 `Handover.audioMimeType`으로 남긴다.
+데모 규모라 파일 스토리지 없이 DB에 넣고, 한 건 상한은 10MB다(화면은 5분에서 스스로 멈춘다). ([#44](https://github.com/ieobom-team/ieobom/issues/44))
 
 **`Staff`는 위 그림에 없다.** 직원 명단(`name` 이름, `code` 사번(unique))은 진입 화면이 본인 선택 목록을
 그릴 때만 읽고, 인계·업무는 직원을 **이름 문자열**로 가리키므로 연관관계를 걸지 않는다.

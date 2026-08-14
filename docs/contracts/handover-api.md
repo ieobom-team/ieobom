@@ -203,7 +203,7 @@ AI 구조화는 이 API가 하지 않는다. (별도 Issue)
 | `reporterName` | string | ✅ | 입력자 이름. 1~50자 |
 | `proxyInput` | boolean | | 대리 입력 여부. 생략하면 `false` |
 | `infoSource` | enum | | `GUARDIAN` `DRIVER` `COLLEAGUE` `OTHER` |
-| `audioData` | string | | 음성 입력일 때 녹음된 오디오 파일 (Base64 Data URL) |
+| `audioData` | string | | 녹음한 원본 음성. Base64 Data URL(`data:audio/…;base64,…`). **`inputMethod: "VOICE"` 일 때만** 붙일 수 있고, 디코딩한 크기가 10MB를 넘으면 안 된다 |
 
 날짜·시각은 오프셋 없는 ISO-8601 지역 시각이다. (`2026-08-11T09:20:00`)
 
@@ -253,6 +253,9 @@ AI 구조화는 이 API가 하지 않는다. (별도 Issue)
 | `proxyInput: true` 인데 `infoSource` 없음 | `400` — `fields[].field = "infoSource"` |
 | `proxyInput`이 `false`/생략인데 `infoSource` 있음 | `400` — `fields[].field = "proxyInput"` |
 | `careRecipientId`가 없는 어르신 | `404` |
+| `inputMethod`가 `VOICE`가 아닌데 `audioData` 있음 | `400` — `fields[].field = "audioData"` |
+| `audioData`가 Data URL이 아니거나 형식이 `audio/*`가 아님 | `400` — `fields[].field = "audioData"` |
+| `audioData`가 10MB 초과 | `400` — `fields[].field = "audioData"` |
 
 두 번째·세 번째 규칙은 `F-YJJJUX` action 슬롯("대리 입력할 수 있으며, 이때 정보 출처를 함께 선택한다")에서 온다.
 대리 입력인데 출처가 비면 "누구에게서 나온 내용인지"가 사라지고,
@@ -264,11 +267,30 @@ AI 구조화는 이 API가 하지 않는다. (별도 Issue)
 
 ## `GET /api/handovers/{id}/audio`
 
-저장된 음성 파일을 재생하기 위해 부른다. (Manyfast `F-SNBVHR` 원본 음성 재생)
+저장된 원본 음성을 재생하려고 부른다. (Manyfast `F-SNBVHR` — 요약이 담지 못한 뉘앙스를 원본 음성으로 받는다)
+
+카드 상세의 `<audio>`가 직접 받아 간다. `apiFetch`가 아니라 브라우저가 부르므로
+프론트는 `apiUrl()`로 주소를 만든다.
 
 ### 응답
-- 성공: `200 OK` (Content-Type: `audio/webm`) + 오디오 바이너리
-- 오디오 없음: `404 Not Found`
+
+| 상황 | 결과 |
+|---|---|
+| 음성이 있음 | `200` + 오디오 바이너리. `Content-Type`은 **저장할 때 받은 값 그대로**다 (`audio/webm;codecs=opus` 등) |
+| 음성이 없거나 인계 기록 자체가 없음 | `404` — `code: "HANDOVER_AUDIO_NOT_FOUND"` |
+
+**재생 단위는 입력 한 건 전체다.** Web Speech API는 인식 결과에 타임스탬프를 주지 않아
+항목별 구간을 자르려면 STT를 갈아타야 한다. (Manyfast `F-SNBVHR` dataSpec 미결 질문 — #44)
+
+**형식을 고정하지 않는다.** 브라우저마다 녹음 형식이 다르고(Chrome은 `audio/webm;codecs=opus`),
+받은 값을 그대로 돌려줘야 재생된다.
+
+### 저장 위치와 용량
+
+- 데모 규모라 파일 스토리지를 두지 않고 **DB에 그대로** 넣는다. (`handover_audio.data`, `MEDIUMBLOB`)
+- 한 건 상한은 **10MB**다. 화면은 그 앞에서 **5분**에 녹음을 스스로 멈춘다.
+- 연결이 끊겨 대기열(`localStorage`)로 들어가는 입력에는 **음성을 담지 않는다.**
+  한 건이 저장 한도를 채우면 대기열 전체가 조용히 저장되지 않는다. 텍스트만 재전송하고, 화면이 그 사실을 알린다.
 
 ---
 

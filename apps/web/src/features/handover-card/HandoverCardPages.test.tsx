@@ -155,6 +155,43 @@ describe('인계 카드 목록 (n18 · n19)', () => {
     expect(within(card).getByText(/점심을 거의 안 드셨어요/)).toBeInTheDocument()
   })
 
+  /**
+   * 원본 음성 재생. (#44 · Manyfast F-SNBVHR)
+   *
+   * 재생 여부는 입력 방식이 아니라 저장된 음성이 있는지(`hasAudio`)로 갈린다 — 마이크 권한을
+   * 거부한 음성 입력에도 방식은 `VOICE` 로 남기 때문이다.
+   */
+  it('원본 음성이 있으면 근거 원문과 함께 재생할 수 있게 둔다', async () => {
+    목록_응답 = {
+      status: 200,
+      body: {
+        date: '2026-08-11',
+        recipients: [
+          {
+            careRecipientId: 1,
+            careRecipientName: '김말순',
+            cards: [카드({ hasAudio: true })],
+          },
+        ],
+        unresolved: [],
+      },
+    }
+    renderApp()
+
+    const card = await screen.findByRole('link', { name: /점심 식사량 저하/ })
+    // 텍스트 근거를 대체하지 않고 함께 둔다
+    expect(within(card).getByText(/점심을 거의 안 드셨어요/)).toBeInTheDocument()
+    const player = within(card).getByLabelText('원본 음성 재생')
+    expect(player).toHaveAttribute('src', '/api/handovers/12/audio')
+  })
+
+  it('저장된 원본 음성이 없으면 재생을 내보이지 않는다', async () => {
+    renderApp()
+
+    const card = await screen.findByRole('link', { name: /점심 식사량 저하/ })
+    expect(within(card).queryByLabelText('원본 음성 재생')).not.toBeInTheDocument()
+  })
+
   it('안전 관련 항목을 카드 묶음 맨 위에 둔다', async () => {
     목록_응답 = {
       status: 200,

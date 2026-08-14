@@ -20,6 +20,8 @@ import java.time.LocalTime;
  *     값과 돌려받는 값의 모양이 달라지면 화면이 굳이 다시 다듬어야 한다
  * @param exportAllowed 이 카드로 출력 문구를 만들 수 있는지. 화면은 이 값으로 버튼을 열고 닫는다
  * @param exportBlockedReason 만들 수 없는 이유. 만들 수 있으면 {@code null}
+ * @param hasAudio 원문에 재생할 원본 음성이 붙어 있는지. 화면은 이 값으로 재생 버튼을 그린다. <b>입력 방식이 음성인지와 다르다</b> — 마이크 권한을
+ *     거부했거나 녹음을 지원하지 않는 브라우저의 입력도 {@code VOICE} 로 저장되고, 그 카드에는 들을 음성이 없다
  */
 public record HandoverCardResponse(
 		Long id,
@@ -60,6 +62,6 @@ public record HandoverCardResponse(
 				card.canGenerateExport(),
 				card.exportBlockedReason(),
 				card.getCreatedAt(),
-				card.getHandover().getInputMethod() == com.ieobom.api.handover.InputMethod.VOICE);
+				card.getHandover().hasAudio());
 	}
 }

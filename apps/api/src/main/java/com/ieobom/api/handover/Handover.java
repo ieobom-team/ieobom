@@ -72,9 +72,18 @@ public class Handover extends BaseTimeEntity {
 	@Column(length = 20)
 	private InfoSource infoSource;
 
-	@jakarta.persistence.Lob
-	@Column(columnDefinition = "MEDIUMBLOB")
-	private byte[] audioData;
+	/**
+	 * 함께 저장한 원본 음성의 형식. 음성을 남기지 않았으면 비어 있다. (Manyfast F-SNBVHR — 요약이 담지 못한 뉘앙스는 원본 음성으로 받는다)
+	 *
+	 * <p>음성 <b>바이트는 여기 두지 않고</b> {@code HandoverAudio} 가 갖는다. 카드 목록 조회는 원문을 {@code join fetch}
+	 * 로 함께 읽으므로(HandoverCardRepository), 바이트를 이 엔티티에 두면 카드를 한 장 볼 때마다 그날의 음성 전부가 메모리로 올라온다. 반대로
+	 * "음성이 있는지"는 카드마다 그려야 하므로, 그 판단에 필요한 이 값만 원문 쪽에 남긴다.
+	 *
+	 * <p>브라우저마다 녹음 형식이 다르다(Chrome 은 {@code audio/webm;codecs=opus}). 재생할 때 그대로 돌려줘야 해서 형식을 고정하지
+	 * 않고 저장한다.
+	 */
+	@Column(length = 100)
+	private String audioMimeType;
 
 	@Builder
 	private Handover(
@@ -85,7 +94,7 @@ public class Handover extends BaseTimeEntity {
 			String reporterName,
 			boolean proxyInput,
 			InfoSource infoSource,
-			byte[] audioData) {
+			String audioMimeType) {
 		this.careRecipient = careRecipient;
 		this.rawText = rawText;
 		this.inputMethod = inputMethod;
@@ -93,6 +102,16 @@ public class Handover extends BaseTimeEntity {
 		this.reporterName = reporterName;
 		this.proxyInput = proxyInput;
 		this.infoSource = infoSource;
-		this.audioData = audioData;
+		this.audioMimeType = audioMimeType;
+	}
+
+	/**
+	 * 원본 음성이 함께 저장돼 있는지. 카드가 재생 버튼을 그릴지 정할 때 쓴다.
+	 *
+	 * <p>입력 방식이 {@code VOICE} 인 것과 같지 않다. 마이크 권한을 거부했거나 녹음을 지원하지 않는 브라우저에서도 인식된 텍스트는 {@code VOICE}
+	 * 로 저장되므로, 방식으로 판단하면 들을 음성이 없는 카드에 재생 버튼이 붙는다.
+	 */
+	public boolean hasAudio() {
+		return audioMimeType != null;
 	}
 }
