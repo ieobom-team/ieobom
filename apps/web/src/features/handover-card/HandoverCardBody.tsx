@@ -1,3 +1,4 @@
+import { AlertTriangle } from 'lucide-react'
 import { apiUrl } from '../../shared/api/client'
 import {
   cardEntries,
@@ -58,7 +59,8 @@ export function CardBadges({ card }: { card: HandoverCard }) {
   return (
     <>
       {card.safetyRelated && (
-        <span className="rounded-full bg-rose-100 px-3 py-1 text-lg font-bold text-rose-900">
+        <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-3 py-1 text-lg font-bold text-rose-900">
+          <AlertTriangle size={18} strokeWidth={2.4} aria-hidden="true" className="shrink-0" />
           안전 관련
         </span>
       )}

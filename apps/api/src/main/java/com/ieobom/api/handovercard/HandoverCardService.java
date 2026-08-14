@@ -42,9 +42,10 @@ public class HandoverCardService {
 	static final String CARE_RECIPIENT_NOT_FOUND = "CARE_RECIPIENT_NOT_FOUND";
 	static final String RECIPIENT_NOT_RESOLVED = "CARE_RECIPIENT_NOT_RESOLVED";
 
-	/** 안전 항목을 앞에 세우고, 같은 무게면 만들어진 순서대로. (Manyfast F-SNBVHR rules) */
+	/** 안전 항목을 앞에 세우고, 같은 무게면 최신 생성 순서대로. (Manyfast F-SNBVHR rules) */
 	private static final Comparator<HandoverCard> SAFETY_FIRST =
-			Comparator.comparing(HandoverCard::isSafetyRelated).reversed().thenComparing(HandoverCard::getId);
+			Comparator.comparing(HandoverCard::isSafetyRelated).reversed()
+					.thenComparing(HandoverCard::getId, Comparator.reverseOrder());
 
 	private final HandoverRepository handoverRepository;
 	private final HandoverCardRepository cardRepository;

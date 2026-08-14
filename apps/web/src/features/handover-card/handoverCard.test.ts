@@ -2,10 +2,16 @@ import { describe, expect, it } from 'vitest'
 import {
   cardEntries,
   chipTextsFor,
+  createdAtTimeLabel,
   dateLabel,
+  filterCards,
   findCard,
+  flattenCards,
+  getCardStats,
   observedTimeLabel,
   safetyFirst,
+  sortInboxCards,
+  sortLatestFirst,
   suggestionLabel,
   totalCardCount,
   uncertainFieldLabels,
@@ -47,23 +53,82 @@ describe('카드 항목', () => {
   })
 })
 
-describe('안전 관련 우선 배치', () => {
+describe('안전 관련 우선 배치 및 최신순 정렬', () => {
   it('안전 항목을 앞으로 보낸다', () => {
-    const 일반 = 카드({ id: 1, safetyRelated: false })
-    const 안전 = 카드({ id: 2, safetyRelated: true })
+    const 일반 = 카드({ id: 1, safetyRelated: false, createdAt: '2026-08-11T10:00:00' })
+    const 안전 = 카드({ id: 2, safetyRelated: true, createdAt: '2026-08-11T09:00:00' })
 
     expect(safetyFirst([일반, 안전]).map((card) => card.id)).toEqual([2, 1])
   })
 
-  it('같은 무게면 받은 순서를 바꾸지 않는다', () => {
+  it('같은 안전 상태면 최신 등록된 카드가 앞에 온다', () => {
     const 카드들 = [
-      카드({ id: 1, safetyRelated: false }),
-      카드({ id: 2, safetyRelated: true }),
-      카드({ id: 3, safetyRelated: false }),
-      카드({ id: 4, safetyRelated: true }),
+      카드({ id: 1, safetyRelated: false, createdAt: '2026-08-11T10:00:00' }),
+      카드({ id: 2, safetyRelated: true, createdAt: '2026-08-11T11:00:00' }),
+      카드({ id: 3, safetyRelated: false, createdAt: '2026-08-11T12:00:00' }),
+      카드({ id: 4, safetyRelated: true, createdAt: '2026-08-11T13:00:00' }),
     ]
 
-    expect(safetyFirst(카드들).map((card) => card.id)).toEqual([2, 4, 1, 3])
+    // 안전 항목(4, 2 최신순) -> 일반 항목(3, 1 최신순)
+    expect(safetyFirst(카드들).map((card) => card.id)).toEqual([4, 2, 3, 1])
+  })
+})
+
+describe('Inbox 정렬 및 필터링 (F-SNBVHR display · rules)', () => {
+  const 카드목록 = [
+    카드({ id: 1, careRecipientId: 1, reviewStatus: 'REVIEWED', safetyRelated: false, createdAt: '2026-08-11T09:00:00' }),
+    카드({ id: 2, careRecipientId: 1, reviewStatus: 'NEEDS_REVIEW', safetyRelated: false, createdAt: '2026-08-11T10:00:00' }),
+    카드({ id: 3, careRecipientId: 2, reviewStatus: 'NEEDS_REVIEW', safetyRelated: true, createdAt: '2026-08-11T11:00:00' }),
+    카드({ id: 4, careRecipientId: 2, reviewStatus: 'REVIEWED', safetyRelated: true, createdAt: '2026-08-11T12:00:00' }),
+  ]
+
+  it('검토 필요 탭은 검토 필요 카드 중 안전 항목 최신순 -> 일반 항목 최신순으로 정렬한다', () => {
+    const 결과 = filterCards(카드목록, 'NEEDS_REVIEW')
+    expect(결과.map((c) => c.id)).toEqual([3, 2])
+  })
+
+  it('안전 관련 탭은 안전 카드만 최신 등록순으로 보여준다', () => {
+    const 결과 = filterCards(카드목록, 'SAFETY')
+    expect(결과.map((c) => c.id)).toEqual([4, 3])
+  })
+
+  it('검토 완료 탭은 완료된 카드만 최신 등록순으로 보여준다', () => {
+    const 결과 = filterCards(카드목록, 'REVIEWED')
+    expect(결과.map((c) => c.id)).toEqual([4, 1])
+  })
+
+  it('sortLatestFirst는 등록 시각 최신순으로 정렬한다', () => {
+    const 정렬결과 = sortLatestFirst(카드목록)
+    expect(정렬결과.map((c) => c.id)).toEqual([4, 3, 2, 1])
+  })
+
+  it('sortInboxCards는 검토 필요 우선 -> 안전 우선 -> 최신순으로 정렬한다', () => {
+    const 정렬결과 = sortInboxCards(카드목록)
+    expect(정렬결과.map((c) => c.id)).toEqual([3, 2, 4, 1])
+  })
+
+  it('flattenCards와 getCardStats로 목록의 카드와 통계를 계산한다', () => {
+    const list: HandoverCardList = {
+      date: '2026-08-11',
+      recipients: [
+        { careRecipientId: 1, careRecipientName: '김말순', cards: [카드목록[0], 카드목록[1]] },
+        { careRecipientId: 2, careRecipientName: '박순자', cards: [카드목록[2], 카드목록[3]] },
+      ],
+      unresolved: [카드({ id: 5, careRecipientId: null, careRecipientName: null })],
+    }
+
+    expect(flattenCards(list)).toHaveLength(4)
+    const stats = getCardStats(list)
+    expect(stats.needsReviewCount).toBe(2)
+    expect(stats.safetyCount).toBe(2)
+    expect(stats.reviewedCount).toBe(2)
+    expect(stats.totalCount).toBe(5)
+    expect(stats.unresolvedCount).toBe(1)
+  })
+
+  it('createdAtTimeLabel은 등록 시각을 HH:MM으로 돌려준다', () => {
+    expect(createdAtTimeLabel('2026-08-11T13:45:00')).toBe('13:45')
+    expect(createdAtTimeLabel(null)).toBeNull()
   })
 })
 
