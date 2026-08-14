@@ -19,11 +19,18 @@ import { RequireSession } from './RequireSession'
  *   → n3 선택 역할? → n4 현장 근무자 홈(`/field`) / n5 관리자 홈(`/admin`)
  *   → n6 특이사항 남기기 → n7~n16 입력(`/field/handovers/new`)
  *   → n18 인계 카드 목록(`/handover-cards`) → n21 상세 / n24 검토 필요 항목
- *   n5 → n44 운영 현황(`/admin/dashboard`) → n46 → n47 하원 미처리 브리핑(`/admin/briefing`)
  *
- * 인계 카드는 `/field` 밑에 두지 않는다. 현장 근무자 홈(n4 → n18)에서도 들어오지만
- * 관리자 하원 미처리 브리핑(n49 → n21)에서도 같은 상세로 들어오기 때문이다.
- * 진입 선택은 요구하되 역할로 가르지 않는다. (Manyfast F-SNBVHR permissions)
+ * 운영 현황 구간은 **"AI 인계 도구 내비게이션 맵" 기준 번호**다. (#16)
+ *
+ *   n5 → n42 관리자 대시보드(`/admin/dashboard`)
+ *   → n48 브리핑 선택 → n44 하원 미처리 브리핑(`/admin/briefing`) → n45 미처리 건수·목록
+ *
+ * **두 플로우의 번호가 겹친다.** 위 구간의 n18 은 "새 플로우 3"의 인계 카드 **목록**이고, 아래 구간이
+ * 가리키는 n18 은 내비게이션 맵의 인계 카드 **상세**다. 번호만 보고 화면을 찾지 말고 이름을 함께 읽는다.
+ *
+ * 인계 카드는 `/field` 밑에 두지 않는다. 현장 근무자 홈(n4 → n18 인계 카드 목록)에서도 들어오지만
+ * 관리자 하원 미처리 브리핑(n46 인계 카드로 이동 → n18 인계 카드 상세 화면)에서도 같은 상세로
+ * 들어오기 때문이다. 진입 선택은 요구하되 역할로 가르지 않는다. (Manyfast F-SNBVHR permissions)
  */
 export function AppRoutes() {
   return (

@@ -8,20 +8,26 @@ import type { TaskResponse } from '../task/taskApi'
  * `features/task/taskApi.ts` 의 `TaskResponse` 를 그대로 쓴다. 같은 값을 두 곳에 적으면 둘이 갈라진다.
  */
 
-/** 미처리와 완료를 나눠서. 대시보드(유저플로우 n44 · n45)가 두 영역을 동시에 그린다. */
+/**
+ * 미처리와 완료를 나눠서.
+ *
+ * 대시보드(유저플로우 "AI 인계 도구 내비게이션 맵" n42 관리자 대시보드 · n43 당일 인계·업무 현황)가
+ * 두 영역을 동시에 그린다.
+ */
 export type TaskList = {
   date: string
   pending: TaskResponse[]
   done: TaskResponse[]
-  /** 목록을 잘라 보여 줘도 줄지 않는 값. 지금 화면은 표시하지 않는다 */
+  /** 목록을 잘라 보여 줘도 줄지 않는 값. 화면은 배열 길이가 아니라 이 값을 그린다 */
   pendingCount: number
   doneCount: number
 }
 
-/** 그날 아직 안 닫힌 것만. 완료를 담을 자리가 없다 (유저플로우 n47 · n48) */
+/** 그날 아직 안 닫힌 것만. 완료를 담을 자리가 없다 (n44 하원 미처리 브리핑 · n45 미처리 건수·목록) */
 export type TaskBriefing = {
   date: string
   pending: TaskResponse[]
+  /** 브리핑이 목록과 별도로 세워 보여 주는 숫자. (Manyfast R-MFISQE 수락기준) */
   pendingCount: number
 }
 

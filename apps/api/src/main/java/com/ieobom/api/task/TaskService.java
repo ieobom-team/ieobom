@@ -97,7 +97,10 @@ public class TaskService {
 	}
 
 	/**
-	 * 그날 업무를 미처리와 완료로 나눠 돌려준다. (Manyfast F-HQTFLK action, 유저플로우 n44 · n45)
+	 * 그날 업무를 미처리와 완료로 나눠 돌려준다. (Manyfast F-HQTFLK action, 유저플로우 "AI 인계 도구 내비게이션 맵" n42 관리자 대시보드 ·
+	 * n43 당일 인계·업무 현황)
+	 *
+	 * <p>이 파일의 배정·완료 쪽 번호(n21 · n34 등)는 아직 "새 플로우 3" 기준이다. 두 플로우에서 같은 번호가 다른 화면을 가리킨다.
 	 *
 	 * <p>인계 카드를 여기 같이 담지 않는다. 대시보드는 인계와 업무를 <b>따로</b> 불러서 한쪽이 실패해도 성공한 쪽을 그대로 보여 줘야 한다.
 	 * (Manyfast F-HQTFLK exceptions) 한 응답으로 합치면 부분 실패를 구분할 자리가 사라진다.
@@ -114,7 +117,8 @@ public class TaskService {
 	}
 
 	/**
-	 * 그날 아직 닫히지 않은 업무. (Manyfast F-HQTFLK trigger · display, 유저플로우 n46 → n47 · n48)
+	 * 그날 아직 닫히지 않은 업무. (Manyfast F-HQTFLK trigger · display, 유저플로우 n48 브리핑 선택 → n44 하원 미처리 브리핑 · n45 미처리
+	 * 건수·목록)
 	 *
 	 * <p>대시보드 조회와 같은 데이터를 보지만 <b>엔드포인트를 나눈다.</b> Manyfast 가 대시보드 조회와 브리핑 확인을 서로 다른 이벤트로 남기라고
 	 * 하는데, 같은 호출을 두 화면이 함께 쓰면 로그에서 둘을 가를 수 없다. (Manyfast F-HQTFLK outcome)

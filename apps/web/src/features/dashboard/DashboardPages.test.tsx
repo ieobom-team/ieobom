@@ -14,8 +14,11 @@ import type { TaskResponse } from '../task/taskApi'
 /**
  * 당일 운영 현황 대시보드와 하원 미처리 브리핑. (Manyfast F-HQTFLK, #16)
  *
- * 여기서 보는 것은 세 가지다. 인계·미처리·완료가 **구분돼** 보이는가, **한쪽 조회가 실패해도 성공한
- * 영역이 남는가**, 그리고 대리 완료 표시가 목록에서도 맞는가.
+ * 여기서 보는 것은 네 가지다. 인계·미처리·완료가 **구분돼** 보이는가, **한쪽 조회가 실패해도 성공한
+ * 영역이 남는가**, **미처리 건수가 목록과 별도로 숫자로 뜨는가**, 그리고 대리 완료 표시가 목록에서도
+ * 맞는가.
+ *
+ * 노드 번호는 유저플로우 "AI 인계 도구 내비게이션 맵" 기준이다.
  */
 
 const 김하늘 = STAFF_DIRECTORY[0]
@@ -155,7 +158,7 @@ function 영역(name: string) {
   return within(screen.getByRole('region', { name }))
 }
 
-describe('당일 운영 현황 대시보드 (n44 · n45)', () => {
+describe('당일 운영 현황 대시보드 (n42 관리자 대시보드 · n43 당일 인계·업무 현황)', () => {
   it('당일 인계 · 미처리 · 완료를 구분해 보여 준다', async () => {
     renderApp()
 
@@ -186,7 +189,7 @@ describe('당일 운영 현황 대시보드 (n44 · n45)', () => {
     const 미처리 = 영역('미처리 업무')
     await user.click(await 미처리.findByRole('link', { name: '인계 카드 보기' }))
 
-    // n49 → n21. 카드 상세는 어르신 이름을 제목으로 연다.
+    // n46 인계 카드로 이동 → n18 인계 카드 상세 화면. 카드 상세는 어르신 이름을 제목으로 연다.
     expect(await screen.findByRole('heading', { name: '김말순', level: 1 })).toBeInTheDocument()
     // 근거 원문은 따옴표와 텍스트가 다른 노드로 나뉘어 그려진다.
     expect(screen.getByText(/점심을 거의 안 드셨어요/)).toBeInTheDocument()
@@ -238,16 +241,35 @@ describe('당일 운영 현황 대시보드 (n44 · n45)', () => {
     expect(안내).toHaveAttribute('href', '/handover-cards/unresolved')
   })
 
-  it('건수를 숫자로 강조하지 않는다', async () => {
+  it('미처리 영역에 건수를 함께 붙인다', async () => {
     renderApp()
 
     await screen.findByText('저녁 식사량 확인')
-    // 응답에는 pendingCount 가 있지만 표시는 Manyfast 미확정이라 화면에 올리지 않는다.
-    expect(영역('미처리 업무').queryByText(/1건/)).toBeNull()
+    expect(영역('미처리 업무').getByText('1건')).toBeInTheDocument()
+  })
+
+  it('건수는 목록 길이가 아니라 pendingCount 를 그린다', async () => {
+    // 목록을 잘라 보여 주더라도 "오늘 몇 건이 안 닫혔는가"는 줄면 안 된다. (task-api.md)
+    업무_응답 = {
+      status: 200,
+      body: { date: '2026-08-13', pending: [업무()], done: [], pendingCount: 7, doneCount: 0 },
+    }
+    renderApp()
+
+    expect(await 영역('미처리 업무').findByText('7건')).toBeInTheDocument()
+    expect(영역('미처리 업무').queryByText('1건')).toBeNull()
+  })
+
+  it('영역 이름은 건수에 끌려가지 않는다', async () => {
+    renderApp()
+
+    // 건수를 제목 안에 넣으면 영역 이름이 매일 바뀐다. 제목과 나란히 두고 이름은 고정한다.
+    await screen.findByText('저녁 식사량 확인')
+    expect(screen.getByRole('region', { name: '미처리 업무' })).toBeInTheDocument()
   })
 })
 
-describe('하원 미처리 브리핑 (n46 → n47 · n48)', () => {
+describe('하원 미처리 브리핑 (n48 브리핑 선택 → n44 브리핑 · n45 미처리 건수·목록)', () => {
   it('대시보드에서 브리핑으로 이동한다', async () => {
     const user = userEvent.setup()
     renderApp()
@@ -278,11 +300,26 @@ describe('하원 미처리 브리핑 (n46 → n47 · n48)', () => {
     expect(호출.some((path) => path.includes('/api/tasks/pending-briefing'))).toBe(true)
   })
 
-  it('미처리가 없으면 없다고 알린다', async () => {
+  it('미처리 건수를 목록과 별도로 숫자로 보여 준다', async () => {
+    // 이 화면이 파는 것은 목록이 아니라 숫자다. (Manyfast R-MFISQE 수락기준, n45 미처리 건수·목록)
+    브리핑_응답 = {
+      status: 200,
+      body: { date: '2026-08-13', pending: [업무()], pendingCount: 4 },
+    }
+    renderApp('/admin/briefing')
+
+    // 목록에 한 건만 실려 와도 숫자는 서버가 센 값 그대로다.
+    expect(await screen.findByText('4건')).toBeInTheDocument()
+    expect(screen.getByText('저녁 식사량 확인')).toBeInTheDocument()
+  })
+
+  it('미처리가 없으면 0건과 함께 없다고 알린다', async () => {
     브리핑_응답 = { status: 200, body: { date: '2026-08-13', pending: [], pendingCount: 0 } }
     renderApp('/admin/briefing')
 
     expect(await screen.findByText('지금 미처리로 남은 업무가 없습니다.')).toBeInTheDocument()
+    // 0 도 답이다. 오늘 넘어간 것이 없다는 것을 숫자로 남긴다.
+    expect(screen.getByText('0건')).toBeInTheDocument()
   })
 
   it('불러오지 못하면 다시 불러올 수 있다', async () => {

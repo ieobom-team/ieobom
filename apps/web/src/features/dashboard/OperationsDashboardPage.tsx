@@ -8,7 +8,7 @@ import { TasksLoadFailed, TasksLoading } from './TasksLoadState'
 import { useTodayTasks } from './useTodayTasks'
 
 /**
- * 유저플로우 n44 · n45 — 당일 운영 현황 대시보드.
+ * 유저플로우 "AI 인계 도구 내비게이션 맵" n42 관리자 대시보드 · n43 당일 인계·업무 현황.
  *
  * 당일 인계 · 미처리 업무 · 완료 업무를 **구분해서** 보여 준다. (Manyfast F-HQTFLK display)
  * 이 화면이 하는 일은 하원 전에 오늘 무엇이 확인되지 않았는지를 눈으로 닫는 것 하나다.
@@ -16,8 +16,9 @@ import { useTodayTasks } from './useTodayTasks'
  * 인계와 업무를 **따로 부른다.** 한쪽이 실패해도 성공한 쪽은 그대로 보여 줘야 하기 때문이다.
  * (Manyfast F-HQTFLK exceptions) 그래서 로딩·실패·빈 상태를 화면 전체가 아니라 영역마다 그린다.
  *
- * 건수를 숫자로 강조하지 않는다. 응답에는 들어 있지만(`pendingCount`) 그 표시는 Manyfast 에 아직
- * 확정되지 않은 제안이라 화면에 올리지 않는다.
+ * 미처리 영역에는 건수를 함께 붙인다. 명세가 건수를 요구하는 자리는 브리핑(n45 미처리 건수·목록)이지만,
+ * 관리자가 먼저 여는 화면이 여기라 같은 숫자를 여기서도 보여 준다. 제목과 나란히 두되 제목 안에 넣지
+ * 않는다 — 영역 이름이 "미처리 업무 3건"으로 바뀌면 영역을 이름으로 가리키는 쪽이 숫자에 끌려간다.
  *
  * 데스크톱 웹 기준이다. 현장 입력 화면들과 달리 관리자가 자리에 앉아 보는 화면이다.
  */
@@ -40,7 +41,7 @@ export function OperationsDashboardPage() {
               <p className="mt-2 text-xl text-slate-600">{dateLabel(기준일)}</p>
             )}
           </div>
-          {/* n46 — 하원 시점에 미처리를 우선 확인하는 길. (Manyfast F-HQTFLK trigger) */}
+          {/* n48 브리핑 선택 — 하원 시점에 미처리를 우선 확인하는 길. (Manyfast F-HQTFLK trigger) */}
           <Link
             to="/admin/briefing"
             className="rounded-2xl bg-teal-700 px-6 py-4 text-xl font-semibold text-white"
@@ -105,9 +106,14 @@ export function OperationsDashboardPage() {
           </section>
 
           <section aria-labelledby="dashboard-pending" className="flex flex-col gap-4">
-            <h2 id="dashboard-pending" className="text-2xl font-bold text-slate-900">
-              미처리 업무
-            </h2>
+            <div className="flex flex-wrap items-baseline gap-3">
+              <h2 id="dashboard-pending" className="text-2xl font-bold text-slate-900">
+                미처리 업무
+              </h2>
+              {taskList !== undefined && (
+                <span className="text-2xl font-bold text-teal-800">{taskList.pendingCount}건</span>
+              )}
+            </div>
 
             {tasks.isPending && <TasksLoading />}
             {tasks.isError && <TasksLoadFailed onRetry={() => void tasks.refetch()} />}

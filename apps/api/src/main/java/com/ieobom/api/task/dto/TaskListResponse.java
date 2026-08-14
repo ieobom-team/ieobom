@@ -31,8 +31,8 @@ public record TaskListResponse(
 	 * <p>"오늘 몇 건이 확인되지 않은 채 넘어갔는가"는 목록을 그리기 위한 값이 아니라 <b>그 자체가 답인 값</b>이다. 화면이 배열 길이를 세게 하면
 	 * 목록을 잘라 보여 주는 순간 숫자도 같이 줄어든다.
 	 *
-	 * <p>다만 <b>지금 화면은 이 숫자를 표시하지 않는다.</b> 건수 표시는 Manyfast 에 아직 확정되지 않은 제안이라, 확정되면 서버를 고치지 않고
-	 * 화면만 붙일 수 있도록 응답에만 담아 둔다.
+	 * <p><b>화면이 이 숫자를 그대로 그린다.</b> 하원 미처리 브리핑은 목록과 별도로 건수를 세워 보여 주고(Manyfast R-MFISQE 수락기준,
+	 * 유저플로우 "AI 인계 도구 내비게이션 맵" n45 미처리 건수·목록), 대시보드 미처리 영역에도 같은 숫자를 붙인다.
 	 */
 	public static TaskListResponse of(
 			LocalDate date, List<TaskResponse> pending, List<TaskResponse> done) {
