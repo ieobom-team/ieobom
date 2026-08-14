@@ -6,6 +6,7 @@ import com.ieobom.api.common.RequestValidationException;
 import com.ieobom.api.handovercard.HandoverCard;
 import com.ieobom.api.handovercard.HandoverCardRepository;
 import com.ieobom.api.recipient.CareRecipient;
+import com.ieobom.api.task.dto.TaskBriefingResponse;
 import com.ieobom.api.task.dto.TaskCompleteResponse;
 import com.ieobom.api.task.dto.TaskCreateRequest;
 import com.ieobom.api.task.dto.TaskListResponse;
@@ -13,6 +14,7 @@ import com.ieobom.api.task.dto.TaskResponse;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,9 +37,22 @@ public class TaskService {
 	static final String TASK_ALREADY_CREATED = "TASK_ALREADY_CREATED";
 	static final String TASK_NOT_FOUND = "TASK_NOT_FOUND";
 
-	/** 미처리를 먼저, 그 안에서는 기한이 이른 순. 완료는 뒤에 두고 기한 순으로 묶는다. 화면이 먼저 봐야 하는 건 아직 안 닫힌 일이다. */
+	/** 전체 목록용 정렬: 미처리를 먼저, 그 안에서는 기한이 이른 순. 완료는 뒤에 두고 기한 순으로 묶는다. */
 	private static final Comparator<Task> PENDING_FIRST_BY_DUE_TIME =
 			Comparator.comparing(Task::isDone).thenComparing(Task::getDueTime);
+
+	/**
+	 * 미처리는 기한이 이른 것부터. 하원 전에 무엇부터 확인해야 하는지가 그대로 순서다.
+	 *
+	 * <p>기한이 같으면 먼저 만들어진 것을 앞에 둔다. 같은 값일 때의 순서를 정해 두지 않으면 새로고침할 때마다 목록이 흔들려서, 방금 본 항목을 다시 찾게
+	 * 된다.
+	 */
+	private static final Comparator<Task> BY_DUE_TIME =
+			Comparator.comparing(Task::getDueTime).thenComparing(Task::getId);
+
+	/** 완료는 방금 닫힌 것부터. 관리자가 보는 것은 "무엇이 처리됐는가"이고 그 답은 최근에 있다. */
+	private static final Comparator<Task> BY_COMPLETED_AT_DESC =
+			Comparator.comparing(Task::getCompletedAt).reversed().thenComparing(Task::getId);
 
 	private final TaskRepository taskRepository;
 	private final HandoverCardRepository cardRepository;
@@ -86,21 +101,55 @@ public class TaskService {
 	}
 
 	/**
-	 * 그날 만들어진 업무 전체. (유저플로우 "새 플로우 3" n31 · n32)
-	 *
-	 * <p>건수 집계나 하원 미처리 브리핑은 여기서 만들지 않는다. 그건 당일 현황을 종합해서 보여주는
-	 * 대시보드(Manyfast F-HQTFLK, #16)의 몫이고, 여기서는 그날의 업무를 있는 그대로 나열만 한다.
+	 * 그날 업무를 돌려준다. 현장 근무자 목록용 tasks와 대시보드용 pending/done을 모두 담는다.
+	 * (Manyfast F-IVFNPC display, Manyfast F-HQTFLK action)
 	 */
 	@Transactional(readOnly = true)
 	public TaskListResponse findByDate(LocalDate date) {
-		List<TaskResponse> tasks =
-				taskRepository.findCreatedBetween(date.atStartOfDay(), date.plusDays(1).atStartOfDay())
-						.stream()
-						.sorted(PENDING_FIRST_BY_DUE_TIME)
-						.map(TaskResponse::from)
-						.toList();
+		List<Task> tasks = findCreatedOn(date);
 
-		return new TaskListResponse(date, tasks);
+		List<TaskResponse> all =
+				tasks.stream().sorted(PENDING_FIRST_BY_DUE_TIME).map(TaskResponse::from).toList();
+		List<TaskResponse> pending = sortedResponses(tasks, task -> !task.isDone(), BY_DUE_TIME);
+		List<TaskResponse> done = sortedResponses(tasks, Task::isDone, BY_COMPLETED_AT_DESC);
+
+		logDashboardViewed(date, pending.size(), done.size());
+		return TaskListResponse.of(date, all, pending, done);
+	}
+
+	/**
+	 * 그날 아직 닫히지 않은 업무. (Manyfast F-HQTFLK trigger · display, 유저플로우 n48 브리핑 선택 → n44 하원 미처리 브리핑 · n45 미처리
+	 * 건수·목록)
+	 *
+	 * <p>대시보드 조회와 같은 데이터를 보지만 <b>엔드포인트를 나눈다.</b> Manyfast 가 대시보드 조회와 브리핑 확인을 서로 다른 이벤트로 남기라고
+	 * 하는데, 같은 호출을 두 화면이 함께 쓰면 로그에서 둘을 가를 수 없다. (Manyfast F-HQTFLK outcome)
+	 *
+	 * <p><b>브리핑을 연 것을 확인으로 본다.</b> "확인했음" 버튼을 따로 두지 않는다. 이 화면은 누락을 막아 준다고 약속하지 않고 남은 것을 보여
+	 * 주는 데서 멈추는데, 확인 버튼은 그것을 닫았다는 느낌으로 바꾼다.
+	 */
+	@Transactional(readOnly = true)
+	public TaskBriefingResponse briefing(LocalDate date) {
+		List<TaskResponse> pending =
+				sortedResponses(findCreatedOn(date), task -> !task.isDone(), BY_DUE_TIME);
+
+		logBriefingConfirmed(date, pending.size());
+		return TaskBriefingResponse.of(date, pending);
+	}
+
+	/**
+	 * 그날 <b>만들어진</b> 업무. (Manyfast F-HQTFLK dataSpec)
+	 *
+	 * <p>어제 만들어져 아직 미처리인 업무는 여기 걸리지 않는다. 당일만 보는 것이 명세이고 자동 승계도 없기 때문이다. (Manyfast F-HQTFLK
+	 * rules) 그런 업무가 어느 화면에도 뜨지 않는다는 뜻이므로, 현장에서 문제가 되면 {@code propose-change} 로 올릴 지점이다.
+	 */
+	private List<Task> findCreatedOn(LocalDate date) {
+		return taskRepository.findCreatedBetween(
+				date.atStartOfDay(), date.plusDays(1).atStartOfDay());
+	}
+
+	private List<TaskResponse> sortedResponses(
+			List<Task> tasks, Predicate<Task> filter, Comparator<Task> order) {
+		return tasks.stream().filter(filter).sorted(order).map(TaskResponse::from).toList();
 	}
 
 	/**
@@ -206,5 +255,25 @@ public class TaskService {
 				task.getDueTime(),
 				task.getCompletedAt(),
 				task.isDelegated());
+	}
+
+	/**
+	 * 대시보드 조회 이벤트. (Manyfast F-HQTFLK outcome)
+	 *
+	 * <p>배정 · 완료 쪽과 같은 이유로 별도 테이블 없이 애플리케이션 로그로 남긴다. <b>업무 내용도 어르신도 담당자 이름도 남기지 않는다.</b>
+	 * 목록 조회는 하루에 여러 번 도는 호출이라, 여기에 내용을 실으면 로그 파일이 그날 어르신들의 상태 기록이 된다. 남기는 것은 건수뿐이다.
+	 */
+	private void logDashboardViewed(LocalDate date, int pendingCount, int doneCount) {
+		log.info("운영 현황 조회 — 기준일={}, 미처리={}건, 완료={}건", date, pendingCount, doneCount);
+	}
+
+	/**
+	 * 하원 미처리 브리핑 확인 이벤트. (Manyfast F-HQTFLK outcome)
+	 *
+	 * <p>대시보드 조회와 <b>따로</b> 남긴다. Manyfast 가 두 이벤트를 구분해 요구하는 이유는, 관리자가 현황을 훑어본 것과 하원 전에 남은 것을
+	 * 실제로 펴 본 것이 다른 행동이기 때문이다. 도입 효과를 나중에 물을 때 답이 되는 쪽은 뒤엣것이다.
+	 */
+	private void logBriefingConfirmed(LocalDate date, int pendingCount) {
+		log.info("하원 미처리 브리핑 확인 — 기준일={}, 미처리={}건", date, pendingCount);
 	}
 }

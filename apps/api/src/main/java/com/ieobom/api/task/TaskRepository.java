@@ -30,8 +30,11 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 	/**
 	 * 그날 만들어진 업무. 연결 카드와 어르신까지 함께 읽는다.
 	 *
-	 * <p>업무의 {@code createdAt} 으로 하루를 가른다({@code HandoverCardRepository.findCreatedBetween} 과 같은
-	 * 방식). 기한이 항상 당일 시각이므로, 업무를 배정한 날이 곧 그 업무가 속한 날이다.
+	 * <p>기준이 기한이 아니라 <b>생성 시점</b>이다. (Manyfast F-HQTFLK dataSpec) 기한으로 자르면 어제 만든 업무가 오늘 기한이라는
+	 * 이유로 오늘 목록에 섞이는데, 이 제품의 기한은 날짜가 없는 당일 시각이라 그런 비교 자체가 성립하지 않는다.
+	 *
+	 * <p>정렬은 여기서 하지 않고 조회한 뒤 자바에서 한다. 미처리는 기한 순, 완료는 완료 시각 역순으로 서로 다른 기준을 쓰고, 같은 값일 때의 순서까지
+	 * 고정해야 화면이 흔들리지 않는다. (카드 목록과 같은 방침)
 	 */
 	@Query(
 			"""
