@@ -26,7 +26,7 @@
 
 ## 테이블
 
-8개다. `handover_card_suggested_action` 은 엔티티가 아니라 `@ElementCollection` 컬렉션 테이블이라
+9개다. `handover_card_suggested_action` 은 엔티티가 아니라 `@ElementCollection` 컬렉션 테이블이라
 엔티티 목록에는 없지만 **없으면 카드 조회가 바로 실패한다.**
 
 모든 **엔티티** 테이블은 `BaseTimeEntity` 를 상속해 `created_at` · `updated_at` (`datetime(6) not null`)
@@ -52,7 +52,11 @@
 | `code` | `varchar(30)` | ✕ | 사번 (`ST-001`…). `uk_staff_code` |
 | `job_role` | `enum('CAREGIVER','CENTER_HEAD','DRIVER','NURSE_AIDE','SOCIAL_WORKER')` | ✕ | 담당 직종 5종 |
 
-**다른 테이블과 외래키로 이어지지 않는다.** 인계·업무는 직원을 이름 문자열로 가리킨다.
+**인계·업무는 직원을 이름 문자열로 가리킨다.** `handover.reporter_name` · `task.assignee_name` ·
+`task.completed_by_name` 에 외래키가 없는 것은 그래서다.
+
+**외래키가 걸리는 곳은 `notification.recipient_staff_id` 하나뿐이다.** 업무는 앱을 쓰지 않는
+직종에도 배정되므로 가리킬 직원 행이 없을 수 있지만, 알림은 받을 사람이 명단에 있어야만 만들어진다.
 
 ### `handover` — 원본 인계 입력
 
@@ -134,6 +138,9 @@ PK 는 **`(sort_order, handover_card_id)`** 다. 값 목록이라 `id` 도 `crea
 | `content` | `varchar(500)` | ✕ | |
 | `assignee_job_role` | `enum(…5종…)` | ○ | 판단 근거가 없으면 비운다 |
 | `assignee_name` | `varchar(50)` | ○ | |
+| `assignee_staff_code` | `varchar(30)` | ○ | 담당자 사번. **FK 가 아니라 문자열이다** |
+| `claimed_at` | `datetime(6)` | ○ | 담당이 정해진 시각 |
+| `claim_method` | `enum('DIRECT_ASSIGN','SELF_CLAIM')` | ○ | 담당 확정 방식 |
 | `due_time` | **`time`** | ✕ | **당일 HH:MM** |
 | `status` | `enum('DONE','PENDING')` | ✕ | 중간 상태를 만들지 않는다 |
 | `completed_at` | `datetime(6)` | ○ | |
@@ -141,6 +148,15 @@ PK 는 **`(sort_order, handover_card_id)`** 다. 값 목록이라 `id` 도 `crea
 
 **`due_time` 이 `date`/`datetime` 이 아니라 `time` 인 이유**는 어르신이 당일 귀가하기 때문이다.
 날짜 단위 기한과 익일 기한을 쓰지 않는다. ([task-api.md](task-api.md))
+
+**`assignee_staff_code` 는 `staff` 외래키가 아니다.** 담당자를 이름 문자열로 두는 결정을 뒤집지
+않았다 — 앱을 쓰지 않는 직종에 배정된 업무는 가리킬 직원 행 자체가 없다. 사번은 **알림을 보낼 수
+있을 때만** 채워지는 보조 값이고, 비어 있어도 업무는 온전하다. 이름을 두고도 사번을 따로 두는 이유는
+동명이인이다. ([#70](https://github.com/ieobom-team/ieobom/issues/70), [notification-api.md](notification-api.md))
+
+**`claim_method` 는 상태가 아니다.** 업무 상태는 `status` 의 `PENDING`/`DONE` 두 값 그대로이고,
+`claim_method` 는 담당자 정보의 일부다. 담당자가 있을 때만 값을 가진다.
+([#73](https://github.com/ieobom-team/ieobom/issues/73))
 
 ### `export_phrase` — 출력 문구
 
@@ -157,11 +173,35 @@ PK 는 **`(sort_order, handover_card_id)`** 다. 값 목록이라 `id` 도 `crea
 
 `uk_export_phrase_card_type (handover_card_id, phrase_type)` — 카드 하나에 종류별 한 줄이다.
 
+### `notification` — 앱 안 알림
+
+| 컬럼 | 타입 | NULL | 비고 |
+|---|---|---|---|
+| `id` | `bigint` | ✕ | PK, auto_increment |
+| `recipient_staff_id` | `bigint` | ✕ | 받는 직원. FK `fk_notification_recipient_staff` |
+| `task_id` | `bigint` | ✕ | 가리키는 업무. FK `fk_notification_task` |
+| `type` | `enum('ASSIGNEE_CHANGED','DELEGATED_COMPLETION','TASK_ASSIGNED')` | ✕ | |
+| `actor_name` | `varchar(50)` | ○ | 알림을 일으킨 사람 |
+| `read_at` | `datetime(6)` | ○ | 읽기 전까지 비어 있다 |
+
+`uk_notification_task_recipient_type (task_id, recipient_staff_id, type)` —
+같은 업무·같은 수신자·같은 종류가 두 번 쌓이지 않는다.
+
+**`staff` 가 다른 테이블과 외래키로 이어지는 유일한 지점이다.** 업무의 담당자는 이름 문자열이지만,
+알림은 **받을 사람이 명단에 있어야만** 만들어진다. 받는 사람이 없는 알림은 조회될 길이 없다.
+
+**알림 본문 문자열을 저장하지 않는다.** 어르신 이름·업무 내용·기한은 조회 시점에 업무에서 읽는다.
+문장을 저장해 두면 업무가 바뀌었을 때(누군가 맡거나 완료하거나) 알림함이 옛말을 하게 된다.
+`actor_name` 만 예외인데, 알림을 일으킨 사람은 그 시점의 사실이라 업무에서 되짚을 수 없다.
+([notification-api.md](notification-api.md))
+
 ## 알아 둘 것
 
 **enum 컬럼은 `varchar` 가 아니라 MySQL 네이티브 `enum(...)` 이다.**
 Hibernate 7 + `MySQLDialect` 가 `@Enumerated(STRING)` 을 그렇게 매핑한다. 값 순서는 알파벳순이다.
-값을 늘리려면 `ALTER TABLE … MODIFY` 가 필요하고, 그건 V2 이후의 마이그레이션이다.
+`@Column(length = …)` 을 붙여도 무시된다 — `notification.type` 이 `length = 30` 을 달고도
+`enum(...)` 으로 나오는 것이 그 예다.
+**값을 늘리면 `ALTER TABLE … MODIFY` 가 필요하고, 그건 V2 이후의 마이그레이션이다.**
 
 **명시적 인덱스가 하나도 없다.** MySQL 이 FK 에 자동으로 붙이는 인덱스와 위의 unique 뿐이다.
 조회 패턴에 맞는 인덱스 추가는 별도 Issue 로 뗀다.
@@ -180,11 +220,15 @@ Hibernate 7 + `MySQLDialect` 가 `@Enumerated(STRING)` 을 그렇게 매핑한�
 ### V1 은 어떻게 만들었나
 
 손으로 적지 않았다. 빈 스키마에 `ddl-auto: create` 로 한 번 띄워 Hibernate 가 실제로 만든 DDL 을
-`SHOW CREATE TABLE` 로 떠서 옮겼다. 손으로 적었으면 아래 셋을 틀렸다.
+`SHOW CREATE TABLE` 로 떠서 옮겼다. 손으로 적었으면 아래 넷을 틀렸다.
 
-- enum 컬럼이 `varchar` 가 아니라 네이티브 `enum(...)` 인 것
+- enum 컬럼이 `varchar` 가 아니라 네이티브 `enum(...)` 인 것 (`length` 를 붙여도 무시된다)
 - `due_time` · `suggested_due_time` 이 `time(6)` 이 아니라 `time` 인 것
 - 컬렉션 테이블 PK 가 `(sort_order, handover_card_id)` 순서인 것
+- `notification` 의 복합 unique 가 `(task_id, recipient_staff_id, type)` 순서인 것
+
+**엔티티가 바뀌면 같은 방법으로 다시 뜬다.** `#70`(알림) · `#73`(담당 확정)이 들어왔을 때도
+V1 을 손으로 고치지 않고 이 절차를 다시 돌렸다.
 
 ## 로컬 DB 초기화 — V1 병합 후 한 번
 

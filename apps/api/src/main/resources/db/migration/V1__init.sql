@@ -1,14 +1,17 @@
 -- V1 — 스키마 고정. (#19)
 --
 -- 이 파일은 손으로 적은 것이 아니라 **Hibernate 가 실제로 만든 DDL 을 옮긴 것이다.**
--- 빈 스키마에 `ddl-auto: create` 로 한 번 띄운 뒤 `SHOW CREATE TABLE` 8 개를 떠서 정리했다.
--- 손으로 적었으면 아래 셋을 전부 틀렸다.
+-- 빈 스키마에 `ddl-auto: create` 로 한 번 띄운 뒤 `SHOW CREATE TABLE` 9 개를 떠서 정리했다.
+-- 손으로 적었으면 아래 넷을 전부 틀렸다.
 --
 --   * enum 컬럼은 varchar 가 아니라 MySQL 네이티브 `enum(...)` 이다. (Hibernate 7 + MySQLDialect)
+--     `@Column(length = 30)` 을 붙여도 무시된다 — `notification.type` 이 그 예다.
 --   * `due_time` · `suggested_due_time` 은 `time(6)` 이 아니라 `time` 이다.
 --   * `handover_card_suggested_action` 의 PK 는 `(sort_order, handover_card_id)` 순서다.
+--   * `notification` 의 복합 unique 는 `(task_id, recipient_staff_id, type)` 순서다.
 --
 -- 컬럼 순서만 읽기 좋게 바꿨다. (실제 테이블은 Hibernate 가 타입별로 재배치한다 — 검증과 무관)
+-- 테이블 순서는 외래키가 가리키는 쪽이 먼저 오도록 잡았다.
 -- 문자셋·콜레이션은 서버 기본값에 기대지 않고 테이블마다 명시한다. 배포 서버 설정이 달라도 같게 만든다.
 --
 -- 규칙: **이 파일은 병합 후 고치지 않는다.** 스키마 변경은 항상 V2, V3 … 을 새로 추가한다.
@@ -108,18 +111,24 @@ create table handover_card_suggested_action (
 ) engine = InnoDB default charset = utf8mb4 collate = utf8mb4_unicode_ci;
 
 -- due_time 이 date 가 아니라 time 인 이유는 docs/contracts/task-api.md 에 있다. (당일 HH:MM)
+--
+-- assignee_staff_code 는 **직원 테이블 외래키가 아니라 문자열이다.** 앱을 쓰지 않는 직종에
+-- 배정된 업무는 가리킬 직원 행 자체가 없다. 알림을 보낼 수 있을 때만 채워지는 보조 값이다. (#70)
 create table task (
-    id                bigint       not null auto_increment,
-    handover_card_id  bigint       not null,
-    content           varchar(500) not null,
-    assignee_job_role enum ('CAREGIVER','CENTER_HEAD','DRIVER','NURSE_AIDE','SOCIAL_WORKER') null,
-    assignee_name     varchar(50)  null,
-    due_time          time         not null,
-    status            enum ('DONE','PENDING') not null,
-    completed_at      datetime(6)  null,
-    completed_by_name varchar(50)  null,
-    created_at        datetime(6)  not null,
-    updated_at        datetime(6)  not null,
+    id                  bigint       not null auto_increment,
+    handover_card_id    bigint       not null,
+    content             varchar(500) not null,
+    assignee_job_role   enum ('CAREGIVER','CENTER_HEAD','DRIVER','NURSE_AIDE','SOCIAL_WORKER') null,
+    assignee_name       varchar(50)  null,
+    assignee_staff_code varchar(30)  null,
+    claimed_at          datetime(6)  null,
+    claim_method        enum ('DIRECT_ASSIGN','SELF_CLAIM') null,
+    due_time            time         not null,
+    status              enum ('DONE','PENDING') not null,
+    completed_at        datetime(6)  null,
+    completed_by_name   varchar(50)  null,
+    created_at          datetime(6)  not null,
+    updated_at          datetime(6)  not null,
     primary key (id),
     constraint fk_task_handover_card
         foreign key (handover_card_id) references handover_card (id)
@@ -140,4 +149,27 @@ create table export_phrase (
     constraint uk_export_phrase_card_type unique (handover_card_id, phrase_type),
     constraint fk_export_phrase_handover_card
         foreign key (handover_card_id) references handover_card (id)
+) engine = InnoDB default charset = utf8mb4 collate = utf8mb4_unicode_ci;
+
+-- 앱 안 알림. 업무 하나만 가리키고, 받는 사람은 직원 명단의 한 행이어야 한다. (#70)
+--
+-- 알림 본문 문자열을 저장하지 않는다. 어르신 이름·업무 내용·기한은 조회 시점에 업무에서 읽는다.
+-- 문장을 저장해 두면 업무가 바뀌었을 때 알림함이 옛말을 하게 된다.
+--
+-- unique 는 같은 업무·같은 수신자·같은 종류의 알림이 두 번 쌓이지 않게 한다.
+create table notification (
+    id                 bigint      not null auto_increment,
+    recipient_staff_id bigint      not null,
+    task_id            bigint      not null,
+    type               enum ('ASSIGNEE_CHANGED','DELEGATED_COMPLETION','TASK_ASSIGNED') not null,
+    actor_name         varchar(50) null,
+    read_at            datetime(6) null,
+    created_at         datetime(6) not null,
+    updated_at         datetime(6) not null,
+    primary key (id),
+    constraint uk_notification_task_recipient_type unique (task_id, recipient_staff_id, type),
+    constraint fk_notification_recipient_staff
+        foreign key (recipient_staff_id) references staff (id),
+    constraint fk_notification_task
+        foreign key (task_id) references task (id)
 ) engine = InnoDB default charset = utf8mb4 collate = utf8mb4_unicode_ci;
