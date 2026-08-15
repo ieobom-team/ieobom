@@ -28,7 +28,8 @@ PATCH /api/tasks/{taskId}/claim             담당 확정 — '내가 처리할�
 PATCH /api/tasks/{taskId}/complete          완료 처리 · 대리 완료 (n35)
 ```
 
-**보내는 엔드포인트는 없다.** 알림·푸시는 MVP 범위 밖이다. 업무는 화면에서 확인하고 화면에서 닫는다.
+**보내는 엔드포인트는 여기 없다.** 앱 내 알림은 배정·대리 완료 시 서버가 스스로 만들고, 계약은
+[`notification-api.md`](notification-api.md) 에 있다. 웹 푸시·알림톡·SMS는 MVP 범위 밖이다.
 
 ---
 
@@ -96,10 +97,16 @@ PATCH /api/tasks/{taskId}/complete          완료 처리 · 대리 완료 (n35)
 {
   "content": "저녁 식사량 확인",
   "assigneeJobRole": "NURSE_AIDE",
-  "assigneeName": "박간호",
+  "assigneeName": "최민재",
+  "assigneeStaffCode": "ST-004",
+  "assignedByStaffCode": "ST-006",
   "dueTime": "17:30"
 }
 ```
+
+사번 두 칸은 **알림을 위한 선택 필드**다. 없어도 업무는 그대로 만들어지고, 명단에 없는 사번이 와도
+`400` 이 아니다. 자세한 것은 [`notification-api.md`](notification-api.md#배정-요청이-사번-두-칸을-받는다)
+에 있다.
 
 ### 응답 — `201 Created`
 
@@ -175,6 +182,7 @@ PATCH /api/tasks/{taskId}/complete          완료 처리 · 대리 완료 (n35)
 | `dueTime` 이 없음 | `400` — `VALIDATION_FAILED` |
 | `dueTime` 에 날짜가 섞여 있거나 `HH:MM` 이 아님 | `400` — `VALIDATION_FAILED` |
 | `dueTime` 이 **하원 시각을 넘음** | `400` — `VALIDATION_FAILED`, 상한 시각을 문장에 담아 돌려준다 |
+| `assigneeStaffCode` · `assignedByStaffCode` 가 **명단에 없는 사번** | **`201`.** 업무는 만들어지고 알림만 없다 |
 | 카드에 **다음 행동이 없음** | `409` — `CARD_NEXT_ACTION_MISSING` |
 | 카드가 **대상 어르신을 가리지 못함** | `409` — `CARE_RECIPIENT_NOT_RESOLVED` |
 | 이 카드에서 **이미 업무를 만들었음** | `409` — `TASK_ALREADY_CREATED` |
@@ -552,7 +560,8 @@ GET /api/tasks/pending-briefing?date= 그날 아직 안 닫힌 것만 (n44 · n4
 | 기간 조회 · 통계 리포트 | **없다.** 당일만 본다 (`F-HQTFLK` rules) |
 | 지연 재알림 | **없다.** MVP 범위 밖 |
 | 다음 교대 자동 승계 | **없다.** MVP 범위 밖. 승계하는 코드가 없는 것으로 지킨다 |
-| 알림 · 푸시 전송 | **없다.** 업무는 화면에서 확인하고 화면에서 닫는다 |
+| **앱 내 알림 조회 · 읽음** | 여기 없다. [`notification-api.md`](notification-api.md) |
+| 웹 푸시 · 알림톡 · SMS 전송 | **없다.** MVP 범위 밖 |
 | 완료를 미처리로 되돌리기 | 없다. Manyfast에 없다 |
 | 담당자 · 기한 **수정**, 업무 삭제 | 없다. Manyfast에 없다. 필요해지면 `propose-change` |
 | **맡은 업무를 다시 놓기** | 없다. Manyfast가 제공하지 않는다 (`F-IVFNPC` rules) |
@@ -579,19 +588,27 @@ GET /api/tasks/pending-briefing?date= 그날 아직 안 닫힌 것만 (n44 · n4
 | `status` | `PENDING` · `DONE` 두 값 |
 | `completed_at` · `completed_by_name` | 완료 시점과 **확인자**. 담당자와 다를 수 있다 |
 | `assignee_job_role` · `assignee_name` | 직종만, 사람만, 또는 둘 다. 하나는 반드시 있다 |
+| `assignee_staff_code` | 담당자의 사번. **알림을 누구에게 보낼지가 이 값으로 갈린다.** 비어 있을 수 있다 |
 | `claimed_at` · `claim_method` | 담당이 정해진 **시점과 방식**. 담당자가 없으면 둘 다 비어 있다 |
 
 담당자 이름을 직원 테이블 참조가 아니라 문자열로 두는 이유는 **MVP에 계정·권한 모델이 없기** 때문이다.
-진입 시 역할과 본인을 선택하는 식별을 쓰므로 가리킬 직원 행이 없다.
+진입 시 역할과 본인을 선택하는 식별을 쓰므로 가리킬 직원 행이 없고, 앱을 쓰지 않는 직종에 직종으로만
+배정된 업무는 애초에 사람이 정해지지 않는다.
 
-담당 확정 요청은 사번을 받지만 **저장하는 것은 이름**이다. 직원 명단은 조회 시점에 직종을 확인하려고 읽고,
-업무에는 기존 `assignee_name` 과 같은 형태로 남는다. 그래서 **동명이인을 구분하지 못한다** — 이름 문자열로
-두는 한 직접 배정에도 같은 한계가 있고, Manyfast `F-YJJJUX` dataSpec이 "파일럿에서 다시 판단"으로 이미
-미뤄 둔 사안이라 여기서도 그대로 둔다.
+**화면에 그리는 것은 여전히 이름이다.** `assignee_staff_code` 는 그 결정을 뒤집지 않고 옆에 붙는
+보조 값이며, **알림 수신자를 동명이인 없이 가리키기 위해서만** 쓴다. (`F-JIEOJO` action) 비어 있어도
+업무는 온전하고, 그때는 알림만 없다. 담당 확정(`claim`)도 이름과 함께 이 값을 남긴다 — 직종에만
+배정됐던 업무는 거기서 처음 사람이 붙고, 그 사람이 나중에 대리 완료 알림을 받을 수신자다.
+
+사번이 없는 경로(화면이 이름만 보낸 직접 배정)에서는 **이름으로 직원을 되짚지 않는다.** 동명이인에서
+갈리기 때문이고, `F-YJJJUX` dataSpec이 동명이인을 "파일럿에서 다시 판단"으로 미뤄 둔 상태라 그 위에
+추측을 얹지 않는다.
 
 `delegated` 와 `claimable` 은 컬럼이 아니다. 앞엣것은 담당자 이름과 확인자 이름에서, 뒤엣것은 상태와
 담당자 이름에서 나오는 값이라 저장하면 두 값이 조용히 갈라진다.
 
 > **Flyway.** `V1__*.sql` 은 아직 없고 스키마는 `ddl-auto: update` 로 만들어진다.
 > [`#19`](https://github.com/ieobom-team/ieobom/issues/19) 에서 첫 마이그레이션을 쓸 때 **`claimed_at`
-> (`DATETIME`) · `claim_method`(`VARCHAR(20)`) 두 컬럼이 빠지지 않아야 한다.**
+> (`DATETIME`) · `claim_method`(`VARCHAR(20)`) · `assignee_staff_code`(`VARCHAR(30)`) 세 컬럼이
+> 빠지지 않아야 한다.** `notification` 테이블도 함께다 —
+> [`notification-api.md`](notification-api.md#db)

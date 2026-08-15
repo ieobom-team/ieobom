@@ -17,6 +17,7 @@ import com.ieobom.api.handovercard.HandoverCard;
 import com.ieobom.api.handovercard.HandoverCardRepository;
 import com.ieobom.api.handovercard.ReviewStatus;
 import com.ieobom.api.handovercard.SafetyFlagSource;
+import com.ieobom.api.notification.NotificationRepository;
 import com.ieobom.api.recipient.CareRecipient;
 import com.ieobom.api.recipient.CareRecipientRepository;
 import com.ieobom.api.task.Task;
@@ -68,6 +69,7 @@ class ExportSheetApiTest {
 	@Autowired private CareRecipientRepository careRecipients;
 	@Autowired private HandoverRepository handovers;
 	@Autowired private HandoverCardRepository cards;
+	@Autowired private NotificationRepository notifications;
 	@Autowired private TaskRepository tasks;
 
 	private CareRecipient 김말순;
@@ -76,6 +78,7 @@ class ExportSheetApiTest {
 
 	@BeforeEach
 	void setUp() {
+		notifications.deleteAll();
 		tasks.deleteAll();
 		cards.deleteAll();
 		handovers.deleteAll();
@@ -96,6 +99,7 @@ class ExportSheetApiTest {
 	/** 업무를 남겨 두면 다른 테스트 클래스의 {@code cards.deleteAll()} 이 외래키에 걸린다. */
 	@AfterEach
 	void tearDown() throws Exception {
+		notifications.deleteAll();
 		tasks.deleteAll();
 		if (열어둔표 != null) {
 			열어둔표.close();
@@ -302,6 +306,6 @@ class ExportSheetApiTest {
 
 	private void 업무(
 			HandoverCard 카드, String 내용, JobRole 직종, String 담당자, LocalTime 기한) {
-		tasks.save(Task.pending(카드, 내용, 직종, 담당자, 기한));
+		tasks.save(Task.pending(카드, 내용, 직종, 담당자, null, 기한));
 	}
 }

@@ -9,6 +9,7 @@ import com.ieobom.api.handover.InputMethod;
 import com.ieobom.api.handovercard.HandoverCard;
 import com.ieobom.api.handovercard.HandoverCardRepository;
 import com.ieobom.api.handovercard.ReviewStatus;
+import com.ieobom.api.notification.NotificationRepository;
 import com.ieobom.api.recipient.CareRecipient;
 import com.ieobom.api.recipient.CareRecipientRepository;
 import com.ieobom.api.staff.Staff;
@@ -52,6 +53,7 @@ class TaskClaimConcurrencyTest {
 	@Autowired private CareRecipientRepository careRecipients;
 	@Autowired private HandoverRepository handovers;
 	@Autowired private HandoverCardRepository cards;
+	@Autowired private NotificationRepository notifications;
 	@Autowired private TaskRepository tasks;
 	@Autowired private StaffRepository staffs;
 
@@ -59,6 +61,7 @@ class TaskClaimConcurrencyTest {
 
 	@BeforeEach
 	void setUp() {
+		notifications.deleteAll();
 		tasks.deleteAll();
 		cards.deleteAll();
 		handovers.deleteAll();
@@ -78,6 +81,7 @@ class TaskClaimConcurrencyTest {
 
 	@AfterEach
 	void tearDown() {
+		notifications.deleteAll();
 		tasks.deleteAll();
 	}
 
@@ -170,7 +174,7 @@ class TaskClaimConcurrencyTest {
 								.build());
 
 		return tasks.save(
-				Task.pending(card, "저녁 식사량 확인", JobRole.NURSE_AIDE, null, LocalTime.of(17, 30)));
+				Task.pending(card, "저녁 식사량 확인", JobRole.NURSE_AIDE, null, null, LocalTime.of(17, 30)));
 	}
 
 	private List<Staff> 직종_직원(JobRole jobRole) {

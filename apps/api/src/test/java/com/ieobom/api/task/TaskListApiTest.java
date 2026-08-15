@@ -11,6 +11,7 @@ import com.ieobom.api.handover.InputMethod;
 import com.ieobom.api.handovercard.HandoverCard;
 import com.ieobom.api.handovercard.HandoverCardRepository;
 import com.ieobom.api.handovercard.ReviewStatus;
+import com.ieobom.api.notification.NotificationRepository;
 import com.ieobom.api.recipient.CareRecipient;
 import com.ieobom.api.recipient.CareRecipientRepository;
 import java.time.LocalDate;
@@ -42,6 +43,7 @@ class TaskListApiTest {
 	@Autowired private CareRecipientRepository careRecipients;
 	@Autowired private HandoverRepository handovers;
 	@Autowired private HandoverCardRepository cards;
+	@Autowired private NotificationRepository notifications;
 	@Autowired private TaskRepository tasks;
 	@Autowired private JdbcTemplate jdbc;
 
@@ -50,6 +52,7 @@ class TaskListApiTest {
 
 	@BeforeEach
 	void setUp() {
+		notifications.deleteAll();
 		tasks.deleteAll();
 		cards.deleteAll();
 		handovers.deleteAll();
@@ -70,6 +73,7 @@ class TaskListApiTest {
 	/** 업무를 남겨 두면 다른 테스트 클래스의 {@code cards.deleteAll()} 이 외래키에 걸린다. */
 	@AfterEach
 	void tearDown() {
+		notifications.deleteAll();
 		tasks.deleteAll();
 	}
 
@@ -281,7 +285,7 @@ class TaskListApiTest {
 
 	private Task 업무(String content, LocalTime dueTime, String assigneeName) {
 		return tasks.save(
-				Task.pending(카드(content), content, JobRole.NURSE_AIDE, assigneeName, dueTime));
+				Task.pending(카드(content), content, JobRole.NURSE_AIDE, assigneeName, null, dueTime));
 	}
 
 	/** 담당자 없이 직종에만 배정된 업무. 브리핑이 "아직 아무도 맡지 않은 건"으로 세는 대상이다. */
