@@ -29,6 +29,10 @@ export type TaskBriefing = {
   pending: TaskResponse[]
   /** 브리핑이 목록과 별도로 세워 보여 주는 숫자. (Manyfast R-MFISQE 수락기준) */
   pendingCount: number
+  /** 미처리 중 담당자가 정해진 건수. `claimedCount + unclaimedCount === pendingCount` (Manyfast F-IVFNPC display) */
+  claimedCount: number
+  /** 미처리 중 아직 아무도 맡지 않은 건수. */
+  unclaimedCount: number
 }
 
 /** `date` 를 생략하면 서버가 오늘로 본다. */
