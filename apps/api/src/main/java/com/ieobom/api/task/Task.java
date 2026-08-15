@@ -59,6 +59,20 @@ public class Task extends BaseTimeEntity {
 	private String assigneeName;
 
 	/**
+	 * 담당자의 사번. 알림을 <b>누구에게</b> 보낼지가 이 값으로 갈린다. (Manyfast F-JIEOJO action)
+	 *
+	 * <p>이름을 두고 사번을 따로 두는 이유는 <b>동명이인</b>이다. 알림 수신자는 직원 명단의 한 행이어야 하는데 이름으로 되짚으면 같은
+	 * 이름이 둘일 때 누구에게 보낼지 정할 수 없고, 그때 조용히 안 보내면 배정 사실이 닿지 않는다. 담당 확정 API 가 이름이 아니라 사번을
+	 * 받는 것과 같은 이유다.
+	 *
+	 * <p><b>직원 테이블 외래키가 아니라 문자열이다.</b> 담당자 이름을 문자열로 둔 결정을 뒤집지 않는다 — 이 제품에는 계정·권한 모델이
+	 * 없고, 앱을 쓰지 않는 직종에 배정된 업무는 가리킬 직원 행 자체가 없다. 사번은 <b>알림을 보낼 수 있을 때만</b> 채워지는 보조
+	 * 값이고, 비어 있어도 업무는 온전하다.
+	 */
+	@Column(length = 30)
+	private String assigneeStaffCode;
+
+	/**
 	 * 담당이 정해진 시각. 담당자가 없으면 비어 있다. (Manyfast F-IVFNPC dataSpec)
 	 *
 	 * <p>생성 시각과 따로 두는 이유는 두 값이 갈릴 수 있기 때문이다. 직종에만 배정된 업무는 만들어진 뒤 한참 지나 누군가 맡는다.
@@ -94,6 +108,7 @@ public class Task extends BaseTimeEntity {
 			String content,
 			JobRole assigneeJobRole,
 			String assigneeName,
+			String assigneeStaffCode,
 			LocalDateTime claimedAt,
 			ClaimMethod claimMethod,
 			LocalTime dueTime,
@@ -104,6 +119,7 @@ public class Task extends BaseTimeEntity {
 		this.content = content;
 		this.assigneeJobRole = assigneeJobRole;
 		this.assigneeName = assigneeName;
+		this.assigneeStaffCode = assigneeStaffCode;
 		this.claimedAt = claimedAt;
 		this.claimMethod = claimMethod;
 		this.dueTime = dueTime;
@@ -123,6 +139,7 @@ public class Task extends BaseTimeEntity {
 			String content,
 			JobRole assigneeJobRole,
 			String assigneeName,
+			String assigneeStaffCode,
 			LocalTime dueTime) {
 
 		boolean assigned = assigneeName != null;
@@ -131,6 +148,7 @@ public class Task extends BaseTimeEntity {
 				.content(content)
 				.assigneeJobRole(assigneeJobRole)
 				.assigneeName(assigneeName)
+				.assigneeStaffCode(assigned ? assigneeStaffCode : null)
 				.claimedAt(assigned ? LocalDateTime.now() : null)
 				.claimMethod(assigned ? ClaimMethod.DIRECT_ASSIGN : null)
 				.dueTime(dueTime)

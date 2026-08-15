@@ -71,17 +71,22 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 	 *
 	 * <p>{@code clearAutomatically} 로 영속성 컨텍스트를 비운다. 이 UPDATE 는 엔티티를 거치지 않고 나가므로, 비우지 않으면 같은
 	 * 트랜잭션에서 다시 읽은 업무가 담당자 없는 옛 상태로 보인다.
+	 *
+	 * <p>이름과 함께 <b>사번도</b> 남긴다. 직종에만 배정됐던 업무는 여기서 처음 사람이 붙는데, 그 사람이 나중에 대리 완료 알림을 받을
+	 * 수신자다. 이름만 남기면 그때 명단에서 되짚어야 하고 동명이인에서 갈린다. (Manyfast F-JIEOJO action)
 	 */
 	@Modifying(clearAutomatically = true, flushAutomatically = true)
 	@Query(
 			"""
 			update Task t
-			set t.assigneeName = :assigneeName, t.claimedAt = :claimedAt, t.claimMethod = :claimMethod
+			set t.assigneeName = :assigneeName, t.assigneeStaffCode = :assigneeStaffCode,
+				t.claimedAt = :claimedAt, t.claimMethod = :claimMethod
 			where t.id = :id and t.assigneeName is null and t.status = :pending
 			""")
 	int claimIfUnclaimed(
 			Long id,
 			String assigneeName,
+			String assigneeStaffCode,
 			LocalDateTime claimedAt,
 			ClaimMethod claimMethod,
 			TaskStatus pending);

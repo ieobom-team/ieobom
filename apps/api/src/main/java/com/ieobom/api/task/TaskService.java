@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.function.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -66,6 +67,15 @@ public class TaskService {
 	private final DueTimePolicy dueTimePolicy;
 
 	/**
+	 * 알림은 사건으로만 알린다. (Manyfast F-JIEOJO trigger)
+	 *
+	 * <p>{@code NotificationService} 를 직접 부르지 않는 이유는 <b>업무 생성이 알림 실패로 롤백되면 안 되기</b>
+	 * 때문이다. 여기서 직접 부르면 알림 쪽 예외 하나가 이 트랜잭션에 롤백 표시를 남겨, 잡아 삼켜도 커밋 시점에 업무까지 함께
+	 * 죽는다. 사건으로 끊으면 알림은 커밋 <b>이후</b>에 자기 트랜잭션에서 돈다. ({@code NotificationEventListener})
+	 */
+	private final ApplicationEventPublisher events;
+
+	/**
 	 * 카드의 다음 행동을 후속 업무로 만든다. (Manyfast F-IVFNPC action)
 	 *
 	 * @throws NotFoundException 카드가 없을 때
@@ -95,9 +105,12 @@ public class TaskService {
 								request.normalizedContent(),
 								request.assigneeJobRole(),
 								request.normalizedAssigneeName(),
+								request.normalizedAssigneeStaffCode(),
 								request.dueTime()));
 
 		logAssigned(task, card);
+		events.publishEvent(
+				new TaskAssignedEvent(task.getId(), request.normalizedAssignedByStaffCode()));
 		return TaskResponse.from(task);
 	}
 
@@ -182,6 +195,7 @@ public class TaskService {
 		task.complete(completedByName);
 
 		logCompleted(task);
+		events.publishEvent(new TaskCompletedEvent(task.getId()));
 		return TaskCompleteResponse.completed(task);
 	}
 
@@ -222,6 +236,7 @@ public class TaskService {
 				taskRepository.claimIfUnclaimed(
 						taskId,
 						staff.getName(),
+						staff.getCode(),
 						LocalDateTime.now(),
 						ClaimMethod.SELF_CLAIM,
 						TaskStatus.PENDING);

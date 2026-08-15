@@ -15,6 +15,7 @@ import com.ieobom.api.handover.InputMethod;
 import com.ieobom.api.handovercard.HandoverCard;
 import com.ieobom.api.handovercard.HandoverCardRepository;
 import com.ieobom.api.handovercard.ReviewStatus;
+import com.ieobom.api.notification.NotificationRepository;
 import com.ieobom.api.recipient.CareRecipient;
 import com.ieobom.api.recipient.CareRecipientRepository;
 import com.ieobom.api.staff.Staff;
@@ -49,6 +50,7 @@ class TaskApiTest {
 	@Autowired private CareRecipientRepository careRecipients;
 	@Autowired private HandoverRepository handovers;
 	@Autowired private HandoverCardRepository cards;
+	@Autowired private NotificationRepository notifications;
 	@Autowired private TaskRepository tasks;
 	@Autowired private StaffRepository staffs;
 
@@ -57,6 +59,7 @@ class TaskApiTest {
 
 	@BeforeEach
 	void setUp() {
+		notifications.deleteAll();
 		tasks.deleteAll();
 		cards.deleteAll();
 		handovers.deleteAll();
@@ -82,6 +85,7 @@ class TaskApiTest {
 	 */
 	@AfterEach
 	void tearDown() {
+		notifications.deleteAll();
 		tasks.deleteAll();
 	}
 
@@ -622,7 +626,7 @@ class TaskApiTest {
 	}
 
 	private Task 업무(HandoverCard card, String assigneeName, LocalTime dueTime) {
-		return tasks.save(Task.pending(card, "저녁 식사량 확인", JobRole.NURSE_AIDE, assigneeName, dueTime));
+		return tasks.save(Task.pending(card, "저녁 식사량 확인", JobRole.NURSE_AIDE, assigneeName, null, dueTime));
 	}
 
 	/** API 를 거치지 않고 완료 상태로 만든다. 완료 처리 자체는 다른 테스트가 이미 본다. */
