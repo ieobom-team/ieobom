@@ -6,17 +6,22 @@ import com.ieobom.api.common.RequestValidationException;
 import com.ieobom.api.handovercard.HandoverCard;
 import com.ieobom.api.handovercard.HandoverCardRepository;
 import com.ieobom.api.recipient.CareRecipient;
+import com.ieobom.api.staff.Staff;
+import com.ieobom.api.staff.StaffRepository;
 import com.ieobom.api.task.dto.TaskBriefingResponse;
+import com.ieobom.api.task.dto.TaskClaimResponse;
 import com.ieobom.api.task.dto.TaskCompleteResponse;
 import com.ieobom.api.task.dto.TaskCreateRequest;
 import com.ieobom.api.task.dto.TaskListResponse;
 import com.ieobom.api.task.dto.TaskResponse;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +41,8 @@ public class TaskService {
 	static final String RECIPIENT_NOT_RESOLVED = "CARE_RECIPIENT_NOT_RESOLVED";
 	static final String TASK_ALREADY_CREATED = "TASK_ALREADY_CREATED";
 	static final String TASK_NOT_FOUND = "TASK_NOT_FOUND";
+	static final String STAFF_NOT_FOUND = "STAFF_NOT_FOUND";
+	static final String TASK_JOB_ROLE_MISMATCH = "TASK_JOB_ROLE_MISMATCH";
 
 	/** 전체 목록용 정렬: 미처리를 먼저, 그 안에서는 기한이 이른 순. 완료는 뒤에 두고 기한 순으로 묶는다. */
 	private static final Comparator<Task> PENDING_FIRST_BY_DUE_TIME =
@@ -56,7 +63,17 @@ public class TaskService {
 
 	private final TaskRepository taskRepository;
 	private final HandoverCardRepository cardRepository;
+	private final StaffRepository staffRepository;
 	private final DueTimePolicy dueTimePolicy;
+
+	/**
+	 * 알림은 사건으로만 알린다. (Manyfast F-JIEOJO trigger)
+	 *
+	 * <p>{@code NotificationService} 를 직접 부르지 않는 이유는 <b>업무 생성이 알림 실패로 롤백되면 안 되기</b>
+	 * 때문이다. 여기서 직접 부르면 알림 쪽 예외 하나가 이 트랜잭션에 롤백 표시를 남겨, 잡아 삼켜도 커밋 시점에 업무까지 함께
+	 * 죽는다. 사건으로 끊으면 알림은 커밋 <b>이후</b>에 자기 트랜잭션에서 돈다. ({@code NotificationEventListener})
+	 */
+	private final ApplicationEventPublisher events;
 
 	/**
 	 * 카드의 다음 행동을 후속 업무로 만든다. (Manyfast F-IVFNPC action)
@@ -88,9 +105,12 @@ public class TaskService {
 								request.normalizedContent(),
 								request.assigneeJobRole(),
 								request.normalizedAssigneeName(),
+								request.normalizedAssigneeStaffCode(),
 								request.dueTime()));
 
 		logAssigned(task, card);
+		events.publishEvent(
+				new TaskAssignedEvent(task.getId(), request.normalizedAssignedByStaffCode()));
 		return TaskResponse.from(task);
 	}
 
@@ -132,8 +152,9 @@ public class TaskService {
 		List<TaskResponse> pending =
 				sortedResponses(findCreatedOn(date), task -> !task.isDone(), BY_DUE_TIME);
 
-		logBriefingConfirmed(date, pending.size());
-		return TaskBriefingResponse.of(date, pending);
+		TaskBriefingResponse briefing = TaskBriefingResponse.of(date, pending);
+		logBriefingConfirmed(briefing);
+		return briefing;
 	}
 
 	/**
@@ -174,13 +195,92 @@ public class TaskService {
 		task.complete(completedByName);
 
 		logCompleted(task);
+		events.publishEvent(new TaskCompletedEvent(task.getId()));
 		return TaskCompleteResponse.completed(task);
+	}
+
+	/**
+	 * 직종에만 배정된 업무를 한 직원이 맡는다. (Manyfast F-IVFNPC action · permissions, 유저플로우 "새 플로우 5" n40 후속 업무 상세 →
+	 * {@code '내가 처리할게요' 선택})
+	 *
+	 * <p><b>담당 확정은 상태 추가가 아니라 담당자 정보의 변경이다.</b> (Manyfast F-IVFNPC rules) 맡아도 업무는 미처리로 남는다.
+	 * "미처리인데 이준호님이 맡음"이 정상적인 표현이고, 완료는 따로 처리한다.
+	 *
+	 * <p>맡지 못하는 경우를 <b>오류로 돌려주지 않는다.</b> (Manyfast F-IVFNPC exceptions) 완료 처리와 같은 이유다 — 화면이
+	 * 그려야 하는 것은 지금 이 업무를 누가 맡고 있는지이고, 그 값은 오류 응답에 담을 자리가 없다.
+	 *
+	 * <p><b>경합은 조건부 UPDATE 가 가른다.</b> 아래 두 검사는 흔한 경우를 미리 걸러 안내 문장을 만들기 위한 것이지 경합을 막지 못한다.
+	 * 검사와 저장 사이에 다른 직원이 맡을 수 있어서, 실제로 한 명만 통과시키는 것은 {@code claimIfUnclaimed} 의 {@code where}
+	 * 절이다. 그래서 영향 행이 0 이면 다시 읽어 무엇이 바뀌었는지 가린다.
+	 *
+	 * @param staffCode 맡는 직원의 사번. 이름과 직종은 <b>요청에서 받지 않고</b> 명단에서 읽는다
+	 * @throws NotFoundException 업무가 없거나 명단에 없는 사번일 때
+	 * @throws ConflictException 배정된 직종에 속하지 않은 직원일 때
+	 */
+	@Transactional
+	public TaskClaimResponse claim(Long taskId, String staffCode) {
+		Task task = findTask(taskId);
+		Staff staff = findStaff(staffCode);
+
+		if (task.isDone()) {
+			log.info("완료된 업무에 담당 확정 요청 — taskId={}, 바뀐 것 없음", task.getId());
+			return TaskClaimResponse.alreadyCompleted(task);
+		}
+		if (task.isClaimed()) {
+			log.info("이미 담당이 있는 업무에 담당 확정 요청 — taskId={}, 바뀐 것 없음", task.getId());
+			return TaskClaimResponse.alreadyClaimed(task);
+		}
+		verifyJobRole(task, staff);
+
+		int updated =
+				taskRepository.claimIfUnclaimed(
+						taskId,
+						staff.getName(),
+						staff.getCode(),
+						LocalDateTime.now(),
+						ClaimMethod.SELF_CLAIM,
+						TaskStatus.PENDING);
+
+		Task current = findTask(taskId);
+		if (updated == 0) {
+			log.info("담당 확정 경합에서 밀림 — taskId={}, 바뀐 것 없음, 완료됨={}", taskId, current.isDone());
+			return current.isDone()
+					? TaskClaimResponse.alreadyCompleted(current)
+					: TaskClaimResponse.alreadyClaimed(current);
+		}
+
+		logClaimed(current);
+		return TaskClaimResponse.claimed(current);
 	}
 
 	private Task findTask(Long taskId) {
 		return taskRepository
 				.findWithCard(taskId)
 				.orElseThrow(() -> new NotFoundException(TASK_NOT_FOUND, "업무를 찾을 수 없습니다."));
+	}
+
+	private Staff findStaff(String staffCode) {
+		return staffRepository
+				.findByCode(staffCode)
+				.orElseThrow(() -> new NotFoundException(STAFF_NOT_FOUND, "직원 명단에서 찾을 수 없습니다."));
+	}
+
+	/**
+	 * 그 업무를 맡을 수 있는 직종인지. (Manyfast F-IVFNPC permissions — "배정된 직종에 속한 직원만 그 업무를 맡을 수 있다")
+	 *
+	 * <p>직종이 비어 있는 업무는 여기까지 오지 않는다. 담당은 직종과 이름 중 하나를 반드시 갖는데 ({@code verifyAssignee}), 이름이
+	 * 있으면 앞에서 "이미 담당이 있다"로 끝나기 때문이다. 그래도 {@code null} 을 통과시키지 않는 이유는 그 보장이 <b>다른 메서드에
+	 * 있기</b> 때문이다 — 여기서 열어 두면 배정 규칙이 바뀔 때 아무나 맡을 수 있는 문이 조용히 열린다.
+	 */
+	private void verifyJobRole(Task task, Staff staff) {
+		if (task.getAssigneeJobRole() == null || task.getAssigneeJobRole() != staff.getJobRole()) {
+			log.info(
+					"직종이 달라 담당 확정 거부 — taskId={}, 배정직종={}, 요청직종={}",
+					task.getId(),
+					task.getAssigneeJobRole(),
+					staff.getJobRole());
+			throw new ConflictException(TASK_JOB_ROLE_MISMATCH, "이 업무에 배정된 직종의 직원만 맡을 수 있습니다.");
+		}
 	}
 
 	/**
@@ -246,6 +346,23 @@ public class TaskService {
 				task.getStatus());
 	}
 
+	/**
+	 * 담당 확정 이벤트. (Manyfast F-IVFNPC outcome — "담당 확정 이벤트를 기록한다")
+	 *
+	 * <p>배정 · 완료 쪽과 같은 방침으로 <b>담당자 이름을 남기지 않는다.</b> 직원 이름이 로그 파일로 새어 나갈 이유가 없다. 대신 확정
+	 * 방식과 배정된 직종을 남긴다 — 직종에만 배정된 업무가 실제로 얼마나 맡아지는지는 나중에 물을 값이다.
+	 */
+	private void logClaimed(Task task) {
+		log.info(
+				"후속 업무 담당 확정 — taskId={}, cardId={}, 배정직종={}, 확정방식={}, 확정시점={}, 상태={}",
+				task.getId(),
+				task.getHandoverCard().getId(),
+				task.getAssigneeJobRole(),
+				task.getClaimMethod(),
+				task.getClaimedAt(),
+				task.getStatus());
+	}
+
 	/** 완료 처리 이벤트. 대리 완료였는지를 함께 남긴다. (Manyfast F-IVFNPC outcome · display) */
 	private void logCompleted(Task task) {
 		log.info(
@@ -272,8 +389,16 @@ public class TaskService {
 	 *
 	 * <p>대시보드 조회와 <b>따로</b> 남긴다. Manyfast 가 두 이벤트를 구분해 요구하는 이유는, 관리자가 현황을 훑어본 것과 하원 전에 남은 것을
 	 * 실제로 펴 본 것이 다른 행동이기 때문이다. 도입 효과를 나중에 물을 때 답이 되는 쪽은 뒤엣것이다.
+	 *
+	 * <p>담당 미확정 건수를 함께 남긴다. 하원까지 <b>아무도 손대지 않은</b> 업무가 하루에 몇 건인지가 이 제품이 답하려는 질문에 가장 가까운
+	 * 숫자다.
 	 */
-	private void logBriefingConfirmed(LocalDate date, int pendingCount) {
-		log.info("하원 미처리 브리핑 확인 — 기준일={}, 미처리={}건", date, pendingCount);
+	private void logBriefingConfirmed(TaskBriefingResponse briefing) {
+		log.info(
+				"하원 미처리 브리핑 확인 — 기준일={}, 미처리={}건, 담당확정={}건, 담당미확정={}건",
+				briefing.date(),
+				briefing.pendingCount(),
+				briefing.claimedCount(),
+				briefing.unclaimedCount());
 	}
 }

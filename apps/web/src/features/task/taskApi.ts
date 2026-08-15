@@ -14,6 +14,8 @@ export type TaskCreateRequest = {
   dueTime: string
 }
 
+export type ClaimMethod = 'DIRECT_ASSIGN' | 'SELF_CLAIM'
+
 export type TaskResponse = {
   id: number
   handoverCardId: number
@@ -23,6 +25,13 @@ export type TaskResponse = {
   assigneeJobRole: JobRole | null
   assigneeJobRoleLabel: string | null
   assigneeName: string | null
+  /** 담당이 정해진 시각. 담당자가 없으면 `null` */
+  claimedAt: string | null
+  /** 담당자가 있을 때만 값이 있다 */
+  claimMethod: ClaimMethod | null
+  claimMethodLabel: string | null
+  /** 지금 맡을 수 있는지. 표시용이며 허가가 아니다 — 실제 경합은 서버가 가른다 */
+  claimable: boolean
   dueTime: string
   status: TaskStatus
   statusLabel: string
@@ -44,6 +53,21 @@ export type TaskCompleteRequest = {
 
 export type TaskCompleteResponse = {
   /** 참이면 이번 요청 전에 이미 완료였다는 뜻이다. 아무것도 바뀌지 않았다. */
+  alreadyCompleted: boolean
+  notice: string | null
+  task: TaskResponse
+}
+
+export type TaskClaimRequest = {
+  staffCode: string
+}
+
+export type TaskClaimResponse = {
+  /** 참이면 이번 요청으로 담당을 잡았다. */
+  claimed: boolean
+  /** 참이면 이미 다른 직원이 맡고 있었다. 아무것도 바뀌지 않았다. */
+  alreadyClaimed: boolean
+  /** 참이면 이미 완료된 업무였다. 아무것도 바뀌지 않았다. */
   alreadyCompleted: boolean
   notice: string | null
   task: TaskResponse
@@ -71,6 +95,22 @@ export function completeTask(
   request: TaskCompleteRequest,
 ): Promise<TaskCompleteResponse> {
   return apiFetch<TaskCompleteResponse>(`/api/tasks/${taskId}/complete`, {
+    method: 'PATCH',
+    body: JSON.stringify(request),
+  })
+}
+
+/**
+ * 직종에만 배정된 업무를 맡는다. ('내가 처리할게요', `docs/contracts/task-api.md`)
+ *
+ * 이름과 직종은 보내지 않는다. 서버가 사번으로 명단에서 직접 읽어 배정된 직종과 같은지 검사한다.
+ * 맡지 못했어도(이미 다른 직원이 맡음 · 이미 완료됨) 오류가 아니라 `200` 이다.
+ */
+export function claimTask(
+  taskId: number,
+  request: TaskClaimRequest,
+): Promise<TaskClaimResponse> {
+  return apiFetch<TaskClaimResponse>(`/api/tasks/${taskId}/claim`, {
     method: 'PATCH',
     body: JSON.stringify(request),
   })

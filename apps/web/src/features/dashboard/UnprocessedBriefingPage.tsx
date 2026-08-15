@@ -46,10 +46,19 @@ export function UnprocessedBriefingPage() {
             목록과 **따로** 세워 둔 숫자다. 목록을 끝까지 읽지 않아도 "오늘 몇 건이 안 닫힌 채
             넘어가는가"는 남아야 한다. 배열 길이가 아니라 `pendingCount` 를 그대로 그린다.
           */
-          <p className="rounded-2xl border-2 border-teal-700 bg-white px-6 py-5 text-xl text-slate-700">
-            오늘 미처리{' '}
-            <span className="text-3xl font-bold text-teal-800">{list.pendingCount}건</span>
-          </p>
+          <div className="flex flex-col gap-3 rounded-2xl border-2 border-teal-700 bg-white px-6 py-5">
+            <p className="text-xl text-slate-700">
+              오늘 미처리{' '}
+              <span className="text-3xl font-bold text-teal-800">{list.pendingCount}건</span>
+            </p>
+            {/*
+              미처리 건수를 담당자 확정 여부로 나눈다. 하원 전에 사람을 붙여야 할 대상은 아직 아무도
+              맡지 않은 쪽이다. (Manyfast F-IVFNPC display, `docs/contracts/task-api.md`)
+            */}
+            <p className="text-lg text-slate-600">
+              {`담당자 확정 ${list.claimedCount}건 · 미확정 ${list.unclaimedCount}건`}
+            </p>
+          </div>
         )}
 
         {briefing.isPending && <TasksLoading />}

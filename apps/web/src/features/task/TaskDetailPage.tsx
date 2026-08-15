@@ -5,12 +5,39 @@ import { ApiError } from '../../shared/api/client'
 import { BigButton } from '../../shared/ui/BigButton'
 import { PageLayout } from '../../shared/ui/PageLayout'
 import { useSession } from '../session/sessionContext'
-import { assigneeLabel, completionLabel, dueTimeLabel } from './task'
+import { assigneeLabel, claimedAgoLabel, claimStatusLabel, completionLabel, dueTimeLabel } from './task'
 import { TasksLoadFailed, TasksLoading } from './TaskLoadState'
-import { completeTask, type TaskCompleteResponse, type TaskResponse } from './taskApi'
+import {
+  claimTask,
+  completeTask,
+  type TaskClaimResponse,
+  type TaskCompleteResponse,
+  type TaskResponse,
+} from './taskApi'
 import { useTask, useTaskCacheUpdate } from './useTasks'
 
 type Stage = 'idle' | 'confirming' | 'delegating'
+
+type ClaimNotice = { tone: 'success' | 'warn'; text: string }
+
+/**
+ * 담당 확정 결과 한 줄. 세 결과(맡음 · 이미 맡음 · 이미 완료)마다 다른 안내를 만든다.
+ *
+ * 서버 `notice` 는 "이미 OO님이 맡은 업무입니다."처럼 상대 시각이 없는 고정 문구라, 이미 맡은
+ * 경우에는 `claimedAt` 으로 "OO님이 N분 전에 맡았습니다"를 화면에서 직접 만든다.
+ */
+function buildClaimNotice(response: TaskClaimResponse): ClaimNotice {
+  if (response.claimed) {
+    return { tone: 'success', text: '담당자로 확정되었습니다.' }
+  }
+  if (response.alreadyClaimed && response.task.assigneeName !== null && response.task.claimedAt !== null) {
+    return {
+      tone: 'warn',
+      text: `${response.task.assigneeName}님이 ${claimedAgoLabel(response.task.claimedAt)} 맡았습니다.`,
+    }
+  }
+  return { tone: 'warn', text: response.notice ?? '지금은 맡을 수 없습니다.' }
+}
 
 /**
  * 유저플로우 "새 플로우 3" n34 → n35 업무 상세 → n59 수행 확인됨? → n60 대리 완료 확인 모달 → n33 대리 완료 처리.
@@ -31,6 +58,9 @@ export function TaskDetailPage() {
   const [result, setResult] = useState<TaskCompleteResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const [claimNotice, setClaimNotice] = useState<ClaimNotice | null>(null)
+  const [claimError, setClaimError] = useState<string | null>(null)
+
   const complete = useMutation({
     mutationFn: (completedByName: string) =>
       completeTask(Number(taskId), { completedByName }),
@@ -45,6 +75,28 @@ export function TaskDetailPage() {
         caught instanceof ApiError
           ? caught.message
           : '완료 처리하지 못했습니다. 잠시 뒤 다시 눌러 주세요.',
+      )
+    },
+  })
+
+  /**
+   * '내가 처리할게요'. (Manyfast F-IVFNPC action, "새 플로우 5" n40 → `'내가 처리할게요' 선택`)
+   *
+   * 응답의 `claimable` 이 그대로 캐시에 반영되므로, 맡았든 경합에서 밀렸든 이후에는 버튼이 다시
+   * 그려지지 않는다 — 세 결과 모두 서버가 돌려준 지금 상태로 담당 표시가 갱신되기 때문이다.
+   */
+  const claim = useMutation({
+    mutationFn: (staffCode: string) => claimTask(Number(taskId), { staffCode }),
+    onSuccess: (response) => {
+      updateCache(response.task)
+      setClaimNotice(buildClaimNotice(response))
+      setClaimError(null)
+    },
+    onError: (caught: unknown) => {
+      setClaimError(
+        caught instanceof ApiError
+          ? caught.message
+          : '지금 맡지 못했습니다. 잠시 뒤 다시 눌러 주세요.',
       )
     },
   })
@@ -83,6 +135,26 @@ export function TaskDetailPage() {
         <>
           <TaskDetail task={task.data} />
 
+          {claimNotice !== null && <ClaimResult notice={claimNotice} />}
+
+          {task.data.claimable && session !== null && (
+            <BigButton
+              onClick={() => {
+                setClaimNotice(null)
+                setClaimError(null)
+                claim.mutate(session.staff.code)
+              }}
+            >
+              {claim.isPending ? '맡는 중…' : '내가 처리할게요'}
+            </BigButton>
+          )}
+
+          {claimError !== null && (
+            <p role="alert" className="text-lg text-amber-900">
+              {claimError}
+            </p>
+          )}
+
           {result !== null && <CompletionResult result={result} onBackToList={() => navigate('/tasks')} />}
 
           {result === null && stage === 'idle' && (
@@ -119,7 +191,7 @@ function TaskDetail({ task }: { task: TaskResponse }) {
       <p className="text-xl text-slate-700">
         담당 {assigneeLabel(task)} · 기한 {dueTimeLabel(task)}
       </p>
-      <p>
+      <p className="flex flex-wrap gap-2">
         <span
           className={`rounded-full px-4 py-2 text-lg font-semibold ${
             task.status === 'DONE'
@@ -129,8 +201,38 @@ function TaskDetail({ task }: { task: TaskResponse }) {
         >
           {task.statusLabel}
         </span>
+        {/* 담당 표시는 직종만 배정 · 담당자 확정 두 가지를 구분한다. (Manyfast F-IVFNPC display) */}
+        <span
+          className={`rounded-full px-4 py-2 text-lg font-semibold ${
+            task.assigneeName === null
+              ? 'bg-slate-100 text-slate-700'
+              : 'bg-teal-100 text-teal-900'
+          }`}
+        >
+          {claimStatusLabel(task)}
+        </span>
       </p>
       {completed !== null && <p className="text-lg text-slate-600">{completed}</p>}
+    </section>
+  )
+}
+
+/** '내가 처리할게요' 결과 안내. */
+function ClaimResult({ notice }: { notice: ClaimNotice }) {
+  return (
+    <section
+      role="status"
+      className={`flex flex-col gap-2 rounded-2xl border-2 px-5 py-6 ${
+        notice.tone === 'success' ? 'border-teal-600 bg-teal-50' : 'border-amber-400 bg-amber-50'
+      }`}
+    >
+      <p
+        className={`text-xl font-semibold ${
+          notice.tone === 'success' ? 'text-teal-900' : 'text-amber-900'
+        }`}
+      >
+        {notice.text}
+      </p>
     </section>
   )
 }
