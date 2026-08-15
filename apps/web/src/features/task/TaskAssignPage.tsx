@@ -9,6 +9,7 @@ import { findCard, jobRoleLabel, JOB_ROLE_LABELS } from '../handover-card/handov
 import type { JobRole } from '../handover-card/handoverCardApi'
 import { useHandoverCards } from '../handover-card/useHandoverCards'
 import type { Staff } from '../session/staffDirectory'
+import { useSession } from '../session/sessionContext'
 import { useStaffDirectory } from '../session/useStaffDirectory'
 import { createTask, type TaskResponse } from './taskApi'
 import {
@@ -32,6 +33,7 @@ const JOB_ROLES = Object.keys(JOB_ROLE_LABELS) as JobRole[]
 export function TaskAssignPage() {
   const { cardId } = useParams()
   const navigate = useNavigate()
+  const { session } = useSession()
   const cards = useHandoverCards()
   const directory = useStaffDirectory()
   const staffList = directory.data ?? []
@@ -53,7 +55,10 @@ export function TaskAssignPage() {
   }, [card, draft])
 
   const assign = useMutation({
-    mutationFn: (request: TaskDraft) => createTask(parsed, toTaskCreateRequest(request)),
+    mutationFn: (request: TaskDraft) =>
+      // assignedByStaffCode: 배정한 사람 사번을 세션에서 주입. 알림 actorName + 자기제외 판정에 사용.
+      // (#70 댓글, #71)
+      createTask(parsed, toTaskCreateRequest(request, session?.staff.code)),
     onSuccess: (task) => {
       setErrors([])
       setNotice(null)
@@ -240,6 +245,7 @@ function TaskForm({
                 onChange({
                   assigneeJobRole: draft.assigneeJobRole === role ? null : role,
                   assigneeName: '',
+                  assigneeStaffCode: '',
                 })
               }
             >
@@ -266,17 +272,27 @@ function TaskForm({
             </p>
             <select
               id="assigneeName"
-              value={draft.assigneeName}
-              onChange={(event) => onChange({ assigneeName: event.target.value })}
+              value={draft.assigneeStaffCode}
+              onChange={(event) => {
+                const code = event.target.value
+                const found = filteredStaff.find((s) => s.code === code)
+                // code 가 있으면 이름·사번을 함께 저장. 빈 선택이면 둘 다 초기화.
+                // assigneeStaffCode 는 알림 생성의 자기제외 판정과 actorName 에 사용. (#70 댓글)
+                onChange({
+                  assigneeName: found?.name ?? '',
+                  assigneeStaffCode: code,
+                })
+              }}
               className="w-full rounded-2xl border-2 border-slate-300 bg-white px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
             >
               <option value="">직종만 배정 (특정인 미지정)</option>
+              {/* 현재 선택값이 목록에 없으면(예: 카드 프리필로 이름만 있는 경우) fallback 옵션 추가 */}
               {draft.assigneeName !== '' &&
                 !filteredStaff.some((s) => s.name === draft.assigneeName) && (
-                  <option value={draft.assigneeName}>{draft.assigneeName}</option>
+                  <option value={draft.assigneeStaffCode}>{draft.assigneeName}</option>
                 )}
               {filteredStaff.map((staff) => (
-                <option key={staff.code} value={staff.name}>
+                <option key={staff.code} value={staff.code}>
                   {staff.name} ({staff.code})
                 </option>
               ))}
