@@ -17,6 +17,8 @@ import com.ieobom.api.handovercard.HandoverCardRepository;
 import com.ieobom.api.handovercard.ReviewStatus;
 import com.ieobom.api.recipient.CareRecipient;
 import com.ieobom.api.recipient.CareRecipientRepository;
+import com.ieobom.api.staff.Staff;
+import com.ieobom.api.staff.StaffRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -48,6 +50,7 @@ class TaskApiTest {
 	@Autowired private HandoverRepository handovers;
 	@Autowired private HandoverCardRepository cards;
 	@Autowired private TaskRepository tasks;
+	@Autowired private StaffRepository staffs;
 
 	private CareRecipient 김말순;
 	private Handover 인계;
@@ -384,6 +387,178 @@ class TaskApiTest {
 				.andExpect(jsonPath("$.code").value("TASK_NOT_FOUND"));
 	}
 
+	@Test
+	void 배정할_때_담당자를_고르면_확정_방식이_직접_배정이다() throws Exception {
+		HandoverCard card = 카드(김말순, "저녁 식사량 확인");
+
+		mockMvc
+				.perform(배정(card.getId(), """
+						{
+						  "content": "저녁 식사량 확인",
+						  "assigneeJobRole": "NURSE_AIDE",
+						  "assigneeName": "박간호",
+						  "dueTime": "17:30"
+						}
+						"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.claimMethod").value("DIRECT_ASSIGN"))
+				.andExpect(jsonPath("$.claimMethodLabel").value("직접 배정"))
+				.andExpect(jsonPath("$.claimedAt").exists())
+				// 사람이 이미 정해진 업무에는 '내가 처리할게요'를 띄우지 않는다. (Manyfast F-IVFNPC display)
+				.andExpect(jsonPath("$.claimable").value(false));
+	}
+
+	@Test
+	void 직종만_배정된_업무는_확정_방식이_없고_맡을_수_있는_상태다() throws Exception {
+		HandoverCard card = 카드(김말순, "저녁 식사량 확인");
+
+		mockMvc
+				.perform(배정(card.getId(), """
+						{"content": "저녁 식사량 확인", "assigneeJobRole": "NURSE_AIDE", "dueTime": "17:30"}
+						"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.assigneeName").doesNotExist())
+				// 방식은 담당자가 있을 때만 값을 가진다. (Manyfast F-IVFNPC dataSpec)
+				.andExpect(jsonPath("$.claimMethod").doesNotExist())
+				.andExpect(jsonPath("$.claimedAt").doesNotExist())
+				.andExpect(jsonPath("$.claimable").value(true));
+	}
+
+	@Test
+	void 배정된_직종_직원이_맡으면_담당자가_되고_상태는_미처리로_남는다() throws Exception {
+		Task task = 업무(카드(김말순, "저녁 식사량 확인"), null);
+		Staff 간호조무사 = 직원(JobRole.NURSE_AIDE);
+
+		mockMvc
+				.perform(담당확정(task.getId(), 사번본문(간호조무사)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.claimed").value(true))
+				.andExpect(jsonPath("$.alreadyClaimed").value(false))
+				.andExpect(jsonPath("$.alreadyCompleted").value(false))
+				.andExpect(jsonPath("$.notice").doesNotExist())
+				.andExpect(jsonPath("$.task.assigneeName").value(간호조무사.getName()))
+				.andExpect(jsonPath("$.task.claimMethod").value("SELF_CLAIM"))
+				.andExpect(jsonPath("$.task.claimMethodLabel").value("직종에서 맡기"))
+				.andExpect(jsonPath("$.task.claimedAt").exists())
+				// 담당 확정은 담당자 정보의 변경이지 상태 추가가 아니다. (Manyfast F-IVFNPC rules)
+				.andExpect(jsonPath("$.task.status").value("PENDING"))
+				.andExpect(jsonPath("$.task.statusLabel").value("미처리"))
+				.andExpect(jsonPath("$.task.claimable").value(false));
+
+		assertThat(tasks.findById(task.getId()))
+				.get()
+				.satisfies(
+						saved -> {
+							assertThat(saved.getAssigneeName()).isEqualTo(간호조무사.getName());
+							assertThat(saved.getClaimMethod()).isEqualTo(ClaimMethod.SELF_CLAIM);
+							assertThat(saved.getClaimedAt()).isNotNull();
+							assertThat(saved.getStatus()).isEqualTo(TaskStatus.PENDING);
+						});
+	}
+
+	@Test
+	void 이미_다른_직원이_맡은_업무는_담당이_바뀌지_않는다() throws Exception {
+		Task task = 업무(카드(김말순, "저녁 식사량 확인"), null);
+		Staff 먼저 = 직원(JobRole.NURSE_AIDE);
+		mockMvc.perform(담당확정(task.getId(), 사번본문(먼저))).andExpect(status().isOk());
+
+		Task 확정직후 = tasks.findById(task.getId()).orElseThrow();
+		Staff 나중 = 다른_직원(JobRole.NURSE_AIDE, 먼저);
+
+		mockMvc
+				.perform(담당확정(task.getId(), 사번본문(나중)))
+				// 오류가 아니다. 화면이 그려야 하는 것은 누가 언제 맡았는지다. (Manyfast F-IVFNPC exceptions)
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.claimed").value(false))
+				.andExpect(jsonPath("$.alreadyClaimed").value(true))
+				.andExpect(jsonPath("$.notice").value(containsString(먼저.getName())))
+				.andExpect(jsonPath("$.task.assigneeName").value(먼저.getName()))
+				.andExpect(jsonPath("$.task.claimedAt").exists());
+
+		assertThat(tasks.findById(task.getId()))
+				.get()
+				.satisfies(
+						saved -> {
+							assertThat(saved.getAssigneeName()).isEqualTo(확정직후.getAssigneeName());
+							assertThat(saved.getClaimedAt()).isEqualTo(확정직후.getClaimedAt());
+						});
+	}
+
+	@Test
+	void 이미_완료된_업무는_맡을_수_없고_완료_상태를_돌려준다() throws Exception {
+		Task task = 업무(카드(김말순, "저녁 식사량 확인"), null);
+		완료로_만든다(task.getId(), "이복지");
+
+		mockMvc
+				.perform(담당확정(task.getId(), 사번본문(직원(JobRole.NURSE_AIDE))))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.claimed").value(false))
+				.andExpect(jsonPath("$.alreadyCompleted").value(true))
+				.andExpect(jsonPath("$.notice").value(containsString("이미 완료")))
+				.andExpect(jsonPath("$.task.status").value("DONE"))
+				.andExpect(jsonPath("$.task.completedByName").value("이복지"));
+
+		assertThat(tasks.findById(task.getId()))
+				.get()
+				.satisfies(saved -> assertThat(saved.getAssigneeName()).isNull());
+	}
+
+	@Test
+	void 배정된_직종이_아닌_직원은_맡을_수_없다() throws Exception {
+		// 업무는 간호조무사에게 배정돼 있고 요청하는 사람은 요양보호사다.
+		Task task = 업무(카드(김말순, "저녁 식사량 확인"), null);
+
+		mockMvc
+				.perform(담당확정(task.getId(), 사번본문(직원(JobRole.CAREGIVER))))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("TASK_JOB_ROLE_MISMATCH"));
+
+		assertThat(tasks.findById(task.getId()))
+				.get()
+				.satisfies(saved -> assertThat(saved.getAssigneeName()).isNull());
+	}
+
+	@Test
+	void 명단에_없는_사번으로는_맡을_수_없다() throws Exception {
+		Task task = 업무(카드(김말순, "저녁 식사량 확인"), null);
+
+		mockMvc
+				.perform(담당확정(task.getId(), """
+						{"staffCode": "ST-999"}
+						"""))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("STAFF_NOT_FOUND"));
+
+		assertThat(tasks.findById(task.getId()))
+				.get()
+				.satisfies(saved -> assertThat(saved.getAssigneeName()).isNull());
+	}
+
+	@Test
+	void 사번이_비어_있으면_담당을_확정하지_않는다() throws Exception {
+		Task task = 업무(카드(김말순, "저녁 식사량 확인"), null);
+
+		mockMvc
+				.perform(담당확정(task.getId(), """
+						{"staffCode": "   "}
+						"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+				.andExpect(jsonPath("$.fields[0].field").value("staffCode"));
+
+		assertThat(tasks.findById(task.getId()))
+				.get()
+				.satisfies(saved -> assertThat(saved.getAssigneeName()).isNull());
+	}
+
+	@Test
+	void 없는_업무는_맡을_수_없다() throws Exception {
+		mockMvc
+				.perform(담당확정(999_999L, 사번본문(직원(JobRole.NURSE_AIDE))))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("TASK_NOT_FOUND"));
+	}
+
 	private MockHttpServletRequestBuilder 배정(Long cardId, String body) {
 		return post("/api/handover-cards/{cardId}/tasks", cardId)
 				.contentType(MediaType.APPLICATION_JSON)
@@ -394,6 +569,37 @@ class TaskApiTest {
 		return patch("/api/tasks/{taskId}/complete", taskId)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(body);
+	}
+
+	private MockHttpServletRequestBuilder 담당확정(Long taskId, String body) {
+		return patch("/api/tasks/{taskId}/claim", taskId)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(body);
+	}
+
+	private String 사번본문(Staff staff) {
+		return """
+				{"staffCode": "%s"}
+				""".formatted(staff.getCode());
+	}
+
+	/**
+	 * 시드 명단에서 그 직종의 직원 하나. 사번을 테스트에 박아 두지 않는 이유는 시드가 바뀌면 여기가 함께 깨지기 때문이다. 이 테스트가 보려는 것은
+	 * 특정 사번이 아니라 <b>직종이 맞는가</b>다.
+	 */
+	private Staff 직원(JobRole jobRole) {
+		return staffs.findAll().stream()
+				.filter(staff -> staff.getJobRole() == jobRole)
+				.findFirst()
+				.orElseThrow();
+	}
+
+	private Staff 다른_직원(JobRole jobRole, Staff 제외) {
+		return staffs.findAll().stream()
+				.filter(staff -> staff.getJobRole() == jobRole)
+				.filter(staff -> !staff.getCode().equals(제외.getCode()))
+				.findFirst()
+				.orElseThrow();
 	}
 
 	/** 검토 단계를 거치지 않고 카드를 직접 만든다. 무엇이 카드가 되는지는 카드 쪽 테스트가 본다. */
