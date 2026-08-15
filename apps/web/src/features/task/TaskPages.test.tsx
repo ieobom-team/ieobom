@@ -8,6 +8,7 @@ import { createQueryClient } from '../../shared/api/queryClient'
 import { SessionProvider } from '../session/SessionProvider'
 import { saveSession } from '../session/sessionStorage'
 import { seedStaffCache, TEST_STAFF } from '../session/staffFixture'
+import type { Staff } from '../session/staffDirectory'
 import type { HandoverCard, JobRole } from '../handover-card/handoverCardApi'
 import type { TaskResponse } from './taskApi'
 
@@ -38,6 +39,7 @@ function 카드(patch: Partial<HandoverCard> = {}): HandoverCard {
   }
 }
 
+/** 기본값은 김하늘(요양보호사)에게 직접 배정된 업무다. */
 function 업무(patch: Partial<TaskResponse> = {}): TaskResponse {
   return {
     id: 4,
@@ -45,9 +47,13 @@ function 업무(patch: Partial<TaskResponse> = {}): TaskResponse {
     careRecipientId: 1,
     careRecipientName: '김말순',
     content: '저녁 식사량 확인',
-    assigneeJobRole: 'NURSE_AIDE',
-    assigneeJobRoleLabel: '간호조무사',
-    assigneeName: '박간호',
+    assigneeJobRole: 'CAREGIVER',
+    assigneeJobRoleLabel: '요양보호사',
+    assigneeName: '김하늘',
+    claimedAt: '2026-08-12T14:02:11.402',
+    claimMethod: 'DIRECT_ASSIGN',
+    claimMethodLabel: '직접 배정',
+    claimable: false,
     dueTime: '17:30',
     status: 'PENDING',
     statusLabel: '미처리',
@@ -59,11 +65,24 @@ function 업무(patch: Partial<TaskResponse> = {}): TaskResponse {
   }
 }
 
+/** 직종만 배정되어 아직 아무도 맡지 않은 업무. */
+function 열린업무(patch: Partial<TaskResponse> = {}): TaskResponse {
+  return 업무({
+    assigneeName: null,
+    claimedAt: null,
+    claimMethod: null,
+    claimMethodLabel: null,
+    claimable: true,
+    ...patch,
+  })
+}
+
 type Outcome = { status: number; body: unknown }
 
 let 목록_응답: Outcome
 let 상세_응답: Outcome
 let 완료_응답: Outcome
+let 클레임_응답: Outcome
 
 beforeEach(() => {
   목록_응답 = { status: 200, body: { date: '2026-08-12', tasks: [업무()] } }
@@ -74,6 +93,22 @@ beforeEach(() => {
       alreadyCompleted: false,
       notice: null,
       task: 업무({ status: 'DONE', statusLabel: '완료', completedByName: '이복지', delegated: true }),
+    },
+  }
+  클레임_응답 = {
+    status: 200,
+    body: {
+      claimed: true,
+      alreadyClaimed: false,
+      alreadyCompleted: false,
+      notice: null,
+      task: 업무({
+        assigneeName: '김하늘',
+        claimedAt: '2026-08-12T16:00:00',
+        claimMethod: 'SELF_CLAIM',
+        claimMethodLabel: '직종에서 맡기',
+        claimable: false,
+      }),
     },
   }
 
@@ -141,6 +176,14 @@ beforeEach(() => {
           }),
         )
       }
+      if (input.includes('/claim')) {
+        return Promise.resolve(
+          new Response(JSON.stringify(클레임_응답.body), {
+            status: 클레임_응답.status,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        )
+      }
       if (/\/api\/tasks\/\d+$/.test(input)) {
         return Promise.resolve(
           new Response(JSON.stringify(상세_응답.body), {
@@ -166,9 +209,9 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function renderApp(initialPath = '/tasks') {
+function renderApp(initialPath = '/tasks', staff: Staff = 김하늘) {
   seedStaffCache()
-  saveSession({ entryRole: 'FIELD_WORKER', staff: 김하늘 })
+  saveSession({ entryRole: 'FIELD_WORKER', staff })
   return render(
     <QueryClientProvider client={createQueryClient()}>
       <SessionProvider>
@@ -194,10 +237,50 @@ describe('업무 목록 (n31 · n32)', () => {
     renderApp()
 
     const item = await screen.findByRole('button', { name: /저녁 식사량 확인/ })
-    expect(item).toHaveTextContent('박간호')
-    expect(item).toHaveTextContent('간호조무사')
+    expect(item).toHaveTextContent('김하늘')
+    expect(item).toHaveTextContent('요양보호사')
     expect(item).toHaveTextContent('17:30까지')
     expect(item).toHaveTextContent('미처리')
+  })
+
+  it('내게 배정된 업무와 내 직종에 열려 있는 업무를 구분해 보여 준다', async () => {
+    목록_응답 = {
+      status: 200,
+      body: {
+        date: '2026-08-12',
+        tasks: [
+          업무({ id: 4, content: '저녁 식사량 확인', assigneeName: '김하늘' }),
+          열린업무({ id: 5, content: '물 챙겨 드리기', assigneeJobRole: 'CAREGIVER', assigneeJobRoleLabel: '요양보호사' }),
+        ],
+      },
+    }
+    renderApp()
+
+    const 내업무 = within(await screen.findByRole('region', { name: '내게 배정된 업무' }))
+    expect(await 내업무.findByText('저녁 식사량 확인')).toBeInTheDocument()
+
+    const 열린업무목록 = within(screen.getByRole('region', { name: '내 직종에 열려 있는 업무' }))
+    expect(열린업무목록.getByText('물 챙겨 드리기')).toBeInTheDocument()
+    // '내가 처리할게요'가 뜨는 업무는 직종 배지로 '직종만 배정'을 함께 보여 준다.
+    expect(within(열린업무목록.getByRole('button', { name: /물 챙겨 드리기/ })).getByText('직종만 배정')).toBeInTheDocument()
+  })
+
+  it('다른 직원에게 배정되었거나 다른 직종에 열린 업무는 보이지 않는다', async () => {
+    목록_응답 = {
+      status: 200,
+      body: {
+        date: '2026-08-12',
+        tasks: [
+          업무({ id: 6, content: '이도윤 담당 업무', assigneeName: '이도윤' }),
+          열린업무({ id: 7, content: '간호조무사 열린 업무', assigneeJobRole: 'NURSE_AIDE', assigneeJobRoleLabel: '간호조무사' }),
+        ],
+      },
+    }
+    renderApp()
+
+    expect(await screen.findByText('오늘 등록된 업무가 없습니다.')).toBeInTheDocument()
+    expect(screen.queryByText('이도윤 담당 업무')).not.toBeInTheDocument()
+    expect(screen.queryByText('간호조무사 열린 업무')).not.toBeInTheDocument()
   })
 
   it('당일 업무가 없으면 비어 있다고 알린다', async () => {
@@ -266,6 +349,107 @@ describe('업무 상세와 완료 처리 (n35 · n59 · n60 · n33)', () => {
       await screen.findByRole('heading', { name: '이미 완료 처리된 업무입니다' }),
     ).toBeInTheDocument()
     expect(screen.getByText(/완료 확인자와 시각을 확인해 주세요/)).toBeInTheDocument()
+  })
+})
+
+describe("담당 확정 ('새 플로우 5' n40 → '내가 처리할게요' 선택)", () => {
+  it('직종만 배정된 업무에는 버튼이 뜨고, 맡으면 담당자·확정 시각으로 바뀌며 버튼이 사라진다', async () => {
+    상세_응답 = { status: 200, body: 열린업무() }
+    const user = userEvent.setup()
+    renderApp('/tasks/4')
+
+    const button = await screen.findByRole('button', { name: '내가 처리할게요' })
+    await user.click(button)
+
+    const notice = await screen.findByRole('status')
+    expect(within(notice).getByText('담당자로 확정되었습니다.')).toBeInTheDocument()
+    expect(screen.getByText(/담당 김하늘/)).toBeInTheDocument()
+    expect(screen.getByText('담당자 확정')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '내가 처리할게요' })).not.toBeInTheDocument()
+  })
+
+  it('담당자가 확정된 업무에는 버튼이 뜨지 않는다', async () => {
+    상세_응답 = { status: 200, body: 업무() }
+    renderApp('/tasks/4')
+
+    expect(await screen.findByText('저녁 식사량 확인')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '내가 처리할게요' })).not.toBeInTheDocument()
+  })
+
+  it('이미 다른 직원이 맡은 업무는 담당이 바뀌지 않고 언제 맡았는지 안내한다', async () => {
+    상세_응답 = { status: 200, body: 열린업무() }
+    클레임_응답 = {
+      status: 200,
+      body: {
+        claimed: false,
+        alreadyClaimed: true,
+        alreadyCompleted: false,
+        notice: '이미 이준호님이 맡은 업무입니다.',
+        task: 업무({
+          assigneeName: '이준호',
+          assigneeJobRole: 'CAREGIVER',
+          assigneeJobRoleLabel: '요양보호사',
+          claimedAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+          claimMethod: 'SELF_CLAIM',
+          claimMethodLabel: '직종에서 맡기',
+          claimable: false,
+        }),
+      },
+    }
+    const user = userEvent.setup()
+    renderApp('/tasks/4')
+
+    await user.click(await screen.findByRole('button', { name: '내가 처리할게요' }))
+
+    const notice = await screen.findByRole('status')
+    expect(within(notice).getByText(/이준호님이 \d+분 전 맡았습니다\./)).toBeInTheDocument()
+    expect(screen.getByText(/담당 이준호/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '내가 처리할게요' })).not.toBeInTheDocument()
+  })
+
+  it('이미 완료된 업무를 맡으려 하면 완료 상태를 안내한다', async () => {
+    상세_응답 = { status: 200, body: 열린업무() }
+    클레임_응답 = {
+      status: 200,
+      body: {
+        claimed: false,
+        alreadyClaimed: false,
+        alreadyCompleted: true,
+        notice: '이미 완료된 업무입니다. 완료 확인자와 시각을 확인해 주세요.',
+        task: 업무({
+          assigneeName: null,
+          status: 'DONE',
+          statusLabel: '완료',
+          completedByName: '이복지',
+          claimable: false,
+        }),
+      },
+    }
+    const user = userEvent.setup()
+    renderApp('/tasks/4')
+
+    await user.click(await screen.findByRole('button', { name: '내가 처리할게요' }))
+
+    const notice = await screen.findByRole('status')
+    expect(
+      within(notice).getByText('이미 완료된 업무입니다. 완료 확인자와 시각을 확인해 주세요.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '내가 처리할게요' })).not.toBeInTheDocument()
+  })
+
+  it('담당 확정 요청이 실패해도 화면은 그대로 동작한다', async () => {
+    상세_응답 = { status: 200, body: 열린업무() }
+    클레임_응답 = { status: 500, body: { code: 'UNKNOWN_ERROR', message: '서버 오류' } }
+    const user = userEvent.setup()
+    renderApp('/tasks/4')
+
+    await user.click(await screen.findByRole('button', { name: '내가 처리할게요' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('서버 오류')
+    // 실패해도 업무 상세와 버튼은 그대로 남는다.
+    expect(screen.getByText('저녁 식사량 확인')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '내가 처리할게요' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '완료 처리' })).toBeInTheDocument()
   })
 })
 

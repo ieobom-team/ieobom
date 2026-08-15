@@ -59,6 +59,10 @@ function 업무(patch: Partial<TaskResponse> = {}): TaskResponse {
     assigneeJobRole: 'NURSE_AIDE',
     assigneeJobRoleLabel: '간호조무사',
     assigneeName: '박간호',
+    claimedAt: '2026-08-13T14:02:11.402',
+    claimMethod: 'DIRECT_ASSIGN',
+    claimMethodLabel: '직접 배정',
+    claimable: false,
     dueTime: '17:30',
     status: 'PENDING',
     statusLabel: '미처리',
@@ -108,7 +112,7 @@ beforeEach(() => {
 
   브리핑_응답 = {
     status: 200,
-    body: { date: '2026-08-13', pending: [업무()], pendingCount: 1 },
+    body: { date: '2026-08-13', pending: [업무()], pendingCount: 1, claimedCount: 1, unclaimedCount: 0 },
   }
 
   vi.stubGlobal(
@@ -315,7 +319,7 @@ describe('하원 미처리 브리핑 (n48 브리핑 선택 → n44 브리핑 · 
     // 이 화면이 파는 것은 목록이 아니라 숫자다. (Manyfast R-MFISQE 수락기준, n45 미처리 건수·목록)
     브리핑_응답 = {
       status: 200,
-      body: { date: '2026-08-13', pending: [업무()], pendingCount: 4 },
+      body: { date: '2026-08-13', pending: [업무()], pendingCount: 4, claimedCount: 3, unclaimedCount: 1 },
     }
     renderApp('/admin/briefing')
 
@@ -324,8 +328,24 @@ describe('하원 미처리 브리핑 (n48 브리핑 선택 → n44 브리핑 · 
     expect(screen.getByText('저녁 식사량 확인')).toBeInTheDocument()
   })
 
+  it('미처리 건수를 담당자 확정 · 미확정으로 나눠 보여 준다', async () => {
+    // 이 구분이 v38 이 메운 구멍이다. 하원 전에 사람을 붙여야 할 대상은 미확정 쪽이다.
+    브리핑_응답 = {
+      status: 200,
+      body: { date: '2026-08-13', pending: [업무()], pendingCount: 5, claimedCount: 2, unclaimedCount: 3 },
+    }
+    renderApp('/admin/briefing')
+
+    await screen.findByText('저녁 식사량 확인')
+    expect(screen.getByText(/담당자 확정 ?2건/)).toBeInTheDocument()
+    expect(screen.getByText(/미확정 ?3건/)).toBeInTheDocument()
+  })
+
   it('미처리가 없으면 0건과 함께 없다고 알린다', async () => {
-    브리핑_응답 = { status: 200, body: { date: '2026-08-13', pending: [], pendingCount: 0 } }
+    브리핑_응답 = {
+      status: 200,
+      body: { date: '2026-08-13', pending: [], pendingCount: 0, claimedCount: 0, unclaimedCount: 0 },
+    }
     renderApp('/admin/briefing')
 
     expect(await screen.findByText('지금 미처리로 남은 업무가 없습니다.')).toBeInTheDocument()
