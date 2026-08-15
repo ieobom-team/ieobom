@@ -15,6 +15,8 @@ export type TaskDraft = {
   content: string
   assigneeJobRole: JobRole | null
   assigneeName: string
+  /** 담당자를 목록에서 선택했을 때의 사번. (#70 댓글, #71) */
+  assigneeStaffCode: string
   /** `<input type="time">` 값. `HH:MM` */
   dueTime: string
 }
@@ -35,6 +37,7 @@ export function draftFromCard(card: HandoverCard): TaskDraft {
     content: card.nextAction ?? '',
     assigneeJobRole: card.suggestedJobRole,
     assigneeName: '',
+    assigneeStaffCode: '',
     dueTime: card.suggestedDueTime ?? '',
   }
 }
@@ -65,7 +68,11 @@ export function validateTaskDraft(draft: TaskDraft): ApiFieldError[] {
   return errors
 }
 
-export function toTaskCreateRequest(draft: TaskDraft): TaskCreateRequest {
+export function toTaskCreateRequest(
+  draft: TaskDraft,
+  /** 배정한 사람 사번. 세션의 staff.code 를 호출부에서 전달한다. (#70 댓글) */
+  assignedByStaffCode?: string,
+): TaskCreateRequest {
   const request: TaskCreateRequest = {
     content: draft.content.trim(),
     dueTime: draft.dueTime,
@@ -75,6 +82,12 @@ export function toTaskCreateRequest(draft: TaskDraft): TaskCreateRequest {
   }
   if (draft.assigneeName.trim() !== '') {
     request.assigneeName = draft.assigneeName.trim()
+  }
+  if (draft.assigneeStaffCode.trim() !== '') {
+    request.assigneeStaffCode = draft.assigneeStaffCode.trim()
+  }
+  if (assignedByStaffCode) {
+    request.assignedByStaffCode = assignedByStaffCode
   }
   return request
 }

@@ -5,12 +5,23 @@ import type { JobRole } from '../handover-card/handoverCardApi'
 
 export type TaskStatus = 'PENDING' | 'DONE'
 
-/** 담당은 직종 또는 이름 중 하나만 있으면 된다. 서버가 빈 칸을 카드 값으로 메우지 않으므로 둘 다 보낼 수도 있다. */
+/** 담당자를 지정하거나 알림 생성에 쓸 두 칸. (#70 댓글, #71)
+ *
+ * - `assigneeStaffCode`: 담당자를 특정한 경우 그 사번. 직종만 배정하면 없어도 된다.
+ *   없으면 알림이 만들어지지 않는다(동명이인 문제).
+ * - `assignedByStaffCode`: 배정한 사람의 사번(세션의 staff.code).
+ *   없으면 actorName 이 null 이 되어 알림 항목에 배정자가 표시되지 않는다.
+ *   또한 자기제외 판정을 못 해 배정자 본인에게도 알림이 생성된다.
+ */
 export type TaskCreateRequest = {
   content: string
   assigneeJobRole?: JobRole
   assigneeName?: string
-  /** 당일 `HH:MM`. 날짜는 담지 않는다 */
+  /** 담당자를 특정할 때 그 사번. */
+  assigneeStaffCode?: string
+  /** 배정한 사람의 사번 (세션 staff.code). */
+  assignedByStaffCode?: string
+  /** 형식 `HH:MM`. 날짜는 포함하지 않는다 */
   dueTime: string
 }
 

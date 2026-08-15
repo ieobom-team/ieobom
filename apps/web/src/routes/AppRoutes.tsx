@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router'
 import { AdminHomePage } from '../features/admin/AdminHomePage'
+import { NotificationInboxPage } from '../features/notification/NotificationInboxPage'
 import { OperationsDashboardPage } from '../features/dashboard/OperationsDashboardPage'
 import { UnprocessedBriefingPage } from '../features/dashboard/UnprocessedBriefingPage'
 import { ExportPage } from '../features/export/ExportPage'
@@ -73,6 +74,8 @@ export function AppRoutes() {
           <Route path="/handover-cards/:cardId/export" element={<ExportPage />} />
           <Route path="/tasks" element={<TaskListPage />} />
           <Route path="/tasks/:taskId" element={<TaskDetailPage />} />
+          {/* 알림함 — 유저플로우 "새 플로우 5" 알림함 화면(n43). (F-JIEOJO, #71) */}
+          <Route path="/notifications" element={<NotificationInboxPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -481,7 +481,7 @@ describe('후속 업무 배정 (n26 → n27 · n28 · n29 · n30)', () => {
     expect(screen.getByRole('option', { name: '김하늘 (ST-001)' })).toBeInTheDocument()
     expect(screen.queryByRole('option', { name: '최민재 (ST-004)' })).not.toBeInTheDocument()
 
-    await user.selectOptions(select, '김하늘')
+    await user.selectOptions(select, 'ST-001')
 
     await user.click(screen.getByRole('button', { name: '업무로 배정하기' }))
 
