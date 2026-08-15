@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 public interface TaskRepository extends JpaRepository<Task, Long> {
@@ -57,4 +58,31 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 	 */
 	@Query("select t from Task t where t.handoverCard.id in :cardIds")
 	List<Task> findByCardIds(Collection<Long> cardIds);
+
+	/**
+	 * 담당자가 비어 있는 미처리 업무에만 담당을 확정한다. (Manyfast F-IVFNPC action)
+	 *
+	 * <p><b>경합을 자바가 아니라 {@code where} 절이 가른다.</b> 먼저 읽고 자바에서 비었는지 검사한 뒤 저장하면, 두 요청이 같은 "비어
+	 * 있음"을 보고 둘 다 저장해 나중 사람이 담당자가 된다. 조건을 UPDATE 안에 두면 DB 가 행을 잠근 채 조건을 다시 보므로 성공은 한 번뿐이고,
+	 * 진 쪽은 <b>영향 행 수 0</b> 으로 그 사실을 알게 된다.
+	 *
+	 * <p>돌려주는 값이 곧 판정이다 — {@code 1} 이면 이 요청이 담당을 잡았고, {@code 0} 이면 그사이 다른 직원이 맡았거나 업무가 완료됐다.
+	 * 부르는 쪽은 0 일 때 <b>다시 읽어</b> 둘 중 무엇인지 가린다.
+	 *
+	 * <p>{@code clearAutomatically} 로 영속성 컨텍스트를 비운다. 이 UPDATE 는 엔티티를 거치지 않고 나가므로, 비우지 않으면 같은
+	 * 트랜잭션에서 다시 읽은 업무가 담당자 없는 옛 상태로 보인다.
+	 */
+	@Modifying(clearAutomatically = true, flushAutomatically = true)
+	@Query(
+			"""
+			update Task t
+			set t.assigneeName = :assigneeName, t.claimedAt = :claimedAt, t.claimMethod = :claimMethod
+			where t.id = :id and t.assigneeName is null and t.status = :pending
+			""")
+	int claimIfUnclaimed(
+			Long id,
+			String assigneeName,
+			LocalDateTime claimedAt,
+			ClaimMethod claimMethod,
+			TaskStatus pending);
 }

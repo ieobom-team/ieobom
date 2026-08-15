@@ -1,6 +1,8 @@
 package com.ieobom.api.task;
 
 import com.ieobom.api.task.dto.TaskBriefingResponse;
+import com.ieobom.api.task.dto.TaskClaimRequest;
+import com.ieobom.api.task.dto.TaskClaimResponse;
 import com.ieobom.api.task.dto.TaskCompleteRequest;
 import com.ieobom.api.task.dto.TaskCompleteResponse;
 import com.ieobom.api.task.dto.TaskCreateRequest;
@@ -87,5 +89,20 @@ public class TaskController {
 	public TaskCompleteResponse complete(
 			@PathVariable Long taskId, @Valid @RequestBody TaskCompleteRequest request) {
 		return taskService.complete(taskId, request.normalizedCompletedByName());
+	}
+
+	/**
+	 * 직종에만 배정된 업무를 맡는다. (유저플로우 "새 플로우 5" n40 후속 업무 상세 → {@code '내가 처리할게요' 선택})
+	 *
+	 * <p>맡지 못했어도 {@code 200} 이다. 이미 다른 직원이 맡았거나 완료된 업무면 아무것도 바꾸지 않고 지금 상태를 돌려주며, 화면은
+	 * {@code alreadyClaimed} · {@code alreadyCompleted} 로 안내를 가른다. {@code complete} 와 같은 패턴이다.
+	 *
+	 * <p><b>맡은 것을 다시 놓는 경로는 두지 않는다.</b> Manyfast 가 제공하지 않는 동작이고, 담당 변경은 관리자가 한다.
+	 * (F-IVFNPC rules)
+	 */
+	@PatchMapping("/api/tasks/{taskId}/claim")
+	public TaskClaimResponse claim(
+			@PathVariable Long taskId, @Valid @RequestBody TaskClaimRequest request) {
+		return taskService.claim(taskId, request.normalizedStaffCode());
 	}
 }

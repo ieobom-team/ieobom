@@ -175,6 +175,47 @@ class TaskListApiTest {
 				.andExpect(jsonPath("$.doneCount").doesNotExist());
 	}
 
+	@Test
+	void 브리핑은_미처리_건수를_담당_확정과_미확정으로_나눈다() throws Exception {
+		업무("담당자가 맡은 일", LocalTime.of(15, 0), "박간호");
+		직종만_배정된_업무("아무도 안 맡은 일", LocalTime.of(16, 0));
+		직종만_배정된_업무("이것도 아무도 안 맡은 일", LocalTime.of(17, 0));
+		완료된_업무("닫은 일", LocalTime.of(14, 0), "박간호", "박간호");
+
+		mockMvc
+				.perform(get("/api/tasks/pending-briefing"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.pendingCount").value(3))
+				// 관리자가 묻는 것은 "남은 게 몇 건인가"가 아니라 "아무도 손대지 않은 게 몇 건인가"다.
+				.andExpect(jsonPath("$.claimedCount").value(1))
+				.andExpect(jsonPath("$.unclaimedCount").value(2));
+	}
+
+	@Test
+	void 브리핑의_확정과_미확정은_합쳐서_미처리_건수가_된다() throws Exception {
+		업무("담당자가 맡은 일", LocalTime.of(15, 0), "박간호");
+		직종만_배정된_업무("아무도 안 맡은 일", LocalTime.of(16, 0));
+		// 완료된 업무는 애초에 미처리가 아니므로 어느 쪽에도 세지 않는다.
+		완료된_업무("담당자가 있던 닫은 일", LocalTime.of(13, 0), "박간호", "박간호");
+
+		mockMvc
+				.perform(get("/api/tasks/pending-briefing"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.pendingCount").value(2))
+				.andExpect(jsonPath("$.claimedCount").value(1))
+				.andExpect(jsonPath("$.unclaimedCount").value(1));
+	}
+
+	@Test
+	void 브리핑이_비면_나눈_건수도_모두_0이다() throws Exception {
+		mockMvc
+				.perform(get("/api/tasks/pending-briefing"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.pendingCount").value(0))
+				.andExpect(jsonPath("$.claimedCount").value(0))
+				.andExpect(jsonPath("$.unclaimedCount").value(0));
+	}
+
 	/**
 	 * {@code /api/tasks/pending-briefing} 이 {@code /api/tasks/&#123;taskId&#125;} 로 흘러가지 않는다.
 	 *
@@ -241,6 +282,11 @@ class TaskListApiTest {
 	private Task 업무(String content, LocalTime dueTime, String assigneeName) {
 		return tasks.save(
 				Task.pending(카드(content), content, JobRole.NURSE_AIDE, assigneeName, dueTime));
+	}
+
+	/** 담당자 없이 직종에만 배정된 업무. 브리핑이 "아직 아무도 맡지 않은 건"으로 세는 대상이다. */
+	private Task 직종만_배정된_업무(String content, LocalTime dueTime) {
+		return 업무(content, dueTime, null);
 	}
 
 	private void 완료된_업무(

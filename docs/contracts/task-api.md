@@ -3,8 +3,9 @@
 인계 카드의 **다음 행동**을 담당자와 기한이 있는 **후속 업무**로 바꾸고 완료까지 닫는다.
 
 - Manyfast: `R-VZCOLM` 후속 업무 연결 및 처리 확인 / `F-IVFNPC` 후속 업무 배정 및 완료 처리
-- 기준 버전: `v0.3-plan-0813`
+- 기준 버전: `v38` (담당 확정 이전 부분은 `v0.3-plan-0813`)
 - 관련 화면: 유저플로우 "AI 인계 도구 내비게이션 맵" — n27 배정 화면(n28 AI 제안값) → n29 · n30 → n31 후속 업무 목록 화면 → n34 업무 선택 → n35 업무 상세 → n59 수행 확인됨? → n60 대리 완료 확인 모달 → n33 대리 완료 처리
+- 담당 확정 관련 화면: 유저플로우 "새 플로우 5" — n40 후속 업무 상세 → `'내가 처리할게요' 선택` / n58 하원 미처리 브리핑 → `담당자 확정·미확정 건수`
 
 > **당일 목록**(대시보드 · 하원 미처리 브리핑)은 Manyfast 기준 항목이 달라서
 > [아래 절](#당일-목록--대시보드와-하원-미처리-브리핑)에 따로 적는다. 경로가 `/api/tasks` 아래라 같은 파일에 둔다.
@@ -23,6 +24,7 @@ POST  /api/handover-cards/{cardId}/tasks    미처리 업무 생성 (n29)
 GET   /api/tasks                            그날 업무 목록 (n31 · n32 / n42 · n43)
 GET   /api/tasks/pending-briefing           하원 미처리 브리핑 (n44 · n45)
 GET   /api/tasks/{taskId}                   업무 상세 (n34)
+PATCH /api/tasks/{taskId}/claim             담당 확정 — '내가 처리할게요' ("새 플로우 5" n40)
 PATCH /api/tasks/{taskId}/complete          완료 처리 · 대리 완료 (n35)
 ```
 
@@ -72,6 +74,15 @@ PATCH /api/tasks/{taskId}/complete          완료 처리 · 대리 완료 (n35)
 했는지"가 아니라 "상태가 무엇인지"를 관리하게 되고, 하원 미처리 브리핑이 봐야 하는 "아직 안 닫힌 것"의
 경계가 흐려진다.
 
+**담당 확정도 상태를 늘리지 않는다.** 누가 맡아도 업무는 `PENDING` 으로 남는다. (`F-IVFNPC` rules)
+`"미처리인데 이준호님이 맡음"` 이 정상적인 표현이고, 그것을 표현하는 것은 상태가 아니라 **담당자 필드**다.
+
+| 화면이 묻는 것 | 어느 값으로 답하나 |
+|---|---|
+| 닫혔는가 | `status` |
+| 맡은 사람이 있는가 | `assigneeName` 이 비었는지 |
+| 어떻게 맡아졌는가 | `claimMethod` |
+
 **미처리로 되돌리는 동작은 없다.** Manyfast에 없다. 그래서 완료 엔드포인트는 상태를 요청으로 받지 않고
 한 방향만 한다.
 
@@ -102,6 +113,10 @@ PATCH /api/tasks/{taskId}/complete          완료 처리 · 대리 완료 (n35)
   "assigneeJobRole": "NURSE_AIDE",
   "assigneeJobRoleLabel": "간호조무사",
   "assigneeName": "박간호",
+  "claimedAt": "2026-08-12T14:02:11.402",
+  "claimMethod": "DIRECT_ASSIGN",
+  "claimMethodLabel": "직접 배정",
+  "claimable": false,
   "dueTime": "17:30",
   "status": "PENDING",
   "statusLabel": "미처리",
@@ -114,6 +129,24 @@ PATCH /api/tasks/{taskId}/complete          완료 처리 · 대리 완료 (n35)
 
 이 모양이 **업무 API가 공유하는 모양**이다. 상세 조회와 완료 처리도 같은 것을 돌려준다.
 담당자 또는 담당 직종 · 기한 · 상태는 언제나 함께 나간다. 화면이 셋을 같이 보여 주기 때문이다. (`F-IVFNPC` display)
+
+### 담당 관련 세 값
+
+| 값 | 언제 채워지나 |
+|---|---|
+| `claimedAt` | 담당자가 정해진 시각. **담당자가 없으면 `null`** |
+| `claimMethod` | `DIRECT_ASSIGN`(직접 배정) · `SELF_CLAIM`(직종에서 맡기). **담당자가 있을 때만** 값이 있다 (`F-IVFNPC` dataSpec) |
+| `claimable` | 지금 맡을 수 있는지. `PENDING` 이면서 담당자가 비었으면 참 |
+
+배정할 때 `assigneeName` 을 함께 보내면 그 자리에서 `DIRECT_ASSIGN` 으로 확정된다. 직종만 보내면 세 값이
+각각 `null` · `null` · `true` 로 나가고, 그 업무가 `'내가 처리할게요'` 가 뜨는 업무다. (`F-IVFNPC` display)
+
+**`claimable` 은 표시용이지 허가가 아니다.** 화면이 이 값을 받은 뒤 직원이 버튼을 누르기까지 사이에 다른
+사람이 맡을 수 있다. 실제로 막는 것은 아래 `claim` 의 조건부 UPDATE다.
+
+`claimedAt` 을 `createdAt` 과 따로 두는 이유는 **두 값이 갈리기 때문**이다. 직종에만 배정된 업무는
+만들어진 뒤 한참 지나 누군가 맡는다. 그 간격이 "직종에 던져 둔 일이 실제로 언제 사람에게 붙었는가"이고,
+`createdAt` 을 재사용하면 그 질문에 답할 수 없게 된다.
 
 ### 세 값은 화면이 프리필한 뒤 직원이 확정한다
 
@@ -224,6 +257,115 @@ Manyfast에 없는 결정이라 구현에서 정했다 — 화면이 먼저 봐�
 | 규칙 | 결과 |
 |---|---|
 | 업무가 없음 | `404` — `TASK_NOT_FOUND` |
+
+---
+
+## `PATCH /api/tasks/{taskId}/claim`
+
+직종에만 배정된 업무를 한 직원이 맡는다. (`F-IVFNPC` action, 유저플로우 "새 플로우 5" n40 → `'내가 처리할게요' 선택`)
+
+```json
+{ "staffCode": "ST-004" }
+```
+
+### 응답 — `200 OK`
+
+```json
+{
+  "claimed": true,
+  "alreadyClaimed": false,
+  "alreadyCompleted": false,
+  "notice": null,
+  "task": {
+    "id": 4,
+    "assigneeName": "최민재",
+    "claimedAt": "2026-08-15T16:12:40.118",
+    "claimMethod": "SELF_CLAIM",
+    "claimMethodLabel": "직종에서 맡기",
+    "claimable": false,
+    "status": "PENDING",
+    "statusLabel": "미처리",
+    "...": "위와 같은 모양"
+  }
+}
+```
+
+**상태는 `PENDING` 그대로다.** 맡은 것과 닫은 것은 다른 일이고, 완료는 따로 처리한다. (`F-IVFNPC` rules)
+
+### 받는 것은 사번 하나다
+
+이름과 직종을 함께 받지 않는다. Manyfast는 **"배정된 직종에 속한 직원만 그 업무를 맡을 수 있다"**고 하는데
+(`F-IVFNPC` permissions), 직종을 요청에서 받으면 그 검사는 **보낸 쪽이 스스로 신고한 값**을 보는 것이 되어
+검사가 아니게 된다. 사번으로 받으면 서버가 `staff` 명단에서 이름과 직종을 직접 읽는다.
+
+완료 처리(`completedByName`)와 갈리는 지점이다. 완료는 **누구나** 대신 눌러도 되므로 검사할 것이 없다.
+
+| | 받는 값 | 검사 |
+|---|---|---|
+| 완료 처리 | 확인자 **이름** | 없다. 대리 완료가 정상 경로다 |
+| 담당 확정 | 맡는 사람 **사번** | 배정된 직종과 같은지 본다 |
+
+### 동시에 두 사람이 누르면
+
+**먼저 도달한 한 명에게만 적용된다.** (`F-IVFNPC` action · rules) 직종에만 배정된 업무는 그 직종 직원
+전원의 목록에 함께 뜨므로, 두 사람이 같은 순간에 누르는 것은 **이 화면의 정상적인 사용**이다.
+
+경합을 가르는 것은 자바가 아니라 `where` 절이다.
+
+```sql
+update task
+   set assignee_name = ?, claimed_at = ?, claim_method = 'SELF_CLAIM'
+ where id = ? and assignee_name is null and status = 'PENDING'
+```
+
+먼저 읽고 자바에서 비었는지 검사한 뒤 저장하면 두 요청이 같은 "비어 있음"을 보고 둘 다 저장해서, **나중
+사람이 담당자가 된다.** 조건을 UPDATE 안에 두면 DB가 행을 잠근 채 조건을 다시 보므로 성공은 한 번뿐이고,
+진 쪽은 **영향 행 수 0**으로 그 사실을 알게 된다. 그때 서버는 업무를 다시 읽어 "이미 맡음"인지 "이미
+완료"인지 가려 돌려준다.
+
+서비스 앞단의 `alreadyClaimed` · `alreadyCompleted` 검사는 흔한 경우를 미리 걸러 **안내 문장을 만들기
+위한 것이지 경합을 막지 못한다.** 검사와 저장 사이에 다른 직원이 맡을 수 있다.
+
+> **테스트는 H2, 배포는 MySQL이다.** `TaskClaimConcurrencyTest` 가 확인하는 것은 InnoDB의 잠금 동작이
+> 아니라 **애플리케이션이 판정을 DB에 맡겼는지**다. 한 행의 조건부 UPDATE를 원자적으로 평가하는 것은 두
+> 엔진 모두 같아서 이 구조는 그대로 옮겨 가지만, **MySQL에서 직접 확인한 것은 아니다.** 실제 엔진 확인이
+> 필요해지면 Testcontainers 도입이 별도 Issue다.
+
+### 맡지 못했을 때
+
+**오류가 아니다.** `200` 이고 **아무것도 바뀌지 않는다.** (`F-IVFNPC` exceptions) 완료 처리와 같은
+이유다 — 화면이 보여 줘야 하는 것은 "실패했다"가 아니라 **지금 이 업무를 누가 맡고 있는지**이고,
+오류 응답(`ApiErrorResponse`)에는 그 값을 담을 자리가 없다.
+
+| 상황 | 참이 되는 값 | `task` 에 들어 있는 것 |
+|---|---|---|
+| 맡았다 | `claimed` | 요청한 직원이 담당자 |
+| 이미 다른 직원이 맡았다 | `alreadyClaimed` | **먼저 맡은 사람**과 그 시각 |
+| 이미 완료됐다 | `alreadyCompleted` | 완료 확인자와 완료 시각 |
+
+셋을 하나의 `failed` 로 묶지 않은 이유는 화면이 띄우는 안내가 셋 다 다르기 때문이다. 묶으면 화면이
+`notice` 문장을 파싱해 무슨 일이 있었는지 되짚어야 한다.
+
+### 규칙
+
+| 규칙 | 결과 |
+|---|---|
+| 업무가 없음 | `404` — `TASK_NOT_FOUND` |
+| `staffCode` 가 비었거나 공백뿐 | `400` — `VALIDATION_FAILED` |
+| 명단에 없는 사번 | `404` — `STAFF_NOT_FOUND` |
+| **배정된 직종에 속하지 않은 직원** | `409` — `TASK_JOB_ROLE_MISMATCH` |
+| 이미 다른 직원이 맡음 | `200`, `alreadyClaimed` — **바뀌는 것 없음** |
+| 이미 완료됨 | `200`, `alreadyCompleted` — **바뀌는 것 없음** |
+
+직종 불일치를 `403` 이 아니라 `409` 로 두는 이유는 **이 제품에 권한 모델이 없기** 때문이다. 진입 시
+역할과 본인을 고르는 식별뿐이라 인증된 주체가 없고, 거절의 근거는 요청자의 권한이 아니라 **업무에 배정된
+직종과 직원의 직종이 어긋난다**는 지금 상태다. 그래서 다른 상태 충돌(`CARD_NEXT_ACTION_MISSING` 등)과
+같은 자리에 둔다. 계정 모델이 생기면 다시 볼 지점이다.
+
+### 맡은 것을 다시 놓을 수 없다
+
+**되돌리는 경로를 두지 않는다.** Manyfast에 없는 동작이고, 담당 변경은 관리자가 한다. (`F-IVFNPC` rules)
+관리자용 담당자 변경 API는 아직 없다 — 필요해지면 별도 Issue다.
 
 ---
 
@@ -340,9 +482,28 @@ GET /api/tasks/pending-briefing?date= 그날 아직 안 닫힌 것만 (n44 · n4
 {
   "date": "2026-08-13",
   "pending": [{ "id": 4, "...": "같은 모양" }],
-  "pendingCount": 1
+  "pendingCount": 3,
+  "claimedCount": 1,
+  "unclaimedCount": 2
 }
 ```
+
+### 미처리 건수를 담당 확정 여부로 나눈다
+
+`claimedCount + unclaimedCount == pendingCount` 가 언제나 성립한다. 완료된 업무는 애초에 `pending` 에
+없으므로 어느 쪽에도 세지 않는다.
+
+| 값 | 무엇 |
+|---|---|
+| `claimedCount` | 미처리 중 **맡은 사람이 있는** 건수 |
+| `unclaimedCount` | 미처리 중 **아직 아무도 맡지 않은** 건수 |
+
+**이 둘을 나누는 것이 v38이 메운 구멍이다.** 배정 화면의 담당자 기본값이 '직종만 배정'이라, 합계만 주면
+관리자는 남은 업무가 "아무도 손대지 않은 것"인지 "누군가 맡아 처리 중인 것"인지 구분할 수 없다. 하원
+전에 사람을 붙여야 할 대상은 뒤쪽이 아니라 앞쪽이다. (`F-IVFNPC` display)
+
+기준은 **담당자 이름 하나**다. 직접 배정이든 직종에서 맡은 것이든 사람이 정해졌으면 확정으로 센다.
+관리자가 여기서 묻는 것은 어떻게 정해졌는가가 아니라 정해졌는가이다.
 
 **완료를 담을 자리가 없다.** 위 응답을 재사용하면서 `done` 을 비우면 그날 완료된 업무가 실제로 있어도
 `doneCount` 가 0 으로 나가 응답이 거짓말을 한다. 브리핑이 답하는 질문은 하나뿐이다 —
@@ -373,9 +534,11 @@ GET /api/tasks/pending-briefing?date= 그날 아직 안 닫힌 것만 (n44 · n4
 | `VALIDATION_FAILED` | `400` |
 | `HANDOVER_CARD_NOT_FOUND` | `404` |
 | `TASK_NOT_FOUND` | `404` |
+| `STAFF_NOT_FOUND` | `404` |
 | `CARD_NEXT_ACTION_MISSING` | `409` |
 | `CARE_RECIPIENT_NOT_RESOLVED` | `409` |
 | `TASK_ALREADY_CREATED` | `409` |
+| `TASK_JOB_ROLE_MISMATCH` | `409` |
 
 `CARE_RECIPIENT_NOT_RESOLVED` 는 카드 검토 API와 같은 코드다. 같은 상황이기 때문이다 —
 [handover-card-schema.md](handover-card-schema.md#patch-apihandover-cardsidreview-status)
@@ -392,6 +555,9 @@ GET /api/tasks/pending-briefing?date= 그날 아직 안 닫힌 것만 (n44 · n4
 | 알림 · 푸시 전송 | **없다.** 업무는 화면에서 확인하고 화면에서 닫는다 |
 | 완료를 미처리로 되돌리기 | 없다. Manyfast에 없다 |
 | 담당자 · 기한 **수정**, 업무 삭제 | 없다. Manyfast에 없다. 필요해지면 `propose-change` |
+| **맡은 업무를 다시 놓기** | 없다. Manyfast가 제공하지 않는다 (`F-IVFNPC` rules) |
+| **관리자의 담당자 변경** | 아직 없다. Manyfast `F-IVFNPC` permissions에는 있고 API가 없다 |
+| **목록의 담당자별 필터링** | 없다. `GET /api/tasks` 는 그날 전체를 준다 ([`#68`](https://github.com/ieobom-team/ieobom/issues/68) 범위 밖) |
 
 **자동 승계가 없다는 것을 어떻게 확인하는가** — 날짜를 넘기는 스케줄러도, 기한이 지난 업무를 건드리는
 코드도 없다. 미처리 업무는 그대로 미처리로 남고, 하원 브리핑에서 사람이 본다. (`F-IVFNPC` rules)
@@ -413,8 +579,19 @@ GET /api/tasks/pending-briefing?date= 그날 아직 안 닫힌 것만 (n44 · n4
 | `status` | `PENDING` · `DONE` 두 값 |
 | `completed_at` · `completed_by_name` | 완료 시점과 **확인자**. 담당자와 다를 수 있다 |
 | `assignee_job_role` · `assignee_name` | 직종만, 사람만, 또는 둘 다. 하나는 반드시 있다 |
+| `claimed_at` · `claim_method` | 담당이 정해진 **시점과 방식**. 담당자가 없으면 둘 다 비어 있다 |
 
 담당자 이름을 직원 테이블 참조가 아니라 문자열로 두는 이유는 **MVP에 계정·권한 모델이 없기** 때문이다.
 진입 시 역할과 본인을 선택하는 식별을 쓰므로 가리킬 직원 행이 없다.
 
-`delegated` 는 컬럼이 아니다. 담당자 이름과 확인자 이름에서 나오는 값이라 저장하면 두 값이 조용히 갈라진다.
+담당 확정 요청은 사번을 받지만 **저장하는 것은 이름**이다. 직원 명단은 조회 시점에 직종을 확인하려고 읽고,
+업무에는 기존 `assignee_name` 과 같은 형태로 남는다. 그래서 **동명이인을 구분하지 못한다** — 이름 문자열로
+두는 한 직접 배정에도 같은 한계가 있고, Manyfast `F-YJJJUX` dataSpec이 "파일럿에서 다시 판단"으로 이미
+미뤄 둔 사안이라 여기서도 그대로 둔다.
+
+`delegated` 와 `claimable` 은 컬럼이 아니다. 앞엣것은 담당자 이름과 확인자 이름에서, 뒤엣것은 상태와
+담당자 이름에서 나오는 값이라 저장하면 두 값이 조용히 갈라진다.
+
+> **Flyway.** `V1__*.sql` 은 아직 없고 스키마는 `ddl-auto: update` 로 만들어진다.
+> [`#19`](https://github.com/ieobom-team/ieobom/issues/19) 에서 첫 마이그레이션을 쓸 때 **`claimed_at`
+> (`DATETIME`) · `claim_method`(`VARCHAR(20)`) 두 컬럼이 빠지지 않아야 한다.**
