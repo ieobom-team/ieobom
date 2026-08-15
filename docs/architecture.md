@@ -9,10 +9,15 @@
 ```
 ieobom/
 ├── apps/
-│   ├── web/                  React 19 + TypeScript + Vite + Tailwind v4
-│   └── api/                  Spring Boot 4.1.0 / Java 21
+│   ├── web/                  React 19 + TypeScript + Vite + Tailwind v4 (+ Dockerfile)
+│   └── api/                  Spring Boot 4.1.0 / Java 21 (+ Dockerfile)
+│       └── src/main/resources/db/migration/   Flyway 마이그레이션 (V1__init.sql)
+├── deploy/                   배포 구성 — 배포에서만 쓴다
+│   ├── docker-compose.yml    Caddy · API · MySQL (루트의 compose 와 다른 파일)
+│   ├── Caddyfile             HTTPS · /api 프록시 · SPA 폴백
+│   └── .env.example          배포용 환경변수 이름만
 ├── docs/
-│   ├── development.md        로컬 실행·환경변수·검증
+│   ├── development.md        로컬 실행·환경변수·검증·배포 실행
 │   ├── architecture.md       이 문서
 │   ├── conventions.md        브랜치·커밋·PR·라벨
 │   ├── submission.md         대회 제출 요건
@@ -24,7 +29,7 @@ ieobom/
 │   ├── pull_request_template.md
 │   └── workflows/            ci.yml (가드) · api.yml (백엔드 빌드) · web.yml (프론트 검증)
 ├── scripts/                  verify-before-pr.sh / .ps1
-├── docker-compose.yml        MySQL 8.4
+├── docker-compose.yml        **로컬 개발용** MySQL 8.4 단독
 ├── AGENTS.md                 에이전트 공통 규칙
 └── CLAUDE.md / GEMINI.md     @AGENTS.md
 ```
@@ -46,8 +51,17 @@ ieobom/
                    MySQL 8.4 (같은 compose, 볼륨)
 ```
 
-VM 한 대에 `docker compose` 로 Caddy · API · MySQL 을 함께 올린다.
-배포 구성 파일(Dockerfile · compose · Caddyfile)은 [#19](https://github.com/ieobom-team/ieobom/issues/19)에서 만든다.
+VM 한 대에 `docker compose` 로 Caddy · API · MySQL 을 함께 올린다. ([#19](https://github.com/ieobom-team/ieobom/issues/19))
+
+| 파일 | 역할 |
+|---|---|
+| [`deploy/docker-compose.yml`](../deploy/docker-compose.yml) | 세 컨테이너. **DB 와 API 는 호스트 포트를 열지 않는다** — Caddy 만 밖에 선다 |
+| [`deploy/Caddyfile`](../deploy/Caddyfile) | 도메인은 `SITE_ADDRESS` 로 받는다. `/api` 는 접두어를 떼지 않고 넘긴다 |
+| [`deploy/.env.example`](../deploy/.env.example) | 변수 이름만. 필수 값이 비면 `:?` 로 기동이 막힌다 |
+| [`apps/api/Dockerfile`](../apps/api/Dockerfile) · [`apps/web/Dockerfile`](../apps/web/Dockerfile) | 멀티스테이지 빌드. web 이미지가 곧 Caddy 다 |
+
+실행 방법은 [development.md 배포](./development.md#7-배포)에 있다.
+**배포 실행과 비밀값 주입은 사람이 한다.**
 
 ### 왜 같은 출처인가
 
