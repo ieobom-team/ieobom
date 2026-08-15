@@ -82,7 +82,11 @@ $env:JAVA_HOME = "$env:USERPROFILE\.jdks\temurin-21.0.10"
 
 `src/test/resources/application.yml`이 H2 인메모리를 쓰고 Flyway를 끈다.
 그래서 CI와 개발자 로컬에서 DB 컨테이너 없이도 `./gradlew build`가 통과한다.
-MySQL 고유 문법이 필요한 테스트가 생기면 Testcontainers 도입을 별도 Issue로 검토한다.
+
+⚠️ **그래서 테스트는 Flyway 마이그레이션을 검증하지 못한다.** `./gradlew build`가 초록이어도
+V1이 MySQL에서 실제로 도는지는 확인되지 않는다. 확인 방법은
+[`db-schema.md`](./contracts/db-schema.md#테스트가-이-스키마를-검증하지-못한다)에 적어 뒀다.
+Testcontainers로 이 확인을 CI에 넣는 것은 별도 Issue로 뗐다.
 
 ### LLM 실호출 확인
 
@@ -113,10 +117,23 @@ CI에서는 `ai` 라벨이 붙은 PR과 수동 실행(`workflow_dispatch`)에서
 
 ### 스키마 관리
 
-- 개발 초반은 `spring.jpa.hibernate.ddl-auto: update`로 빠르게 간다.
-- **제출 전에는 Flyway 마이그레이션으로 고정한다.**
-  `src/main/resources/db/migration/V1__*.sql`을 추가하고 `spring.flyway.enabled: true`로 바꾼 뒤,
-  `ddl-auto`를 `validate`로 내린다.
+**스키마는 Flyway가 만들고 Hibernate는 검증만 한다.** (`spring.flyway.enabled: true` + `ddl-auto: validate`)
+테이블·컬럼·제약과 마이그레이션 규칙은 [`docs/contracts/db-schema.md`](./contracts/db-schema.md)에 있다.
+
+- 엔티티를 고치면 **같은 PR에서** `src/main/resources/db/migration/`에 `V2__…`처럼 새 파일을 추가한다.
+- **`V1__init.sql`은 고치지 않는다.** 이미 적용된 DB에서 체크섬이 어긋나 기동이 막힌다.
+- 엔티티와 DB가 한 글자만 달라도 **기동이 실패한다.** `ddl-auto: validate`라서 그렇다.
+
+> ⚠️ **V1이 병합되면 각자 로컬 DB를 한 번 초기화한다.**
+>
+> ```bash
+> docker compose down -v && docker compose up -d
+> ```
+>
+> `baseline-on-migrate: true`라서 이미 `ddl-auto: update`로 자란 로컬 DB는 baseline으로 찍히고
+> V1을 건너뛴다. 로컬은 안 깨지지만 **로컬(baseline)과 배포(빈 DB → V1 실행)가 서로 다른 경로로
+> 만들어진 스키마를 쓰게 된다.** 한 번 비우면 그 비대칭이 사라진다.
+> **로컬 데이터는 시더가 다시 넣는 시드뿐이라 잃을 것이 없다.**
 
 ### API 문서
 
@@ -203,3 +220,39 @@ pwsh ./scripts/verify-before-pr.ps1   # Windows
 | `web.yml` | `apps/web/**` 변경 시 | Node 20 + `npm run lint` · `npm test` · `npm run build` |
 
 CI는 최종 안전망이지 로컬 검증의 대체가 아니다. `main` 병합 전 CI 통과를 사람이 확인한다.
+
+## 7. 배포
+
+VM 한 대에 **Caddy · API · MySQL**을 `docker compose`로 함께 올린다.
+왜 같은 출처에 두는지는 [architecture.md 배포 배치](./architecture.md#배포-배치)에 있다.
+
+| 파일 | 무엇 |
+|---|---|
+| `deploy/docker-compose.yml` | 배포용 compose. **루트의 `docker-compose.yml`과 다른 파일이다** (그쪽은 로컬 MySQL 단독) |
+| `deploy/Caddyfile` | HTTPS 자동 발급, `/api` → `api:8080`, 나머지는 정적 + SPA 폴백 |
+| `deploy/.env.example` | 배포용 환경변수 **이름만**. 값은 채우지 않는다 |
+| `apps/api/Dockerfile` | JDK 21 빌드 → JRE 21 실행 (멀티스테이지) |
+| `apps/web/Dockerfile` | Node 20 빌드 → Caddy 이미지에 `dist` 탑재 |
+
+```bash
+cp deploy/.env.example deploy/.env      # 값을 채운 뒤 (커밋하지 않는다)
+docker compose -f deploy/docker-compose.yml up -d --build
+docker compose -f deploy/docker-compose.yml ps
+docker compose -f deploy/docker-compose.yml logs -f api
+```
+
+이미지 빌드와 compose 문법만 확인하려면 이렇게 한다.
+
+```bash
+docker build -t ieobom-api apps/api
+docker build -t ieobom-web apps/web
+docker compose -f deploy/docker-compose.yml config
+```
+
+> `config`는 `deploy/.env`를 읽는다. 파일이 없으면 필수 변수가 비어 있다며 실패한다.
+> **그게 의도한 동작이다.** Public 저장소라 비밀값에 기본값을 넣어 두지 않았고,
+> 값이 비면 배포되는 대신 기동이 막힌다.
+
+**배포 실행과 비밀값 주입은 사람이 한다.** (`AGENTS.md` 승인 경계 등급 D)
+`SITE_ADDRESS` · `MYSQL_PASSWORD` · `MYSQL_ROOT_PASSWORD` · `LLM_API_KEY`가 그 대상이다.
+`LLM_API_KEY`가 없으면 앱은 뜨지만 AI 구조화가 503으로 끊긴다.

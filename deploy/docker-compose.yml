@@ -1,0 +1,92 @@
+# 배포용 compose. VM 한 대에 Caddy · API · MySQL 을 함께 올린다. (#19)
+#
+#   cp deploy/.env.example deploy/.env    # 값을 채운 뒤
+#   docker compose -f deploy/docker-compose.yml up -d --build
+#
+# **루트의 docker-compose.yml 과 다른 파일이다.** 그쪽은 로컬 개발용 MySQL 단독이다.
+#
+# 비밀값은 이 파일에 쓰지 않는다. 전부 환경변수로 받고, 없으면 `:?` 로 기동 자체를 막는다.
+# Public 저장소라 기본값을 넣어 두면 그 값이 그대로 배포된다.
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: ieobom-mysql-prod
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ieobom}
+      MYSQL_USER: ${MYSQL_USER:-ieobom}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD 를 채워야 한다}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD 를 채워야 한다}
+      TZ: Asia/Seoul
+    # **호스트 포트를 열지 않는다.** DB 는 compose 네트워크 안에서만 보이면 된다.
+    #
+    # max_allowed_packet 을 기본값(64MB)보다 낮추지 않는다. 음성 원본이 mediumblob 이고
+    # 10MB 녹음이 Base64 로 약 13.3MB 가 되어 올라온다. (docs/contracts/db-schema.md)
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  api:
+    build:
+      context: ../apps/api
+    container_name: ieobom-api
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      # 컨테이너 사이에서는 서비스 이름으로 붙는다. 호스트의 포트 매핑과 무관하다.
+      DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-ieobom}?characterEncoding=UTF-8&serverTimezone=Asia/Seoul
+      DB_USERNAME: ${MYSQL_USER:-ieobom}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD 를 채워야 한다}
+      # 키가 없어도 앱은 뜬다. 구조화를 부르는 시점에 503 으로 알린다.
+      # 다만 코어 플로우 2단계(AI 구조화)가 동작하려면 반드시 있어야 한다.
+      LLM_API_KEY: ${LLM_API_KEY:?LLM_API_KEY 를 채워야 AI 구조화가 동작한다}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4.1-mini}
+      FACILITY_DISMISSAL_TIME: ${FACILITY_DISMISSAL_TIME:-18:00}
+      TZ: Asia/Seoul
+    # 호스트에 열지 않는다. Caddy 만 이 포트에 붙는다.
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      # Flyway 마이그레이션과 시더가 도는 시간을 감안한다.
+      retries: 10
+      start_period: 60s
+
+  web:
+    build:
+      context: ../apps/web
+    container_name: ieobom-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      # Caddy 가 인증서를 발급할 도메인. 값이 비면 배포 주소가 없는 것과 같다.
+      SITE_ADDRESS: ${SITE_ADDRESS:?SITE_ADDRESS 에 배포 도메인을 넣어야 한다}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # 발급받은 인증서를 남긴다. 이게 없으면 재기동마다 다시 발급받아
+      # Let's Encrypt 발급 한도에 걸린다.
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  mysql-data:
+  caddy-data:
+  caddy-config:

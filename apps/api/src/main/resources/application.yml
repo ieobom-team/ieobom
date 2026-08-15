@@ -12,17 +12,25 @@ spring:
 
   jpa:
     hibernate:
-      # 개발 초반 속도를 위한 설정이다.
-      # 제출 전에 Flyway 마이그레이션으로 스키마를 고정하고 validate 로 바꾼다.
-      ddl-auto: update
+      # 스키마는 Flyway 가 만든다. Hibernate 는 엔티티와 어긋나면 기동을 막는 역할만 한다. (#19)
+      # update 로 되돌리면 마이그레이션에 없는 변경이 DB 에 조용히 생겨 배포와 로컬이 갈라진다.
+      ddl-auto: validate
     open-in-view: false
     properties:
       hibernate:
         format_sql: true
 
   flyway:
-    # db/migration 에 첫 마이그레이션 파일이 들어오면 true 로 바꾼다.
-    enabled: false
+    enabled: true
+    # 이미 ddl-auto: update 로 자란 로컬 DB 를 baseline 으로 찍고 V1 을 건너뛴다.
+    # false 로 내리면 팀원 로컬이 전부 즉시 실패한다.
+    #
+    # 대신 로컬(baseline → V1 skip)과 배포(빈 DB → V1 실행)가 서로 다른 경로로 만들어진
+    # 스키마를 쓰게 된다. 이 비대칭을 없애려면 **V1 병합 후 각자 로컬 DB 를 한 번 초기화한다.**
+    #
+    #   docker compose down -v && docker compose up -d
+    #
+    # 로컬 데이터는 시더가 다시 넣는 시드뿐이라 잃을 것이 없다. (docs/development.md)
     baseline-on-migrate: true
     locations: classpath:db/migration
 

@@ -1,0 +1,42 @@
+# 배포용 리버스 프록시 설정. (#19)
+#
+# 프론트와 API 를 **같은 출처**에 둔다. 브라우저 기준으로 주소가 하나라 CORS 가 아예 생기지 않고,
+# 백엔드에 CORS 코드가 한 줄도 없는 상태 그대로 배포된다. (docs/architecture.md 배포 배치)
+#
+# 도메인은 여기 적지 않고 SITE_ADDRESS 환경변수로 받는다. Public 저장소다.
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# API. **접두어를 떼지 않는다.**
+	# 컨트롤러가 `@RequestMapping("/api/handovers")` 처럼 `/api` 를 포함해 매핑돼 있어서
+	# handle_path 로 떼면 전부 404 가 된다.
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+
+	# 정적 산출물. `/srv` 는 apps/web 이미지가 담아 온 vite 빌드 결과다.
+	handle {
+		root * /srv
+		# SPA 폴백. BrowserRouter 라서 이게 없으면 `/handover-cards` 같은 주소를
+		# 새로고침하거나 직접 열었을 때 404 가 난다.
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output stdout
+	}
+}
+
+# 음성 업로드가 Base64 Data URL 이라 10MB 녹음이 약 13.3MB JSON 으로 올라온다.
+# Caddy 는 요청 본문 크기를 기본으로 제한하지 않는다. **request_body max_size 를 넣지 않는다.**
+# 넣으려면 13.3MB 보다 넉넉해야 한다. (docs/contracts/db-schema.md)
+
+# HTTPS 는 Caddy 가 Let's Encrypt 로 자동 발급·갱신한다.
+# 음성 입력(webkitSpeechRecognition)이 secure context 에서만 동작하므로 HTTP 로 두면 배포에서 그냥 실패한다.
+# 만료 알림 메일을 받으려면 아래를 파일 맨 위(사이트 블록 밖)에 두고 주소를 채운다.
+#
+#   {
+#       email 담당자@example.com
+#   }
