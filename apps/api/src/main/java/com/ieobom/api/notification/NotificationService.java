@@ -127,6 +127,59 @@ public class NotificationService {
 	}
 
 	/**
+	 * 관리자의 담당자 변경 알림을 만든다. (Manyfast F-JIEOJO action)
+	 *
+	 * <p>새 담당자에게는 배정 알림(TASK_ASSIGNED)을, 이전 담당자에게는 담당 변경 알림(ASSIGNEE_CHANGED)을 만든다.
+	 * 이전 담당자가 없었던 업무(직종만 배정)는 담당 변경 알림을 만들지 않는다. (알릴 이전 담당자가 없음)
+	 * 변경자와 수신자가 같으면 알림을 만들지 않는다. (F-JIEOJO exceptions)
+	 */
+	@Transactional
+	public void notifyAssigneeChanged(
+			Long taskId, String oldStaffCode, String newStaffCode, String assignedByStaffCode) {
+		Task task = taskRepository.findWithCard(taskId).orElse(null);
+		if (task == null) {
+			log.warn("담당 변경 알림 대상 업무가 없음 — taskId={}", taskId);
+			return;
+		}
+
+		Staff actor = findStaffOrNull(assignedByStaffCode);
+
+		// 1. 새 담당자(또는 직종 전원)에게 TASK_ASSIGNED 알림
+		List<Staff> newRecipients = assignmentRecipients(task);
+		int assignedCreated = 0;
+		for (Staff recipient : newRecipients) {
+			if (oldStaffCode != null && oldStaffCode.equals(recipient.getCode())) {
+				continue;
+			}
+			if (create(recipient, task, NotificationType.TASK_ASSIGNED, actorName(actor), actor)) {
+				assignedCreated++;
+			}
+		}
+		if (!newRecipients.isEmpty()) {
+			logCreated(NotificationType.TASK_ASSIGNED, task, newRecipients.size(), assignedCreated);
+		}
+
+		// 2. 이전 담당자에게 ASSIGNEE_CHANGED 알림
+		if (oldStaffCode != null && !oldStaffCode.equals(newStaffCode)) {
+			Staff oldRecipient = findStaffOrNull(oldStaffCode);
+			if (oldRecipient != null) {
+				boolean changedCreated =
+						create(
+								oldRecipient,
+								task,
+								NotificationType.ASSIGNEE_CHANGED,
+								actorName(actor),
+								actor);
+				logCreated(
+						NotificationType.ASSIGNEE_CHANGED,
+						task,
+						1,
+						changedCreated ? 1 : 0);
+			}
+		}
+	}
+
+	/**
 	 * 한 직원의 알림함. (Manyfast F-JIEOJO display)
 	 *
 	 * <p><b>여는 것만으로는 읽음이 되지 않는다.</b> (F-JIEOJO rules) 읽기 전용 트랜잭션인 것이 그 규칙을 형태로 지킨다 —

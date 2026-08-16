@@ -1,6 +1,7 @@
 package com.ieobom.api.task;
 
 import com.ieobom.api.common.ConflictException;
+import com.ieobom.api.common.JobRole;
 import com.ieobom.api.common.NotFoundException;
 import com.ieobom.api.common.RequestValidationException;
 import com.ieobom.api.handovercard.HandoverCard;
@@ -13,6 +14,7 @@ import com.ieobom.api.task.dto.TaskClaimResponse;
 import com.ieobom.api.task.dto.TaskCompleteResponse;
 import com.ieobom.api.task.dto.TaskCreateRequest;
 import com.ieobom.api.task.dto.TaskListResponse;
+import com.ieobom.api.task.dto.TaskReassignRequest;
 import com.ieobom.api.task.dto.TaskResponse;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -43,6 +45,7 @@ public class TaskService {
 	static final String TASK_NOT_FOUND = "TASK_NOT_FOUND";
 	static final String STAFF_NOT_FOUND = "STAFF_NOT_FOUND";
 	static final String TASK_JOB_ROLE_MISMATCH = "TASK_JOB_ROLE_MISMATCH";
+	static final String TASK_ALREADY_COMPLETED = "TASK_ALREADY_COMPLETED";
 
 	/** 전체 목록용 정렬: 미처리를 먼저, 그 안에서는 기한이 이른 순. 완료는 뒤에 두고 기한 순으로 묶는다. */
 	private static final Comparator<Task> PENDING_FIRST_BY_DUE_TIME =
@@ -253,6 +256,46 @@ public class TaskService {
 		return TaskClaimResponse.claimed(current);
 	}
 
+	/**
+	 * 관리자가 후속 업무의 담당자를 바꾼다. (Manyfast F-IVFNPC permissions, Manyfast F-JIEOJO trigger)
+	 *
+	 * <p>새 담당자에게는 배정 알림을, 이전 담당자에게는 담당 변경 알림을 만든다. (Manyfast F-JIEOJO action)
+	 *
+	 * @throws NotFoundException 업무가 없을 때
+	 * @throws ConflictException 이미 완료된 업무일 때
+	 * @throws RequestValidationException 담당 직종도 담당자도 없을 때
+	 */
+	@Transactional
+	public TaskResponse reassign(Long taskId, TaskReassignRequest request) {
+		Task task = findTask(taskId);
+
+		if (task.isDone()) {
+			log.info("완료된 업무에 담당자 변경 시도 — taskId={}, 바뀐 것 없음", taskId);
+			throw new ConflictException(TASK_ALREADY_COMPLETED, "완료된 업무의 담당자는 변경할 수 없습니다.");
+		}
+		if (!request.hasAssignee()) {
+			throw new RequestValidationException(
+					"담당 직종 또는 담당자를 지정해 주세요.", List.of("assigneeJobRole", "assigneeName"));
+		}
+
+		String oldAssigneeStaffCode = task.getAssigneeStaffCode();
+		String newAssigneeName = request.normalizedAssigneeName();
+		String newAssigneeStaffCode = request.normalizedAssigneeStaffCode();
+		JobRole newJobRole = request.assigneeJobRole();
+
+		task.reassign(newJobRole, newAssigneeName, newAssigneeStaffCode);
+
+		logReassigned(task, oldAssigneeStaffCode);
+		events.publishEvent(
+				new TaskAssigneeChangedEvent(
+						task.getId(),
+						oldAssigneeStaffCode,
+						newAssigneeStaffCode,
+						request.normalizedAssignedByStaffCode()));
+
+		return TaskResponse.from(task);
+	}
+
 	private Task findTask(Long taskId) {
 		return taskRepository
 				.findWithCard(taskId)
@@ -372,6 +415,22 @@ public class TaskService {
 				task.getDueTime(),
 				task.getCompletedAt(),
 				task.isDelegated());
+	}
+
+	/**
+	 * 담당자 변경 이벤트. (Manyfast F-IVFNPC outcome)
+	 *
+	 * <p>배정 · 완료 쪽과 같은 방침으로 <b>담당자 이름을 남기지 않는다.</b> 직원 이름이 로그 파일로 새어 나갈 이유가 없다. 대신
+	 * 변경된 직종과 담당자 지정 여부를 남긴다.
+	 */
+	private void logReassigned(Task task, String oldStaffCode) {
+		log.info(
+				"후속 업무 담당자 변경 — taskId={}, cardId={}, 담당직종={}, 담당자지정={}, 이전담당자있음={}",
+				task.getId(),
+				task.getHandoverCard().getId(),
+				task.getAssigneeJobRole(),
+				task.getAssigneeName() != null,
+				oldStaffCode != null);
 	}
 
 	/**

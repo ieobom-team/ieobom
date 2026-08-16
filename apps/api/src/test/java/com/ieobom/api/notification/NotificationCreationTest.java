@@ -346,6 +346,129 @@ class NotificationCreationTest {
 				.andExpect(status().isOk());
 	}
 
+	private void 담당자를_바꾼다(Long taskId, String body) throws Exception {
+		mockMvc
+				.perform(
+						patch("/api/tasks/{id}/assignee", taskId)
+								.contentType(MediaType.APPLICATION_JSON)
+								.content(body))
+				.andExpect(status().isOk());
+	}
+
+	/**
+	 * 관리자가 담당자를 바꾸면 새 담당자에게 배정 알림을, 이전 담당자에게 담당 변경 알림을 만든다. (Manyfast F-JIEOJO action)
+	 */
+	@Test
+	void 담당자_변경_시_새_담당자와_이전_담당자_양쪽에_알림이_만들어진다() throws Exception {
+		List<Staff> 간호조무사들 = staffs.findByJobRole(JobRole.NURSE_AIDE);
+		Staff 이전담당자 = 간호조무사들.get(0);
+		Staff 새담당자 = 간호조무사들.get(1);
+
+		Long taskId = 담당자가_있는_업무(이전담당자);
+		notifications.deleteAll();
+
+		담당자를_바꾼다(
+				taskId,
+				"""
+				{
+				  "assigneeJobRole": "NURSE_AIDE",
+				  "assigneeName": "%s",
+				  "assigneeStaffCode": "%s",
+				  "assignedByStaffCode": "ST-006"
+				}
+				"""
+						.formatted(새담당자.getName(), 새담당자.getCode()));
+
+		List<Notification> 알림들 = notifications.findAll();
+		assertThat(알림들).hasSize(2);
+
+		Notification 새담당자_알림 =
+				알림들.stream()
+						.filter(n -> n.getType() == NotificationType.TASK_ASSIGNED)
+						.findFirst()
+						.orElseThrow();
+		assertThat(새담당자_알림.getActorName()).isEqualTo("강태호");
+		assertThat(
+						jdbc.queryForObject(
+								"select s.code from notification n join staff s on s.id = n.recipient_staff_id where n.id = ?",
+								String.class,
+								새담당자_알림.getId()))
+				.isEqualTo(새담당자.getCode());
+
+		Notification 이전담당자_알림 =
+				알림들.stream()
+						.filter(n -> n.getType() == NotificationType.ASSIGNEE_CHANGED)
+						.findFirst()
+						.orElseThrow();
+		assertThat(이전담당자_알림.getActorName()).isEqualTo("강태호");
+		assertThat(
+						jdbc.queryForObject(
+								"select s.code from notification n join staff s on s.id = n.recipient_staff_id where n.id = ?",
+								String.class,
+								이전담당자_알림.getId()))
+				.isEqualTo(이전담당자.getCode());
+	}
+
+	/** 이전 담당자가 없던 업무(직종만 배정)를 사람으로 바꾸면 ASSIGNEE_CHANGED 는 만들지 않는다. (Manyfast F-JIEOJO action) */
+	@Test
+	void 이전_담당자가_없던_업무의_담당자를_지정하면_ASSIGNEE_CHANGED_는_만들지_않는다() throws Exception {
+		배정한다(
+				카드("저녁 식사량 확인"),
+				"""
+				{"content": "저녁 식사량 확인", "assigneeJobRole": "NURSE_AIDE", "dueTime": "17:30"}
+				""");
+		Long taskId = tasks.findAll().get(0).getId();
+		notifications.deleteAll();
+
+		Staff 새담당자 = 직원(JobRole.NURSE_AIDE);
+		담당자를_바꾼다(
+				taskId,
+				"""
+				{
+				  "assigneeJobRole": "NURSE_AIDE",
+				  "assigneeName": "%s",
+				  "assigneeStaffCode": "%s",
+				  "assignedByStaffCode": "ST-001"
+				}
+				"""
+						.formatted(새담당자.getName(), 새담당자.getCode()));
+
+		List<Notification> 알림들 = notifications.findAll();
+		assertThat(알림들).singleElement().satisfies(n -> {
+			assertThat(n.getType()).isEqualTo(NotificationType.TASK_ASSIGNED);
+		});
+		assertThat(수신자_사번들()).containsExactly(새담당자.getCode());
+	}
+
+	/** 변경자와 수신자가 같으면 알림을 만들지 않는다. (Manyfast F-JIEOJO exceptions) */
+	@Test
+	void 변경자가_새_담당자_또는_이전_담당자_자신이면_해당_알림은_만들지_않는다() throws Exception {
+		List<Staff> 간호조무사들 = staffs.findByJobRole(JobRole.NURSE_AIDE);
+		Staff 이전담당자 = 간호조무사들.get(0);
+		Staff 새담당자 = 간호조무사들.get(1);
+
+		Long taskId = 담당자가_있는_업무(이전담당자);
+		notifications.deleteAll();
+
+		담당자를_바꾼다(
+				taskId,
+				"""
+				{
+				  "assigneeJobRole": "NURSE_AIDE",
+				  "assigneeName": "%s",
+				  "assigneeStaffCode": "%s",
+				  "assignedByStaffCode": "%s"
+				}
+				"""
+						.formatted(새담당자.getName(), 새담당자.getCode(), 새담당자.getCode()));
+
+		List<Notification> 알림들 = notifications.findAll();
+		assertThat(알림들).singleElement().satisfies(n -> {
+			assertThat(n.getType()).isEqualTo(NotificationType.ASSIGNEE_CHANGED);
+		});
+		assertThat(수신자_사번들()).containsExactly(이전담당자.getCode());
+	}
+
 	private Staff 직원(JobRole jobRole) {
 		return staffs.findByJobRole(jobRole).stream().findFirst().orElseThrow();
 	}

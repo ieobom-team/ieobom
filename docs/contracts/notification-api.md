@@ -13,7 +13,8 @@
 ## 흐름
 
 ```
-POST  /api/handover-cards/{cardId}/tasks   업무 배정 → 서버가 알림을 만든다 (task-api.md)
+POST  /api/handover-cards/{cardId}/tasks   업무 배정 → 새 담당자/직종에 알림 (task-api.md)
+PATCH /api/tasks/{taskId}/assignee         담당자 변경 → 새 담당자(`TASK_ASSIGNED`) · 이전 담당자(`ASSIGNEE_CHANGED`)에 알림
 PATCH /api/tasks/{taskId}/complete         대리 완료 → 담당자에게 알림
       ↓
 GET   /api/notifications?staffCode=        내 알림함 (오늘 / 지난, 읽지 않은 개수)
@@ -21,7 +22,7 @@ PATCH /api/notifications/{id}/read         항목 하나를 읽음으로
 ```
 
 **알림을 보내는 엔드포인트가 없다.** 화면이 "알림을 보내 줘"라고 부를 수 있으면 배정과 알림이 갈라져,
-배정은 됐는데 알림은 안 간 상태를 화면이 만들 수 있다. 알림은 업무가 배정되거나 대리 완료될 때
+배정은 됐는데 알림은 안 간 상태를 화면이 만들 수 있다. 알림은 업무가 배정되거나 담당자가 바뀌거나 대리 완료될 때
 **서버가 스스로 만든다.**
 
 웹 푸시·기기 구독은 여기 없다. 별도 Feature다. (`F-QPWGNS`, [`#72`](https://github.com/ieobom-team/ieobom/issues/72))
@@ -33,17 +34,14 @@ PATCH /api/notifications/{id}/read         항목 하나를 읽음으로
 | 값 | 표시 | 언제 |
 |---|---|---|
 | `TASK_ASSIGNED` | 새 업무 배정 | 나에게, 또는 내 직종에 업무가 배정됨 |
-| `ASSIGNEE_CHANGED` | 담당 변경 | 내가 맡던 업무의 담당자가 바뀜 |
+| `ASSIGNEE_CHANGED` | 담당 변경 | 내가 맡던 업무의 담당자가 다른 사람으로 바뀜 |
 | `DELEGATED_COMPLETION` | 대리 완료 | 내가 담당인 업무를 다른 사람이 닫음 |
 
 **값을 늘리지 않는 것이 요점이다.** (`F-JIEOJO` dataSpec) 기한 임박 재알림·미완료 반복 독촉·다음 교대
 승계는 MVP 범위 밖이고, 그것들이 들어오는 자리가 바로 이 열거형이다. 유형이 늘면 알림함은 "무엇을 해야
 하는지"를 알리는 화면에서 "무슨 일이 있었는지"를 나열하는 화면이 된다.
 
-> **`ASSIGNEE_CHANGED` 는 지금 만들어지지 않는다.** 트리거인 **관리자의 담당자 변경에 API가 없다.**
-> ([`task-api.md`](task-api.md#이-api가-하지-않는-것) — "관리자의 담당자 변경: 아직 없다")
-> 값을 미리 두는 이유는 Manyfast가 유형을 셋으로 고정했기 때문이고, 담당자 변경 API가 생기면
-> **발행 지점만 붙이면 된다.** 그 Issue가 나오기 전까지 이 값은 응답에 나타나지 않는다.
+`ASSIGNEE_CHANGED` 는 관리자가 이미 있는 업무의 담당자를 변경할 때([`task-api.md`](task-api.md#patch-apitaskstaskidassignee)) **이전 담당자에게** 생성된다. (`F-JIEOJO` action) 이전 담당자가 없던 업무(직종만 배정)를 사람으로 바꿀 때는 알릴 이전 담당자가 없으므로 생성되지 않는다.
 
 ---
 
@@ -83,6 +81,17 @@ PATCH /api/notifications/{id}/read         항목 하나를 읽음으로
 | 담당자 본인이 닫음 | 없다. "배정자==수신자면 만들지 않는다"의 완료 쪽 얼굴이다 |
 | 직종에만 배정된 채 아무도 맡지 않고 닫힘 | 없다. **알릴 담당자가 없다** |
 | 이미 완료된 업무를 다시 닫음 | 없다. 아무것도 바뀌지 않았으므로 알릴 사건도 없다 |
+
+### 담당자 변경 알림
+
+관리자가 담당자를 변경(`PATCH /api/tasks/{taskId}/assignee`)하면 양쪽에 알림이 만들어진다. (`F-JIEOJO` action)
+
+| 대상 | 알림 유형 | 조건 |
+|---|---|---|
+| 새 담당자 | `TASK_ASSIGNED` | 새 담당자가 지정되었고 사번이 있음 (단, 변경자 != 새 담당자) |
+| 이전 담당자 | `ASSIGNEE_CHANGED` | 이전 담당자가 있었고 새 담당자와 다름 (단, 변경자 != 이전 담당자) |
+
+이전 담당자가 없었던 업무(직종만 배정)를 특정인으로 바꿀 때는 `ASSIGNEE_CHANGED` 는 만들지 않는다 — 알릴 이전 담당자가 없다.
 
 ---
 

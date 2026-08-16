@@ -25,6 +25,7 @@ GET   /api/tasks                            그날 업무 목록 (n31 · n32 / n
 GET   /api/tasks/pending-briefing           하원 미처리 브리핑 (n44 · n45)
 GET   /api/tasks/{taskId}                   업무 상세 (n34)
 PATCH /api/tasks/{taskId}/claim             담당 확정 — '내가 처리할게요' ("새 플로우 5" n40)
+PATCH /api/tasks/{taskId}/assignee          담당자 변경 — 관리자가 담당자 교체 (F-IVFNPC permissions)
 PATCH /api/tasks/{taskId}/complete          완료 처리 · 대리 완료 (n35)
 ```
 
@@ -373,7 +374,37 @@ update task
 ### 맡은 것을 다시 놓을 수 없다
 
 **되돌리는 경로를 두지 않는다.** Manyfast에 없는 동작이고, 담당 변경은 관리자가 한다. (`F-IVFNPC` rules)
-관리자용 담당자 변경 API는 아직 없다 — 필요해지면 별도 Issue다.
+
+---
+
+## `PATCH /api/tasks/{taskId}/assignee`
+
+관리자가 이미 있는 업무의 담당 직종 또는 담당자를 바꾼다. (`F-IVFNPC` permissions — "사회복지사와 센터장은 이미 담당이 확정된 업무의 담당자를 바꿀 수 있다")
+
+```json
+{
+  "assigneeJobRole": "NURSE_AIDE",
+  "assigneeName": "최민재",
+  "assigneeStaffCode": "ST-004",
+  "assignedByStaffCode": "ST-001"
+}
+```
+
+사번 두 칸은 **알림을 위한 선택 필드**다. 없어도 담당자는 그대로 변경되고, 변경 사실은 새 담당자(`TASK_ASSIGNED`)와 이전 담당자(`ASSIGNEE_CHANGED`) 양쪽에 알림으로 전달된다. ([`notification-api.md`](notification-api.md#누구에게-만들어지는가))
+
+### 응답 — `200 OK`
+
+응답은 위 `201` 과 같은 모양(`TaskResponse`)이다. `assigneeName`, `assigneeJobRole`, `assigneeStaffCode` 가 갱신되고, `claimMethod` 는 `DIRECT_ASSIGN`, `claimedAt` 은 변경 시점으로 갱신된다.
+
+### 규칙
+
+| 규칙 | 결과 |
+|---|---|
+| 업무가 없음 | `404` — `TASK_NOT_FOUND` |
+| **담당 직종도 담당자 이름도 없음** | `400` — `VALIDATION_FAILED` |
+| **이미 완료된 업무** | `409` — `TASK_ALREADY_COMPLETED`, "완료된 업무의 담당자는 변경할 수 없습니다." |
+
+**완료된 업무의 담당자는 바꿀 수 없다.** 이미 닫힌 업무의 담당자가 바뀌면 완료 확인 기록과의 관계가 왜곡되고, 대리 완료 여부(`isDelegated`) 판정이 훼손된다.
 
 ---
 
@@ -547,6 +578,7 @@ GET /api/tasks/pending-briefing?date= 그날 아직 안 닫힌 것만 (n44 · n4
 | `CARE_RECIPIENT_NOT_RESOLVED` | `409` |
 | `TASK_ALREADY_CREATED` | `409` |
 | `TASK_JOB_ROLE_MISMATCH` | `409` |
+| `TASK_ALREADY_COMPLETED` | `409` |
 
 `CARE_RECIPIENT_NOT_RESOLVED` 는 카드 검토 API와 같은 코드다. 같은 상황이기 때문이다 —
 [handover-card-schema.md](handover-card-schema.md#patch-apihandover-cardsidreview-status)
@@ -563,9 +595,9 @@ GET /api/tasks/pending-briefing?date= 그날 아직 안 닫힌 것만 (n44 · n4
 | **앱 내 알림 조회 · 읽음** | 여기 없다. [`notification-api.md`](notification-api.md) |
 | 웹 푸시 · 알림톡 · SMS 전송 | **없다.** MVP 범위 밖 |
 | 완료를 미처리로 되돌리기 | 없다. Manyfast에 없다 |
-| 담당자 · 기한 **수정**, 업무 삭제 | 없다. Manyfast에 없다. 필요해지면 `propose-change` |
+| 기한 **수정**, 업무 삭제 | 없다. Manyfast에 없다. 필요해지면 `propose-change` |
 | **맡은 업무를 다시 놓기** | 없다. Manyfast가 제공하지 않는다 (`F-IVFNPC` rules) |
-| **관리자의 담당자 변경** | 아직 없다. Manyfast `F-IVFNPC` permissions에는 있고 API가 없다 |
+| **담당자 변경 화면** | 여기 없다. API 만 있고 화면은 별도 frontend Issue다 |
 | **목록의 담당자별 필터링** | 없다. `GET /api/tasks` 는 그날 전체를 준다 ([`#68`](https://github.com/ieobom-team/ieobom/issues/68) 범위 밖) |
 
 **자동 승계가 없다는 것을 어떻게 확인하는가** — 날짜를 넘기는 스케줄러도, 기한이 지난 업무를 건드리는

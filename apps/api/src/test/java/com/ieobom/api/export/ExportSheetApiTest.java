@@ -69,6 +69,7 @@ class ExportSheetApiTest {
 	@Autowired private CareRecipientRepository careRecipients;
 	@Autowired private HandoverRepository handovers;
 	@Autowired private HandoverCardRepository cards;
+	@Autowired private ExportPhraseRepository phrases;
 	@Autowired private NotificationRepository notifications;
 	@Autowired private TaskRepository tasks;
 
@@ -80,6 +81,7 @@ class ExportSheetApiTest {
 	void setUp() {
 		notifications.deleteAll();
 		tasks.deleteAll();
+		phrases.deleteAll();
 		cards.deleteAll();
 		handovers.deleteAll();
 
@@ -101,6 +103,9 @@ class ExportSheetApiTest {
 	void tearDown() throws Exception {
 		notifications.deleteAll();
 		tasks.deleteAll();
+		phrases.deleteAll();
+		cards.deleteAll();
+		handovers.deleteAll();
 		if (열어둔표 != null) {
 			열어둔표.close();
 			열어둔표 = null;

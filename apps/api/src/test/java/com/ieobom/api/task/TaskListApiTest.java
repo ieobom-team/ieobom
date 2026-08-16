@@ -247,9 +247,10 @@ class TaskListApiTest {
 
 	@Test
 	void 목록도_대리_완료를_상세와_같게_판정한다() throws Exception {
-		완료된_업무("대리로 닫은 일", LocalTime.of(14, 0), "박간호", "이복지");
-		완료된_업무("본인이 닫은 일", LocalTime.of(15, 0), "박간호", "박간호");
-		완료된_업무("직종만 배정된 일", LocalTime.of(16, 0), null, "이복지");
+		LocalDateTime 기준 = LocalDateTime.of(LocalDate.now(), LocalTime.of(14, 0));
+		완료된_업무("대리로 닫은 일", LocalTime.of(14, 0), "박간호", "이복지", 기준);
+		완료된_업무("본인이 닫은 일", LocalTime.of(15, 0), "박간호", "박간호", 기준.plusMinutes(10));
+		완료된_업무("직종만 배정된 일", LocalTime.of(16, 0), null, "이복지", 기준.plusMinutes(20));
 
 		mockMvc
 				.perform(get("/api/tasks"))

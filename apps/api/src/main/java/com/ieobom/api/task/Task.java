@@ -203,4 +203,20 @@ public class Task extends BaseTimeEntity {
 	public boolean isDelegated() {
 		return isDone() && assigneeName != null && !assigneeName.equals(completedByName);
 	}
+
+	/**
+	 * 담당자를 변경한다. (Manyfast F-IVFNPC permissions — "사회복지사와 센터장은 이미 담당이 확정된 업무의 담당자를 바꿀 수 있다")
+	 *
+	 * @param assigneeJobRole 변경할 담당 직종
+	 * @param assigneeName 변경할 담당자 이름
+	 * @param assigneeStaffCode 변경할 담당자 사번
+	 */
+	public void reassign(JobRole assigneeJobRole, String assigneeName, String assigneeStaffCode) {
+		boolean assigned = assigneeName != null;
+		this.assigneeJobRole = assigneeJobRole;
+		this.assigneeName = assigneeName;
+		this.assigneeStaffCode = assigned ? assigneeStaffCode : null;
+		this.claimedAt = assigned ? LocalDateTime.now() : null;
+		this.claimMethod = assigned ? ClaimMethod.DIRECT_ASSIGN : null;
+	}
 }
