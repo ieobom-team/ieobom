@@ -1,5 +1,6 @@
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Bell } from 'lucide-react'
 import { Link } from 'react-router'
+import { useUnreadCount } from '../../features/notification/useNotifications'
 import { findEntryRole, homePathOf } from '../../features/session/entryRole'
 import { useSession } from '../../features/session/sessionContext'
 
@@ -24,7 +25,7 @@ export type AppHeaderProps = {
  *
  * - 좌측: 뒤로가기 버튼 또는 홈(로고) 링크
  * - 중앙: 페이지 제목
- * - 우측: 현재 로그인한 본인 칩 및 '본인 바꾸기' 버튼
+ * - 우측: 알림함(🔔 배지), 현재 로그인한 본인 칩 및 '본인 바꾸기' 버튼
  */
 export function AppHeader({
   title,
@@ -36,6 +37,7 @@ export function AppHeader({
   className = '',
 }: AppHeaderProps) {
   const { session, leave } = useSession()
+  const unreadCount = useUnreadCount(session?.staff.code)
 
   const shouldShowBack = showBack || Boolean(backTo) || Boolean(onBack)
   const homePath = session ? homePathOf(session.entryRole) : '/'
@@ -83,9 +85,28 @@ export function AppHeader({
           )}
         </div>
 
-        {/* 우측: 세션 칩 & 본인 바꾸기 */}
+        {/* 우측: 알림함 버튼 & 세션 칩 & 본인 바꾸기 */}
         {showSession && session && role && (
           <div className="flex items-center gap-2 sm:gap-2.5">
+            <Link
+              id="notification-inbox-btn"
+              to="/notifications"
+              className="relative flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-slate-300 bg-white p-2 text-slate-700 hover:border-teal-600 hover:bg-teal-50 hover:text-teal-800 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300 sm:px-3 sm:py-1.5"
+              aria-label={
+                unreadCount > 0 ? `알림함 (미읽음 ${unreadCount}건)` : '알림함'
+              }
+            >
+              <Bell size={20} strokeWidth={2.2} aria-hidden="true" />
+              {unreadCount > 0 && (
+                <span
+                  aria-hidden="true"
+                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white shadow-xs"
+                >
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </Link>
+
             <div className="flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-sm whitespace-nowrap sm:gap-2 sm:px-3 sm:py-1.5 sm:text-base">
               <span className="font-semibold text-slate-900">{session.staff.name}</span>
               <span className="hidden text-slate-500 sm:inline">{session.staff.code}</span>
