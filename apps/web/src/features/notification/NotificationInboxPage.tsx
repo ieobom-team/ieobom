@@ -8,6 +8,7 @@ import { useSession } from '../session/sessionContext'
 import type { NotificationResponse } from './notificationApi'
 import { NotificationItem } from './NotificationItem'
 import { useMarkNotificationRead, useNotifications } from './useNotifications'
+import { PushNotificationToggle } from './push/PushNotificationToggle'
 
 /**
  * 알림함 화면 — 유저플로우 "새 플로우 5" 알림함 화면(n43) · 배정 알림 목록(n44) · 알림 항목 선택(n45).
@@ -58,6 +59,9 @@ export function NotificationInboxPage() {
 
   return (
     <PageLayout title="알림함" backTo="/" showBottomNav>
+      {/* 기기 푸시 알림 설정 토글 (지원 브라우저 전용) */}
+      <PushNotificationToggle staffCode={staffCode || null} />
+
       {/* 로딩 */}
       {notifications.isPending && (
         <p className="text-xl text-slate-500">알림을 불러오는 중…</p>

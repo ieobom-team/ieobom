@@ -28,3 +28,8 @@ ieobom:
     model: ${LLM_MODEL:gpt-4.1-mini}
     api-key: ${LLM_API_KEY:}
     timeout: ${LLM_TIMEOUT:60s}
+
+  vapid:
+    public-key: ""
+    private-key: ""
+    subject: "mailto:test@ieobom.com"

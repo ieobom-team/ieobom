@@ -44,6 +44,10 @@ dependencies {
 	// 기대지 않으므로 Boot 4.1 과 부딪히는 지점이 없다 — 확인은 build 로 한다.
 	implementation 'org.apache.poi:poi-ooxml:5.4.1'
 
+	// VAPID 웹 푸시 발송 (#72)
+	implementation 'nl.martijndwars:web-push:5.1.1'
+	implementation 'org.bouncycastle:bcprov-jdk18on:1.79'
+
 	// 테스트 전용. 로컬/배포 DB 는 MySQL 8.4 이고, H2 는 테스트에서만 쓴다.
 	// src/test/resources/application.yml 참고.
 	testRuntimeOnly 'com.h2database:h2'

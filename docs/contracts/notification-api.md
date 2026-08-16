@@ -318,11 +318,50 @@ unreadCount == today 안에서 readAt 이 비어 있는 개수
 
 ---
 
+## 웹 푸시 (`F-QPWGNS`, #72)
+
+직원이 허용한 기기(안드로이드 크롬, PC 웹)에 한해 앱을 열고 있지 않아도 새 업무 배정을 알린다.
+
+- **보조 채널**: 앱 내 알림 생성 시에만 함께 발송되며, 푸시 단독 발송은 없다.
+- **프라이버시**: 푸시 본문에는 **어르신 실명, 증상, 투약, 낙상, 병원 일정, 인계 원문이 없다**. ("새 후속 업무가 배정되었습니다", 기한 시각까지만 담김)
+
+### `GET /api/push-subscriptions/public-key`
+VAPID 공개키를 조회한다. 프론트엔드가 브라우저 `PushManager.subscribe()` 호출 시 사용한다.
+
+```json
+{
+  "publicKey": "BI..."
+}
+```
+
+### `POST /api/push-subscriptions`
+기기 구독을 등록하거나 직원을 재연결한다 (기기 단위 upsert).
+
+```json
+{
+  "staffCode": "ST-004",
+  "endpoint": "https://fcm.googleapis.com/fcm/send/...",
+  "p256dh": "...",
+  "auth": "..."
+}
+```
+- 동일한 `endpoint`로 요청이 다시 오면 연결 직원(`staffCode`)과 키만 덮어쓴다.
+
+### `DELETE /api/push-subscriptions`
+기기 구독을 해제하거나 직원 연결을 끊는다.
+
+```json
+{
+  "endpoint": "https://fcm.googleapis.com/fcm/send/..."
+}
+```
+
+---
+
 ## 이 API가 하지 않는 것
 
 | 항목 | 어디서 |
 |---|---|
-| 웹 푸시 · 기기 구독 | **없다.** 별도 Feature (`F-QPWGNS`, [`#72`](https://github.com/ieobom-team/ieobom/issues/72)) |
 | 카카오 알림톡 · SMS | **없다.** MVP 범위 밖 |
 | 기한 임박 재알림 · 미완료 반복 독촉 | **없다.** MVP 범위 밖. 보내는 코드가 없는 것으로 지킨다 |
 | 다음 교대 자동 승계 | **없다.** MVP 범위 밖 |
@@ -330,9 +369,9 @@ unreadCount == today 안에서 readAt 이 비어 있는 개수
 | 알림 삭제 · 보관 기간 만료 | 없다. 기간 제한 없이 누적 보관한다 (`F-JIEOJO` rules) |
 | SSE · WebSocket | **없다.** 화면이 30초마다 다시 조회한다 (`F-JIEOJO` rules) |
 | 보호자에게 가는 알림 | 없다. 수신 대상은 직원 명단뿐이다 (`F-JIEOJO` permissions) |
+| iOS 탭 사파리 푸시 | 지원하지 않음. 안드로이드 크롬 및 PC 웹 대상 |
 
-**어르신 실명을 그대로 담는다.** 알림은 LLM 호출 경로가 아니므로 내부 ID 치환 대상이 아니다.
-(`F-JIEOJO` rules) 치환은 LLM에 보내는 요청에서만 한다.
+**어르신 실명을 앱 내 알림에만 담는다.** 푸시 알림에는 실명을 넣지 않는다.
 
 **알림 생성·읽음 이벤트**는 카드·업무 쪽과 같은 이유로 별도 테이블 없이 애플리케이션 로그로 남긴다.
 **수신자 이름도 업무 내용도 남기지 않는다.** 남기는 것은 대상 수와 실제로 만들어진 수이고, 둘이 갈리는

@@ -195,6 +195,20 @@ PK 는 **`(sort_order, handover_card_id)`** 다. 값 목록이라 `id` 도 `crea
 `actor_name` 만 예외인데, 알림을 일으킨 사람은 그 시점의 사실이라 업무에서 되짚을 수 없다.
 ([notification-api.md](notification-api.md))
 
+### `push_subscription` — 개인 기기 웹 푸시 구독 (`#72`)
+
+| 컬럼 | 타입 | NULL | 비고 |
+|---|---|---|---|
+| `id` | `bigint` | ✕ | PK, auto_increment |
+| `staff_id` | `bigint` | ✕ | 연결 직원. FK `fk_push_subscription_staff` |
+| `endpoint` | `varchar(1000)` | ✕ | 기기 고유 구독 엔드포인트. `uk_push_subscription_endpoint` |
+| `p256dh` | `varchar(255)` | ✕ | 암호화 공개키 |
+| `auth` | `varchar(255)` | ✕ | 인증 시크릿 |
+| `last_status` | `varchar(30)` | ○ | 마지막 발송 결과 (`SUCCESS`, `HTTP 410` 등) |
+| `last_sent_at` | `datetime(6)` | ○ | 마지막 발송 시각 |
+
+`uk_push_subscription_endpoint (endpoint)` — 브라우저/기기 단위로 유일하며, 같은 기기 재등록 시 직원만 덮어쓴다.
+
 ## 알아 둘 것
 
 **enum 컬럼은 `varchar` 가 아니라 MySQL 네이티브 `enum(...)` 이다.**
