@@ -105,7 +105,11 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   if (response.status === 204) {
     return undefined as T
   }
-  return (await response.json()) as T
+  const text = await response.text()
+  if (!text || text.trim() === '') {
+    return undefined as T
+  }
+  return JSON.parse(text) as T
 }
 
 /** 서버가 만들어 내려준 파일 하나. */

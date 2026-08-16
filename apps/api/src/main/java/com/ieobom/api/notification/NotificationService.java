@@ -4,6 +4,7 @@ import com.ieobom.api.common.JobRole;
 import com.ieobom.api.common.NotFoundException;
 import com.ieobom.api.notification.dto.NotificationListResponse;
 import com.ieobom.api.notification.dto.NotificationResponse;
+import com.ieobom.api.notification.push.PushService;
 import com.ieobom.api.staff.Staff;
 import com.ieobom.api.staff.StaffRepository;
 import com.ieobom.api.task.Task;
@@ -20,7 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 배정 사실을 담당 직원에게 닿게 한다. (Manyfast F-JIEOJO)
+ * 배정 사실을 담당 직원에게 닿게 한다. (Manyfast F-JIEOJO, F-QPWGNS)
  *
  * <p>이 서비스가 지키는 것은 세 가지다. <b>누구에게 만드는가</b>(특정 담당자 하나 / 직종 전원), <b>만들지 않는 경우</b>(배정자
  * 자신 · 명단에 없는 사람 · 이미 있는 알림), 그리고 <b>배지를 당일분만 센다</b>는 것이다.
@@ -52,6 +53,7 @@ public class NotificationService {
 	private final NotificationRepository notificationRepository;
 	private final StaffRepository staffRepository;
 	private final TaskRepository taskRepository;
+	private final PushService pushService;
 
 	/**
 	 * 배정 알림을 만든다. (Manyfast F-JIEOJO action)
@@ -278,6 +280,7 @@ public class NotificationService {
 						.type(type)
 						.actorName(actorName)
 						.build());
+		pushService.sendTaskPush(recipient, task, type);
 		return true;
 	}
 

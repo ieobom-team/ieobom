@@ -26,6 +26,7 @@ cp .env.example .env
 | `DB_URL` `DB_USERNAME` `DB_PASSWORD` | `apps/api` | `application.yml`이 읽는다 |
 | `SERVER_PORT` | `apps/api` | 기본 8080 |
 | `LLM_API_KEY` `LLM_BASE_URL` `LLM_MODEL` `LLM_TIMEOUT` | `apps/api` | **백엔드에서만 쓴다.** 프론트로 내려보내지 않는다. 비어 있어도 앱은 뜨고 테스트도 통과한다 |
+| `VAPID_PUBLIC_KEY` `VAPID_PRIVATE_KEY` `VAPID_SUBJECT` | `apps/api` | 웹 푸시 발송 키 (`npx web-push generate-vapid-keys` 로 생성). 비어 있으면 푸시 발송만 비활성화 |
 | `VITE_API_BASE_URL` | `apps/web` | **로컬도 배포도 비워 둔다.** 아래 설명을 읽는다 |
 
 배포 환경에서는 `.env` 대신 플랫폼의 환경변수 주입 기능을 쓴다.

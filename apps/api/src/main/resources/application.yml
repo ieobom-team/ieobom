@@ -49,6 +49,12 @@ ieobom:
     api-key: ${LLM_API_KEY:}
     timeout: ${LLM_TIMEOUT:60s}
 
+  # 웹 푸시 VAPID 설정 (Manyfast F-QPWGNS, #72)
+  vapid:
+    public-key: ${VAPID_PUBLIC_KEY:}
+    private-key: ${VAPID_PRIVATE_KEY:}
+    subject: ${VAPID_SUBJECT:mailto:admin@ieobom.com}
+
 server:
   port: ${SERVER_PORT:8080}
 
