@@ -4,7 +4,7 @@
 create table push_subscription (
     id bigint not null auto_increment,
     staff_id bigint not null,
-    endpoint varchar(1000) not null,
+    endpoint varchar(500) not null,
     p256dh varchar(255) not null,
     auth varchar(255) not null,
     last_status varchar(30) null,

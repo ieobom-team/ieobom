@@ -43,7 +43,7 @@ public class PushSubscription extends BaseTimeEntity {
 	@JoinColumn(name = "staff_id", nullable = false)
 	private Staff staff;
 
-	@Column(name = "endpoint", nullable = false, length = 1000)
+	@Column(name = "endpoint", nullable = false, length = 500)
 	private String endpoint;
 
 	@Column(name = "p256dh", nullable = false, length = 255)

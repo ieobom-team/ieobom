@@ -201,7 +201,7 @@ PK 는 **`(sort_order, handover_card_id)`** 다. 값 목록이라 `id` 도 `crea
 |---|---|---|---|
 | `id` | `bigint` | ✕ | PK, auto_increment |
 | `staff_id` | `bigint` | ✕ | 연결 직원. FK `fk_push_subscription_staff` |
-| `endpoint` | `varchar(1000)` | ✕ | 기기 고유 구독 엔드포인트. `uk_push_subscription_endpoint` |
+| `endpoint` | `varchar(500)` | ✕ | 기기 고유 구독 엔드포인트. `uk_push_subscription_endpoint` |
 | `p256dh` | `varchar(255)` | ✕ | 암호화 공개키 |
 | `auth` | `varchar(255)` | ✕ | 인증 시크릿 |
 | `last_status` | `varchar(30)` | ○ | 마지막 발송 결과 (`SUCCESS`, `HTTP 410` 등) |
