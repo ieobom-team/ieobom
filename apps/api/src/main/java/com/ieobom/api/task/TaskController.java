@@ -7,6 +7,7 @@ import com.ieobom.api.task.dto.TaskCompleteRequest;
 import com.ieobom.api.task.dto.TaskCompleteResponse;
 import com.ieobom.api.task.dto.TaskCreateRequest;
 import com.ieobom.api.task.dto.TaskListResponse;
+import com.ieobom.api.task.dto.TaskReassignRequest;
 import com.ieobom.api.task.dto.TaskResponse;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
@@ -104,5 +105,14 @@ public class TaskController {
 	public TaskClaimResponse claim(
 			@PathVariable Long taskId, @Valid @RequestBody TaskClaimRequest request) {
 		return taskService.claim(taskId, request.normalizedStaffCode());
+	}
+
+	/**
+	 * 관리자가 후속 업무의 담당자를 변경한다. (Manyfast F-IVFNPC permissions)
+	 */
+	@PatchMapping("/api/tasks/{taskId}/assignee")
+	public TaskResponse reassign(
+			@PathVariable Long taskId, @Valid @RequestBody TaskReassignRequest request) {
+		return taskService.reassign(taskId, request);
 	}
 }

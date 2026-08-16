@@ -1,6 +1,7 @@
 package com.ieobom.api.notification;
 
 import com.ieobom.api.task.TaskAssignedEvent;
+import com.ieobom.api.task.TaskAssigneeChangedEvent;
 import com.ieobom.api.task.TaskCompletedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -55,6 +56,20 @@ public class NotificationEventListener {
 			notificationService.notifyDelegatedCompletion(event.taskId());
 		} catch (RuntimeException e) {
 			log.error("대리 완료 알림 생성 실패 — taskId={}, 완료 처리는 그대로 저장됨", event.taskId(), e);
+		}
+	}
+
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+	public void onTaskAssigneeChanged(TaskAssigneeChangedEvent event) {
+		try {
+			notificationService.notifyAssigneeChanged(
+					event.taskId(),
+					event.oldAssigneeStaffCode(),
+					event.newAssigneeStaffCode(),
+					event.assignedByStaffCode());
+		} catch (RuntimeException e) {
+			log.error("담당 변경 알림 생성 실패 — taskId={}, 담당자 변경은 그대로 저장됨", event.taskId(), e);
 		}
 	}
 }
