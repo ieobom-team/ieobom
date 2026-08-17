@@ -11,7 +11,7 @@ export const notificationsKey = (staffCode: string) =>
   ['notifications', staffCode] as const
 
 /**
- * 알림 목록을 30초마다 폴링한다. (F-JIEOJO rules)
+ * 알림 목록을 3초마다 폴링한다. (F-JIEOJO rules)
  *
  * `staffCode` 가 없으면 요청하지 않는다. 세션이 없는 화면에서도 훅이
  * 마운트되지 않도록 호출부에서 조건을 판단하지만, 방어 차원에서 enabled 도 건다.
@@ -27,7 +27,7 @@ export function useNotifications(staffCode: string | undefined) {
     queryKey: notificationsKey(staffCode ?? ''),
     queryFn: () => fetchNotifications(staffCode!),
     enabled: !!staffCode,
-    refetchInterval: 30_000,
+    refetchInterval: 3_000,
     throwOnError: false,
   })
 }
