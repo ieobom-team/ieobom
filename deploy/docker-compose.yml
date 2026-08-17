@@ -53,6 +53,10 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
       LLM_MODEL: ${LLM_MODEL:-gpt-4.1-mini}
       FACILITY_DISMISSAL_TIME: ${FACILITY_DISMISSAL_TIME:-18:00}
+      # 웹 푸시 VAPID (Manyfast F-QPWGNS, #72)
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@ieobom.com}
       TZ: Asia/Seoul
     # 호스트에 열지 않는다. Caddy 만 이 포트에 붙는다.
     expose:
