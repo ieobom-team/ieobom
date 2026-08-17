@@ -51,6 +51,7 @@
 | `name` | `varchar(50)` | ✕ | |
 | `code` | `varchar(30)` | ✕ | 사번 (`ST-001`…). `uk_staff_code` |
 | `job_role` | `enum('CAREGIVER','CENTER_HEAD','DRIVER','NURSE_AIDE','SOCIAL_WORKER')` | ✕ | 담당 직종 5종 |
+| `pin_hash` | `varchar(255)` | ○ | 선택형 4~6자리 숫자 PIN 단방향 해시값 (V3, #83) |
 
 **인계·업무는 직원을 이름 문자열로 가리킨다.** `handover.reporter_name` · `task.assignee_name` ·
 `task.completed_by_name` 에 외래키가 없는 것은 그래서다.

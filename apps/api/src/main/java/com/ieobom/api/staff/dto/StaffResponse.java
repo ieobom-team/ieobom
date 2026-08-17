@@ -16,14 +16,17 @@ import com.ieobom.api.staff.Staff;
  * @param code 사번. 동명이인을 화면에서 구분하고, 저장된 선택값을 되살릴 때 쓴다
  * @param jobRole 담당 직종 코드
  * @param jobRoleLabel 담당 직종 한글 라벨
+ * @param hasPin 4~6자리 숫자 PIN 설정 여부 (해시/평문 원문은 응답에서 은닉)
  */
-public record StaffResponse(String name, String code, JobRole jobRole, String jobRoleLabel) {
+public record StaffResponse(
+		String name, String code, JobRole jobRole, String jobRoleLabel, boolean hasPin) {
 
 	public static StaffResponse from(Staff staff) {
 		return new StaffResponse(
 				staff.getName(),
 				staff.getCode(),
 				staff.getJobRole(),
-				staff.getJobRole() != null ? staff.getJobRole().getLabel() : null);
+				staff.getJobRole() != null ? staff.getJobRole().getLabel() : null,
+				staff.hasPin());
 	}
 }

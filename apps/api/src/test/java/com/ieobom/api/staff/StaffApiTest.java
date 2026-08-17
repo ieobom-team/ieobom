@@ -47,8 +47,8 @@ class StaffApiTest {
 	}
 
 	@Test
-	void 이름_사번_직종을_내려주고_서버_id는_내리지_않는다() throws Exception {
-		// 서버 id 는 저장할 곳이 없어 내리지 않는다. (#33)
+	void 이름_사번_직종_hasPin을_내려주고_서버_id와_해시값은_내리지_않는다() throws Exception {
+		// 서버 id 및 pin_hash 원문은 내리지 않는다. (#33, #83)
 		mockMvc
 				.perform(get("/api/staff"))
 				.andExpect(status().isOk())
@@ -56,6 +56,73 @@ class StaffApiTest {
 				.andExpect(jsonPath("$.staff[0].code").isNotEmpty())
 				.andExpect(jsonPath("$.staff[0].jobRole").isNotEmpty())
 				.andExpect(jsonPath("$.staff[0].jobRoleLabel").isNotEmpty())
-				.andExpect(jsonPath("$.staff[0].id").doesNotExist());
+				.andExpect(jsonPath("$.staff[0].hasPin").isBoolean())
+				.andExpect(jsonPath("$.staff[0].id").doesNotExist())
+				.andExpect(jsonPath("$.staff[0].pinHash").doesNotExist());
+	}
+
+	@Test
+	void PIN_등록_검증_변경_초기화_시나리오() throws Exception {
+		String staffCode = "ST-001";
+
+		// 1. PIN 신규 등록
+		mockMvc
+				.perform(
+						org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+										"/api/staff/{code}/pin", staffCode)
+								.contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+								.content("{\"newPin\": \"1234\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.hasPin").value(true));
+
+		// 2. 올바른 PIN 검증
+		mockMvc
+				.perform(
+						org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+										"/api/staff/{code}/verify-pin", staffCode)
+								.contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+								.content("{\"pin\": \"1234\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.valid").value(true))
+				.andExpect(jsonPath("$.locked").value(false));
+
+		// 3. 잘못된 PIN 검증
+		mockMvc
+				.perform(
+						org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+										"/api/staff/{code}/verify-pin", staffCode)
+								.contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+								.content("{\"pin\": \"0000\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.valid").value(false))
+				.andExpect(jsonPath("$.remainingAttempts").value(4));
+
+		// 4. PIN 변경 (기존 PIN 포함)
+		mockMvc
+				.perform(
+						org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+										"/api/staff/{code}/pin", staffCode)
+								.contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+								.content("{\"currentPin\": \"1234\", \"newPin\": \"5678\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.hasPin").value(true));
+
+		// 5. 변경된 PIN 검증 성공
+		mockMvc
+				.perform(
+						org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+										"/api/staff/{code}/verify-pin", staffCode)
+								.contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+								.content("{\"pin\": \"5678\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.valid").value(true));
+
+		// 6. 관리자 1-Click 초기화
+		mockMvc
+				.perform(
+						org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+								"/api/staff/{code}/reset-pin", staffCode))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.hasPin").value(false));
 	}
 }

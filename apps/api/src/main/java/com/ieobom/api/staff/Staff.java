@@ -45,14 +45,31 @@ public class Staff extends BaseTimeEntity {
 	@Column(nullable = false, length = 30)
 	private JobRole jobRole;
 
+	/** 선택형 4~6자리 숫자 PIN 단방향 해시값. 없으면 null (Manyfast F-YJJJUX dataSpec) */
+	@Column(name = "pin_hash", length = 255)
+	private String pinHash;
+
 	@Builder
-	private Staff(String name, String code, JobRole jobRole) {
+	private Staff(String name, String code, JobRole jobRole, String pinHash) {
 		this.name = name;
 		this.code = code;
 		this.jobRole = jobRole;
+		this.pinHash = pinHash;
 	}
 
 	public void assignJobRole(JobRole jobRole) {
 		this.jobRole = jobRole;
+	}
+
+	public boolean hasPin() {
+		return this.pinHash != null && !this.pinHash.isBlank();
+	}
+
+	public void updatePinHash(String pinHash) {
+		this.pinHash = pinHash;
+	}
+
+	public void clearPin() {
+		this.pinHash = null;
 	}
 }

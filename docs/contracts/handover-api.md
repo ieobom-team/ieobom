@@ -21,8 +21,8 @@
 ```json
 {
   "staff": [
-    { "name": "강태호", "code": "ST-006", "jobRole": "SOCIAL_WORKER", "jobRoleLabel": "사회복지사" },
-    { "name": "김하늘", "code": "ST-001", "jobRole": "CAREGIVER", "jobRoleLabel": "요양보호사" }
+    { "name": "강태호", "code": "ST-006", "jobRole": "SOCIAL_WORKER", "jobRoleLabel": "사회복지사", "hasPin": false },
+    { "name": "김하늘", "code": "ST-001", "jobRole": "CAREGIVER", "jobRoleLabel": "요양보호사", "hasPin": true }
   ]
 }
 ```
@@ -33,18 +33,120 @@
 | `code` | string | 사번. 명단 안에서 유일하다. 동명이인을 화면에서 구분하고, 브라우저에 저장한 선택값을 되살릴 때 쓴다 |
 | `jobRole` | string | 담당 직종 코드 (`CAREGIVER`, `NURSE_AIDE`, `SOCIAL_WORKER`, `DRIVER`, `CENTER_HEAD`). 후속 업무 배정 시 직종별 직원 필터링에 쓴다 |
 | `jobRoleLabel` | string | 담당 직종 한글 라벨 |
+| `hasPin` | boolean | 선택형 4~6자리 숫자 PIN 설정 여부 (해시 및 평문 원문은 응답에서 은닉된다) |
 
 **이름 가나다순이고, 이름이 같으면 사번순이다.**
 
-**서버 id를 내리지 않는다.** 인계와 후속 업무는 직원을 `reporterName` · `assigneeName` ·
+**서버 id와 PIN 해시값을 내리지 않는다.** 인계와 후속 업무는 직원을 `reporterName` · `assigneeName` ·
 `completedByName` 같은 **이름 문자열**로 가리키므로 화면이 직원 id를 넘길 곳이 없다. ([#33](https://github.com/ieobom-team/ieobom/issues/33))
-사번을 함께 저장할지는 동명이인 구분이 실제로 필요해지는 시점에 다시 판단한다.
+PIN 해시값 역시 보안을 위해 외부에 노출하지 않고 `hasPin` 여부만 내려준다. ([#83](https://github.com/ieobom-team/ieobom/issues/83))
 
-**등록·수정·삭제 API가 없다.** 직원 명단 관리 화면을 만들지 않기로 했고(유저플로우 "AI 인계 도구 내비게이션 맵"에
+**직원 명단 추가·삭제 API가 없다.** 직원 명단 관리 화면을 만들지 않기로 했고(유저플로우 "AI 인계 도구 내비게이션 맵"에
 직원 명단 화면이 없다), 명단 변경은 시드와 DB로 처리한다. 어르신 명단([#42](https://github.com/ieobom-team/ieobom/issues/42))과 다른 점이다.
 
 **연결이 끊기면 화면은 마지막으로 받아 둔 명단을 쓴다.** 명단을 받지 못했다고 진입을 막으면
 현장 근무자가 입력 자체를 못 한다. (`features/session/staffApi.ts`)
+
+---
+
+## `POST /api/staff/{code}/verify-pin`
+
+선택한 직원의 4~6자리 숫자 PIN 일치 여부를 검증한다. (`F-YJJJUX` permissions, exceptions, [#83](https://github.com/ieobom-team/ieobom/issues/83))
+5회 연속 실패 시 1분간 검증이 잠긴다.
+
+### 요청
+
+```json
+{
+  "pin": "1234"
+}
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `pin` | string | ○ | 4~6자리 숫자 PIN (`^[0-9]{4,6}$`) |
+
+### 응답 — `200 OK` (검증 성공 또는 잔여 횟수 남은 실패)
+
+```json
+{
+  "valid": true,
+  "locked": false,
+  "remainingAttempts": 5
+}
+```
+
+불일치 시:
+```json
+{
+  "valid": false,
+  "locked": false,
+  "remainingAttempts": 4
+}
+```
+
+### 응답 — `423 Locked` (5회 연속 실패 시 1분간 잠금)
+
+```json
+{
+  "valid": false,
+  "locked": true,
+  "remainingAttempts": 0
+}
+```
+
+---
+
+## `PUT /api/staff/{code}/pin`
+
+직원의 선택형 4~6자리 숫자 PIN을 신규 등록, 변경하거나 해제한다. (`F-YJJJUX` permissions, [#83](https://github.com/ieobom-team/ieobom/issues/83))
+기존 PIN이 설정되어 있는 경우 `currentPin` 검증을 통과해야 변경할 수 있다.
+`newPin`을 빈 문자열(`""`) 또는 생략/null로 전달하면 PIN을 해제(`hasPin: false`)한다.
+
+### 요청
+
+```json
+{
+  "currentPin": "1234",
+  "newPin": "5678"
+}
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `currentPin` | string | △ | 현재 PIN (기존에 PIN이 설정되어 있을 경우 필수) |
+| `newPin` | string | ✕ | 새 4~6자리 숫자 PIN (`^[0-9]{4,6}$`). 빈 값이면 PIN 해제 |
+
+### 응답 — `200 OK`
+
+```json
+{
+  "name": "김하늘",
+  "code": "ST-001",
+  "jobRole": "CAREGIVER",
+  "jobRoleLabel": "요양보호사",
+  "hasPin": true
+}
+```
+
+---
+
+## `POST /api/staff/{code}/reset-pin`
+
+관리자/사회복지사가 PIN을 분실하거나 잠긴 직원의 PIN을 즉시 해제(초기화)하는 1-Click API. (`F-YJJJUX` exceptions, [#83](https://github.com/ieobom-team/ieobom/issues/83))
+호출 즉시 `pin_hash`가 `null`로 초기화되며 5회 실패 잠금 상태도 즉시 해제된다.
+
+### 응답 — `200 OK`
+
+```json
+{
+  "name": "김하늘",
+  "code": "ST-001",
+  "jobRole": "CAREGIVER",
+  "jobRoleLabel": "요양보호사",
+  "hasPin": false
+}
+```
 
 ---
 
