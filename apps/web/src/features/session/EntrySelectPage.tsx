@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from 'react-router'
 import { BigButton } from '../../shared/ui/BigButton'
 import type { JobRole } from '../handover-card/handoverCardApi'
 import { ENTRY_ROLES, findEntryRole, homePathOf, type EntryRole } from './entryRole'
+import { PinPadModal } from './PinPadModal'
 import { useSession } from './sessionContext'
 import type { Staff } from './staffDirectory'
 import { useStaffDirectory } from './useStaffDirectory'
@@ -32,11 +33,14 @@ function compareStaff(a: Staff, b: Staff): number {
  *
  * 본인 선택 목록은 **센터가 사전 등록한 직원 명단**에서 온다. (Manyfast F-YJJJUX permissions, #33)
  * 이 화면에서 명단을 고치지 않는다 — 직원 명단 관리 화면은 만들지 않는다.
+ *
+ * 선택형 PIN이 설정된 직원은 숫자 키패드 검증 모달을 거치고, 미설정 직원은 1-Click 즉시 진입한다. (#83, #84)
  */
 export function EntrySelectPage() {
   const { session, enter } = useSession()
   const navigate = useNavigate()
   const [pickedRole, setPickedRole] = useState<EntryRole | null>(null)
+  const [selectedStaffForPin, setSelectedStaffForPin] = useState<Staff | null>(null)
   const directory = useStaffDirectory()
   const staffList = directory.data ?? []
   const sortedStaff = [...staffList].sort(compareStaff)
@@ -50,6 +54,22 @@ export function EntrySelectPage() {
     if (!pickedRole) {
       return
     }
+
+    if (staff.hasPin) {
+      setSelectedStaffForPin(staff)
+      return
+    }
+
+    enter(pickedRole, staff)
+    navigate(homePathOf(pickedRole), { replace: true })
+  }
+
+  const handlePinSuccess = () => {
+    if (!pickedRole || !selectedStaffForPin) {
+      return
+    }
+    const staff = selectedStaffForPin
+    setSelectedStaffForPin(null)
     enter(pickedRole, staff)
     navigate(homePathOf(pickedRole), { replace: true })
   }
@@ -105,14 +125,25 @@ export function EntrySelectPage() {
               {sortedStaff.map((staff) => (
                 <li key={staff.code}>
                   <BigButton tone="plain" onClick={() => handlePickStaff(staff)}>
-                    <span className="flex flex-wrap items-baseline gap-x-3">
-                      <span>{staff.name}</span>
-                      {staff.jobRoleLabel && (
-                        <span className="rounded-lg bg-teal-100 px-2.5 py-0.5 text-base font-semibold text-teal-800">
-                          {staff.jobRoleLabel}
+                    <span className="flex flex-wrap items-center justify-between gap-x-3">
+                      <span className="flex flex-wrap items-baseline gap-x-3">
+                        <span>{staff.name}</span>
+                        {staff.jobRoleLabel && (
+                          <span className="rounded-lg bg-teal-100 px-2.5 py-0.5 text-base font-semibold text-teal-800">
+                            {staff.jobRoleLabel}
+                          </span>
+                        )}
+                        <span className="text-lg font-normal text-slate-500">{staff.code}</span>
+                      </span>
+                      {staff.hasPin && (
+                        <span
+                          className="flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-sm font-semibold text-slate-600"
+                          title="PIN 잠금 설정됨"
+                          aria-label="PIN 잠금 설정됨"
+                        >
+                          🔒 PIN
                         </span>
                       )}
-                      <span className="text-lg font-normal text-slate-500">{staff.code}</span>
                     </span>
                   </BigButton>
                 </li>
@@ -128,6 +159,15 @@ export function EntrySelectPage() {
             역할 다시 고르기
           </button>
         </section>
+      )}
+
+      {/* PIN 검증 모달 */}
+      {selectedStaffForPin && (
+        <PinPadModal
+          staff={selectedStaffForPin}
+          onSuccess={handlePinSuccess}
+          onClose={() => setSelectedStaffForPin(null)}
+        />
       )}
     </main>
   )

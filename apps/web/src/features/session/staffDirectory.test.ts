@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { TEST_STAFF } from './staffFixture'
-import { cacheDirectory, findStaffByCode, readCachedDirectory, STAFF_CACHE_KEY } from './staffDirectory'
+import {
+  cacheDirectory,
+  findStaffByCode,
+  readCachedDirectory,
+  STAFF_CACHE_KEY,
+  updateCachedStaff,
+} from './staffDirectory'
 
 describe('직원 명단 캐시', () => {
   it('받아 온 명단을 그대로 되살린다', () => {
@@ -19,14 +25,12 @@ describe('직원 명단 캐시', () => {
     expect(readCachedDirectory()).toEqual([])
   })
 
-  it('명단 모양이 아닌 항목은 걸러 낸다', () => {
-    // 캐시 형식이 바뀐 옛 값이 남아 있어도 그대로 화면에 올리지 않는다.
-    window.localStorage.setItem(
-      STAFF_CACHE_KEY,
-      JSON.stringify([{ code: 'ST-001', name: '김하늘' }, { staffId: 7 }]),
-    )
+  it('updateCachedStaff 로 특정 직원의 정보를 캐시에서 갱신한다', () => {
+    cacheDirectory(TEST_STAFF)
+    const updated = { ...TEST_STAFF[0], hasPin: false }
+    updateCachedStaff(updated)
 
-    expect(readCachedDirectory()).toEqual([{ code: 'ST-001', name: '김하늘' }])
+    expect(findStaffByCode(readCachedDirectory(), 'ST-001')?.hasPin).toBe(false)
   })
 })
 

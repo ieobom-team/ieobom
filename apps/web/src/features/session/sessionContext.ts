@@ -7,6 +7,8 @@ export type SessionContextValue = {
   session: EntrySession | null
   /** 진입 역할과 본인을 확정한다. */
   enter: (entryRole: EntryRole, staff: Staff) => void
+  /** 현재 세션의 직원 정보를 갱신한다. (PIN 설정/변경/해제 시) */
+  updateStaff: (staff: Staff) => void
   /** 선택을 지우고 진입 선택 화면으로 되돌린다. (본인 바꾸기) */
   leave: () => void
 }
