@@ -1,8 +1,11 @@
-import { ArrowLeft, Bell } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowLeft, Bell, KeyRound } from 'lucide-react'
 import { Link } from 'react-router'
 import { useUnreadCount } from '../../features/notification/useNotifications'
 import { findEntryRole, homePathOf } from '../../features/session/entryRole'
+import { PinSettingsModal } from '../../features/session/PinSettingsModal'
 import { useSession } from '../../features/session/sessionContext'
+import type { Staff } from '../../features/session/staffDirectory'
 
 export type AppHeaderProps = {
   /** 페이지 제목 (생략 시 로고만 노출) */
@@ -25,7 +28,7 @@ export type AppHeaderProps = {
  *
  * - 좌측: 뒤로가기 버튼 또는 홈(로고) 링크
  * - 중앙: 페이지 제목
- * - 우측: 알림함(🔔 배지), 현재 로그인한 본인 칩 및 '본인 바꾸기' 버튼
+ * - 우측: 알림함(🔔 배지), PIN 설정/변경, 현재 로그인한 본인 칩 및 '본인 바꾸기' 버튼
  */
 export function AppHeader({
   title,
@@ -36,94 +39,130 @@ export function AppHeader({
   showSession = true,
   className = '',
 }: AppHeaderProps) {
-  const { session, leave } = useSession()
+  const { session, updateStaff, leave } = useSession()
   const unreadCount = useUnreadCount(session?.staff.code)
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false)
 
   const shouldShowBack = showBack || Boolean(backTo) || Boolean(onBack)
   const homePath = session ? homePathOf(session.entryRole) : '/'
   const role = session ? findEntryRole(session.entryRole) : null
 
+  const handlePinUpdateSuccess = (updatedStaff: Staff) => {
+    updateStaff(updatedStaff)
+    setIsPinModalOpen(false)
+  }
+
   return (
-    <header className={`border-b border-slate-200 bg-white ${className}`}>
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
-        {/* 좌측: 뒤로가기 또는 로고/홈 */}
-        <div className="flex items-center gap-3">
-          {shouldShowBack ? (
-            onBack ? (
-              <button
-                type="button"
-                onClick={onBack}
-                className="flex min-h-12 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-lg font-semibold text-slate-800 hover:border-teal-600 hover:bg-teal-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300"
-                aria-label={backLabel}
-              >
-                <ArrowLeft size={20} strokeWidth={2.4} aria-hidden="true" />
-                <span>{backLabel}</span>
-              </button>
+    <>
+      <header className={`border-b border-slate-200 bg-white ${className}`}>
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          {/* 좌측: 뒤로가기 또는 로고/홈 */}
+          <div className="flex items-center gap-3">
+            {shouldShowBack ? (
+              onBack ? (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="flex min-h-12 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-lg font-semibold text-slate-800 hover:border-teal-600 hover:bg-teal-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300"
+                  aria-label={backLabel}
+                >
+                  <ArrowLeft size={20} strokeWidth={2.4} aria-hidden="true" />
+                  <span>{backLabel}</span>
+                </button>
+              ) : (
+                <Link
+                  to={backTo ?? homePath}
+                  className="flex min-h-12 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-lg font-semibold text-slate-800 hover:border-teal-600 hover:bg-teal-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300"
+                  aria-label={backLabel}
+                >
+                  <ArrowLeft size={20} strokeWidth={2.4} aria-hidden="true" />
+                  <span>{backLabel}</span>
+                </Link>
+              )
             ) : (
               <Link
-                to={backTo ?? homePath}
-                className="flex min-h-12 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-lg font-semibold text-slate-800 hover:border-teal-600 hover:bg-teal-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300"
-                aria-label={backLabel}
+                to={homePath}
+                className="flex items-center gap-2 text-2xl font-bold tracking-tight text-teal-800 hover:text-teal-900 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300"
               >
-                <ArrowLeft size={20} strokeWidth={2.4} aria-hidden="true" />
-                <span>{backLabel}</span>
+                <span>이어봄</span>
               </Link>
-            )
-          ) : (
-            <Link
-              to={homePath}
-              className="flex items-center gap-2 text-2xl font-bold tracking-tight text-teal-800 hover:text-teal-900 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300"
-            >
-              <span>이어봄</span>
-            </Link>
-          )}
+            )}
 
-          {title && (
-            <span className="hidden text-xl font-bold text-slate-900 sm:inline">
-              · {title}
-            </span>
+            {title && (
+              <span className="hidden text-xl font-bold text-slate-900 sm:inline">
+                · {title}
+              </span>
+            )}
+          </div>
+
+          {/* 우측: 알림함 버튼 & PIN 설정 & 세션 칩 & 본인 바꾸기 */}
+          {showSession && session && role && (
+            <div className="flex items-center gap-2 sm:gap-2.5">
+              {/* PIN 설정 / 변경 버튼 */}
+              <button
+                id="pin-settings-btn"
+                type="button"
+                onClick={() => setIsPinModalOpen(true)}
+                className="flex min-h-10 items-center gap-1 rounded-xl border border-slate-300 bg-white px-2.5 py-1 text-sm font-semibold text-slate-700 whitespace-nowrap hover:border-teal-600 hover:bg-teal-50 hover:text-teal-800 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300 sm:px-3 sm:py-1.5 sm:text-base"
+                title={session.staff.hasPin ? 'PIN 번호 변경 / 해제' : 'PIN 번호 신규 등록'}
+              >
+                <KeyRound size={16} strokeWidth={2.2} aria-hidden="true" />
+                <span>{session.staff.hasPin ? 'PIN 변경' : 'PIN 설정'}</span>
+              </button>
+
+              <Link
+                id="notification-inbox-btn"
+                to="/notifications"
+                className="relative flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-slate-300 bg-white p-2 text-slate-700 hover:border-teal-600 hover:bg-teal-50 hover:text-teal-800 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300 sm:px-3 sm:py-1.5"
+                aria-label={
+                  unreadCount > 0 ? `알림함 (미읽음 ${unreadCount}건)` : '알림함'
+                }
+              >
+                <Bell size={20} strokeWidth={2.2} aria-hidden="true" />
+                {unreadCount > 0 && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white shadow-xs"
+                  >
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </Link>
+
+              <div className="flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-sm whitespace-nowrap sm:gap-2 sm:px-3 sm:py-1.5 sm:text-base">
+                <span className="font-semibold text-slate-900">{session.staff.name}</span>
+                <span className="hidden text-slate-500 sm:inline">{session.staff.code}</span>
+                <span className="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-800 sm:text-sm">
+                  {role.label}
+                </span>
+                {session.staff.hasPin && (
+                  <span
+                    className="ml-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-xs font-bold text-amber-800"
+                    title="PIN 잠금 설정됨"
+                  >
+                    🔒
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={leave}
+                className="rounded-xl border border-slate-300 bg-white px-2.5 py-1 text-sm font-semibold text-slate-700 whitespace-nowrap hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300 sm:px-3 sm:py-1.5 sm:text-base"
+              >
+                본인 바꾸기
+              </button>
+            </div>
           )}
         </div>
+      </header>
 
-        {/* 우측: 알림함 버튼 & 세션 칩 & 본인 바꾸기 */}
-        {showSession && session && role && (
-          <div className="flex items-center gap-2 sm:gap-2.5">
-            <Link
-              id="notification-inbox-btn"
-              to="/notifications"
-              className="relative flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-slate-300 bg-white p-2 text-slate-700 hover:border-teal-600 hover:bg-teal-50 hover:text-teal-800 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300 sm:px-3 sm:py-1.5"
-              aria-label={
-                unreadCount > 0 ? `알림함 (미읽음 ${unreadCount}건)` : '알림함'
-              }
-            >
-              <Bell size={20} strokeWidth={2.2} aria-hidden="true" />
-              {unreadCount > 0 && (
-                <span
-                  aria-hidden="true"
-                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white shadow-xs"
-                >
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </Link>
-
-            <div className="flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-sm whitespace-nowrap sm:gap-2 sm:px-3 sm:py-1.5 sm:text-base">
-              <span className="font-semibold text-slate-900">{session.staff.name}</span>
-              <span className="hidden text-slate-500 sm:inline">{session.staff.code}</span>
-              <span className="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-800 sm:text-sm">
-                {role.label}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={leave}
-              className="rounded-xl border border-slate-300 bg-white px-2.5 py-1 text-sm font-semibold text-slate-700 whitespace-nowrap hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300 sm:px-3 sm:py-1.5 sm:text-base"
-            >
-              본인 바꾸기
-            </button>
-          </div>
-        )}
-      </div>
-    </header>
+      {isPinModalOpen && session && (
+        <PinSettingsModal
+          staff={session.staff}
+          onSuccess={handlePinUpdateSuccess}
+          onClose={() => setIsPinModalOpen(false)}
+        />
+      )}
+    </>
   )
 }

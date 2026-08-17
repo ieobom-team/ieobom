@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fetchStaffDirectory } from './staffApi'
+import {
+  fetchStaffDirectory,
+  resetStaffPin,
+  updateStaffPin,
+  verifyStaffPin,
+} from './staffApi'
 import { readCachedDirectory } from './staffDirectory'
 import { seedStaffCache, TEST_STAFF } from './staffFixture'
 
@@ -52,5 +57,87 @@ describe('직원 명단 조회', () => {
 
     // 퇴사해서 빠진 사람이 캐시에 남아 있으면 안 된다.
     expect(readCachedDirectory()).toEqual(서버_명단)
+  })
+})
+
+describe('PIN 검증 및 관리 API', () => {
+  it('verifyStaffPin: 올바른 PIN이면 valid: true 응답을 반환한다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ valid: true, locked: false, remainingAttempts: 5 }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        ),
+      ),
+    )
+
+    const result = await verifyStaffPin('ST-001', '1234')
+    expect(result.valid).toBe(true)
+    expect(result.locked).toBe(false)
+    expect(result.remainingAttempts).toBe(5)
+  })
+
+  it('verifyStaffPin: 5회 실패 시 423 Locked 응답을 정상 파싱한다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ valid: false, locked: true, remainingAttempts: 0 }), {
+            status: 423,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        ),
+      ),
+    )
+
+    const result = await verifyStaffPin('ST-001', '9999')
+    expect(result.valid).toBe(false)
+    expect(result.locked).toBe(true)
+    expect(result.remainingAttempts).toBe(0)
+  })
+
+  it('updateStaffPin: PIN 설정 및 변경 시 캐시를 동기화한다', async () => {
+    seedStaffCache()
+    const updatedStaff = { ...TEST_STAFF[0], hasPin: true }
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(JSON.stringify(updatedStaff), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        ),
+      ),
+    )
+
+    const result = await updateStaffPin('ST-001', undefined, '1234')
+    expect(result.hasPin).toBe(true)
+    expect(readCachedDirectory().find((s) => s.code === 'ST-001')?.hasPin).toBe(true)
+  })
+
+  it('resetStaffPin: 관리자 1-Click 초기화 시 hasPin: false로 캐시를 동기화한다', async () => {
+    seedStaffCache()
+    const resetStaff = { ...TEST_STAFF[0], hasPin: false }
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(JSON.stringify(resetStaff), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        ),
+      ),
+    )
+
+    const result = await resetStaffPin('ST-001')
+    expect(result.hasPin).toBe(false)
+    expect(readCachedDirectory().find((s) => s.code === 'ST-001')?.hasPin).toBe(false)
   })
 })

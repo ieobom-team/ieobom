@@ -195,10 +195,10 @@ npm test -- -t "본인 바꾸기"       # 이름으로 좁혀 실행
 로그인이 없다. 진입 시 **역할 2종과 본인**을 고르고 그 값을 이후 화면의 입력자 식별로 쓴다.
 업무 배정에 쓰는 **담당 직종 5종은 다른 개념이며 섞지 않는다.** ([architecture.md 인증](./architecture.md#인증))
 
-직원 명단(`features/session/staffDirectory.ts`)은 **프론트 상수(mock)다.**
-서버에 직원 엔티티가 없고 API 는 직원을 `reporterName` 같은 문자열로만 받는다.
+직원 명단(`features/session/staffDirectory.ts`)은 **서버에서 받아 온다.** (`GET /api/staff`, #33, #83)
+기기에 캐시해 두고, 공용 기기 보호를 위해 선택형 4~6자리 숫자 PIN(`PinPadModal`, `PinSettingsModal`)을 지원한다.
 
-**어르신 목록은 다르다.** `GET /api/care-recipients`로 서버에서 받아 온다.
+**어르신 목록도 마찬가지다.** `GET /api/care-recipients`로 서버에서 받아 온다.
 인계 등록이 서버가 발급한 `careRecipientId`를 요구하므로 프론트 상수로 두면 id 를 추측하게 된다.
 
 ## 5. PR 전 검증

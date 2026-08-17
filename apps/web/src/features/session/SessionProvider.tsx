@@ -19,6 +19,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void syncPushSubscriptionOnSessionEnter(staff.code)
   }, [])
 
+  const updateStaff = useCallback((staff: Staff) => {
+    setSession((prev) => {
+      if (!prev) return null
+      const next: EntrySession = { ...prev, staff }
+      saveSession(next)
+      return next
+    })
+  }, [])
+
   const leave = useCallback(() => {
     clearSession()
     setSession(null)
@@ -26,8 +35,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo<SessionContextValue>(
-    () => ({ session, enter, leave }),
-    [session, enter, leave],
+    () => ({ session, enter, updateStaff, leave }),
+    [session, enter, updateStaff, leave],
   )
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>

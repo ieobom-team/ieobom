@@ -14,10 +14,12 @@ export type Staff = {
   /** 담당 직종. 후속 업무 배정 시 직종별 필터링에 쓴다. */
   jobRole?: JobRole
   jobRoleLabel?: string
+  /** 선택형 4~6자리 숫자 PIN 설정 여부 (Manyfast F-YJJJUX, #83, #84) */
+  hasPin?: boolean
 }
 
 /** 캐시 형식이 바뀌면 뒤의 번호를 올려 옛 값과 섞이지 않게 한다. */
-export const STAFF_CACHE_KEY = 'ieobom.staff-directory.v2'
+export const STAFF_CACHE_KEY = 'ieobom.staff-directory.v3'
 
 function isStaff(value: unknown): value is Staff {
   return (
@@ -59,6 +61,12 @@ export function cacheDirectory(directory: readonly Staff[]): void {
   } catch {
     // 캐시하지 못해도 이번 화면은 받아 온 목록으로 그대로 동작한다.
   }
+}
+
+export function updateCachedStaff(updatedStaff: Staff): void {
+  const current = readCachedDirectory()
+  const next = current.map((s) => (s.code === updatedStaff.code ? updatedStaff : s))
+  cacheDirectory(next)
 }
 
 export function findStaffByCode(
