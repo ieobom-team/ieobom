@@ -116,7 +116,7 @@
 | ![](docs/assets/input.png) | ![](docs/assets/card.png) | ![](docs/assets/tasks.png) |
 -->
 
-_배포 링크(https://ieobom-likelion.duckdns.org)에서 직접 확인하실 수 있습니다._
+_[배포 링크](https://ieobom-likelion.duckdns.org)에서 직접 확인하실 수 있습니다._
 
 ---
 
