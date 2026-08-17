@@ -15,7 +15,7 @@ import type { Staff } from './staffDirectory'
  * 공용 기기 보호를 위해 직원이 자신의 4~6자리 PIN을 설정/변경할 수 있는 버튼을 제공한다. (#83, #84)
  *
  * 알림 배지: 당일 미읽음 개수. 0이면 숫자를 표시하지 않는다. (F-JIEOJO display)
- * 폴링은 useUnreadCount → useNotifications 내부에서 30초마다 실행된다.
+ * 폴링은 useUnreadCount → useNotifications 내부에서 3초마다 실행된다.
  * session 이 없으면 훅이 요청을 보내지 않는다. (enabled: !!staffCode)
  */
 export function SessionHeader() {
