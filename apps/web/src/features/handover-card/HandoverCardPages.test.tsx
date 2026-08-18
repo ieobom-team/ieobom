@@ -400,7 +400,8 @@ describe('어르신을 가리지 못한 항목 (n23 negative → n24)', () => {
 
     await user.click(await screen.findByRole('link', { name: /가리지 못한 항목이 1건/ }))
 
-    expect(await screen.findByRole('heading', { name: '검토 필요 항목' })).toBeInTheDocument()
+    // 화면 제목은 AppHeader 2행이 보여준다 — 본문에 별도 heading을 두지 않는다(#88 후속 코멘트).
+    expect(await screen.findByText('검토 필요 항목')).toBeInTheDocument()
     expect(screen.getByText(/한 분이 어지럽다고 하심/)).toBeInTheDocument()
   })
 

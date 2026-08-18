@@ -9,9 +9,9 @@ const TYPE_LABEL: Record<NotificationType, string> = {
 
 /** 알림 유형별 배경색 클래스 */
 const TYPE_BG: Record<NotificationType, string> = {
-  TASK_ASSIGNED: 'bg-teal-50 text-teal-800',
+  TASK_ASSIGNED: 'bg-primary-soft text-primary',
   TASK_REASSIGNED: 'bg-amber-50 text-amber-800',
-  TASK_DELEGATED_COMPLETE: 'bg-slate-100 text-slate-700',
+  TASK_DELEGATED_COMPLETE: 'bg-btn-neutral text-ink',
 }
 
 /**
@@ -58,13 +58,9 @@ export function NotificationItem({
   const { task } = notification
   const isUnread = !notification.read
 
-  const borderClass = notification.safetyRelated
-    ? 'border-red-300'
-    : isUnread
-      ? 'border-teal-300'
-      : 'border-slate-200'
+  const borderClass = notification.safetyRelated || isUnread ? 'border-primary' : 'border-border-card'
 
-  const bgClass = isUnread ? 'bg-white' : 'bg-slate-50'
+  const bgClass = isUnread ? 'bg-white' : 'bg-canvas'
 
   return (
     <article
@@ -78,10 +74,10 @@ export function NotificationItem({
           {TYPE_LABEL[notification.type]}
         </span>
         {isUnread && (
-          <span className="h-2 w-2 rounded-full bg-teal-500" aria-label="미읽음" />
+          <span className="h-2 w-2 rounded-full bg-primary" aria-label="미읽음" />
         )}
         {notification.safetyRelated && (
-          <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+          <span className="rounded-full bg-primary-soft px-2 py-0.5 text-xs font-semibold text-primary">
             안전
           </span>
         )}
@@ -95,13 +91,13 @@ export function NotificationItem({
         aria-label={`${task.careRecipientName} — ${task.content}`}
       >
         {/* 어르신 이름 */}
-        <p className="text-xl font-bold text-slate-900">{task.careRecipientName}</p>
+        <p className="text-xl font-bold text-ink">{task.careRecipientName}</p>
 
         {/* 업무 내용 */}
-        <p className="mt-1 text-lg text-slate-800">{task.content}</p>
+        <p className="mt-1 text-lg text-ink">{task.content}</p>
 
         {/* 배정한 사람 · 기한 시각 · 받은 시각 */}
-        <dl className="mt-3 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-base text-slate-600">
+        <dl className="mt-3 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-base text-ink-muted">
           <dt className="font-semibold">배정</dt>
           <dd>{notification.actorName}</dd>
 
@@ -127,7 +123,7 @@ export function NotificationItem({
         - claimedAt 이 있으면 담당자 + 맡은 시각 표시
       */}
       {notification.type === 'TASK_ASSIGNED' && (
-        <div className="mt-4 border-t border-slate-100 pt-3">
+        <div className="mt-4 border-t border-border-divider pt-3">
           {task.claimable ? (
             <button
               type="button"
@@ -136,12 +132,12 @@ export function NotificationItem({
                 onClaim(notification)
               }}
               disabled={claimPending}
-              className="w-full rounded-xl border-2 border-teal-600 bg-teal-50 px-4 py-3 text-lg font-bold text-teal-800 disabled:opacity-50"
+              className="w-full rounded-xl border-2 border-primary bg-primary-soft px-4 py-3 text-lg font-bold text-primary disabled:opacity-50"
             >
               {claimPending ? '처리 중…' : '내가 처리할게요'}
             </button>
           ) : task.assigneeName !== null ? (
-            <p className="text-base text-slate-500">
+            <p className="text-base text-ink-muted">
               <span className="font-semibold">{task.assigneeName}</span>
               {task.claimedAt && ` · ${formatTime(task.claimedAt)} 맡음`}
             </p>

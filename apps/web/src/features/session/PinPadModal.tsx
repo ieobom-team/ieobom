@@ -154,10 +154,10 @@ export function PinPadModal({ staff, onSuccess, onClose }: PinPadModalProps) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="pin-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4"
     >
       <div
-        className={`w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl transition-transform ${
+        className={`w-full max-w-sm rounded-3xl bg-surface-modal p-6 shadow-2xl transition-transform ${
           isShaking ? 'animate-bounce' : ''
         }`}
         style={
@@ -179,19 +179,19 @@ export function PinPadModal({ staff, onSuccess, onClose }: PinPadModalProps) {
         {/* 상단 직원 정보 및 닫기 */}
         <div className="flex items-center justify-between">
           <div>
-            <h2 id="pin-modal-title" className="text-2xl font-bold text-slate-900">
+            <h2 id="pin-modal-title" className="text-2xl font-bold text-ink">
               PIN 번호 입력
             </h2>
-            <p className="mt-1 text-lg text-slate-600">
-              <span className="font-semibold text-slate-900">{staff.name}</span>
-              <span className="ml-1 text-slate-500">({staff.code})</span>
+            <p className="mt-1 text-lg text-ink-muted">
+              <span className="font-semibold text-ink">{staff.name}</span>
+              <span className="ml-1 text-ink-muted">({staff.code})</span>
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            className="flex h-10 w-10 items-center justify-center rounded-full text-2xl text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-2xl text-ink-tertiary hover:bg-btn-neutral hover:text-ink"
           >
             ✕
           </button>
@@ -205,7 +205,7 @@ export function PinPadModal({ staff, onSuccess, onClose }: PinPadModalProps) {
               <div
                 key={idx}
                 className={`flex h-6 w-6 items-center justify-center rounded-full transition-all ${
-                  isFilled ? 'bg-teal-700 scale-110' : 'border-2 border-slate-300 bg-slate-100'
+                  isFilled ? 'bg-primary scale-110' : 'border-2 border-border-card bg-btn-neutral'
                 }`}
                 aria-hidden="true"
               >
@@ -238,7 +238,7 @@ export function PinPadModal({ staff, onSuccess, onClose }: PinPadModalProps) {
               type="button"
               disabled={isLocked || isSubmitting}
               onClick={() => handleAppendDigit(String(num))}
-              className="flex h-16 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-2xl font-bold text-slate-800 shadow-sm active:bg-teal-100 disabled:opacity-40"
+              className="flex h-16 items-center justify-center rounded-2xl border border-border-card bg-white text-2xl font-bold text-ink shadow-sm active:bg-primary-soft disabled:opacity-40"
             >
               {num}
             </button>
@@ -249,7 +249,7 @@ export function PinPadModal({ staff, onSuccess, onClose }: PinPadModalProps) {
             type="button"
             disabled={isLocked || isSubmitting || pin.length === 0}
             onClick={handleClear}
-            className="flex h-16 items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 text-lg font-semibold text-slate-600 shadow-sm active:bg-slate-200 disabled:opacity-40"
+            className="flex h-16 items-center justify-center rounded-2xl border border-border-card bg-btn-neutral text-lg font-semibold text-ink-muted shadow-sm active:brightness-95 disabled:opacity-40"
           >
             초기화
           </button>
@@ -259,7 +259,7 @@ export function PinPadModal({ staff, onSuccess, onClose }: PinPadModalProps) {
             type="button"
             disabled={isLocked || isSubmitting}
             onClick={() => handleAppendDigit('0')}
-            className="flex h-16 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-2xl font-bold text-slate-800 shadow-sm active:bg-teal-100 disabled:opacity-40"
+            className="flex h-16 items-center justify-center rounded-2xl border border-border-card bg-white text-2xl font-bold text-ink shadow-sm active:bg-primary-soft disabled:opacity-40"
           >
             0
           </button>
@@ -270,29 +270,29 @@ export function PinPadModal({ staff, onSuccess, onClose }: PinPadModalProps) {
             disabled={isLocked || isSubmitting || pin.length === 0}
             onClick={handleDelete}
             aria-label="한 글자 지우기"
-            className="flex h-16 items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 text-xl font-bold text-slate-700 shadow-sm active:bg-slate-200 disabled:opacity-40"
+            className="flex h-16 items-center justify-center rounded-2xl border border-border-card bg-btn-neutral text-xl font-bold text-ink shadow-sm active:brightness-95 disabled:opacity-40"
           >
             ⌫
           </button>
         </div>
 
-        {/* 하단 확인 버튼 */}
-        <div className="mt-5 flex flex-col gap-2">
+        {/* 하단 확인 버튼 — 좌 보조(취소) / 우 주요(확인) (DESIGN.md §8.5) */}
+        <div className="mt-5 grid grid-cols-2 gap-3">
           <button
             type="button"
-            disabled={pin.length < MIN_PIN_LENGTH || isSubmitting || isLocked}
-            onClick={() => void handleVerify(pin)}
-            className="flex h-14 w-full items-center justify-center rounded-2xl bg-teal-700 text-xl font-bold text-white shadow hover:bg-teal-800 disabled:bg-slate-300 disabled:text-slate-500"
+            onClick={onClose}
+            className="flex h-14 w-full items-center justify-center rounded-2xl bg-btn-neutral text-xl font-semibold text-ink hover:brightness-95"
           >
-            {isSubmitting ? '확인 중…' : '확인'}
+            취소
           </button>
 
           <button
             type="button"
-            onClick={onClose}
-            className="h-12 w-full rounded-2xl text-lg font-semibold text-slate-600 hover:bg-slate-100"
+            disabled={pin.length < MIN_PIN_LENGTH || isSubmitting || isLocked}
+            onClick={() => void handleVerify(pin)}
+            className="flex h-14 w-full items-center justify-center rounded-2xl bg-primary text-xl font-bold text-white shadow hover:brightness-95 disabled:bg-btn-neutral disabled:text-ink-tertiary"
           >
-            취소
+            {isSubmitting ? '확인 중…' : '확인'}
           </button>
         </div>
       </div>

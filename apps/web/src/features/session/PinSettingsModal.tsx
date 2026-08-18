@@ -91,31 +91,31 @@ export function PinSettingsModal({ staff, onSuccess, onClose }: PinSettingsModal
       role="dialog"
       aria-modal="true"
       aria-labelledby="pin-settings-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4"
     >
-      <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+      <div className="w-full max-w-md rounded-3xl bg-surface-modal p-6 shadow-2xl">
         {/* 헤더 */}
         <div className="flex items-center justify-between">
           <div>
-            <h2 id="pin-settings-title" className="text-2xl font-bold text-slate-900">
+            <h2 id="pin-settings-title" className="text-2xl font-bold text-ink">
               {hasExistingPin ? 'PIN 번호 변경 / 해제' : 'PIN 번호 신규 등록'}
             </h2>
-            <p className="mt-1 text-lg text-slate-600">
-              <span className="font-semibold text-slate-900">{staff.name}</span>
-              <span className="ml-1 text-slate-500">({staff.code})</span>
+            <p className="mt-1 text-lg text-ink-muted">
+              <span className="font-semibold text-ink">{staff.name}</span>
+              <span className="ml-1 text-ink-muted">({staff.code})</span>
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            className="flex h-10 w-10 items-center justify-center rounded-full text-2xl text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-2xl text-ink-tertiary hover:bg-btn-neutral hover:text-ink"
           >
             ✕
           </button>
         </div>
 
-        <p className="mt-3 text-base text-slate-600">
+        <p className="mt-3 text-base text-ink-muted">
           공용 기기에서 내 알림과 업무를 안전하게 보호할 수 있는 4~6자리 숫자 PIN을 설정합니다.
         </p>
 
@@ -134,7 +134,7 @@ export function PinSettingsModal({ staff, onSuccess, onClose }: PinSettingsModal
             <div>
               <label
                 htmlFor="current-pin-input"
-                className="block text-base font-semibold text-slate-800"
+                className="block text-base font-semibold text-ink"
               >
                 현재 PIN 번호
               </label>
@@ -148,7 +148,7 @@ export function PinSettingsModal({ staff, onSuccess, onClose }: PinSettingsModal
                 onChange={(e) => setCurrentPin(e.target.value.replace(/[^0-9]/g, ''))}
                 placeholder="현재 4~6자리 숫자"
                 autoComplete="current-password"
-                className="mt-1.5 w-full rounded-xl border-2 border-slate-300 px-4 py-3 text-xl tracking-widest text-slate-900 focus:border-teal-600 focus:outline-none"
+                className="mt-1.5 w-full rounded-xl border-2 border-border-card px-4 py-3 text-xl tracking-widest text-ink focus:border-primary focus:outline-none"
               />
             </div>
           )}
@@ -157,7 +157,7 @@ export function PinSettingsModal({ staff, onSuccess, onClose }: PinSettingsModal
           <div>
             <label
               htmlFor="new-pin-input"
-              className="block text-base font-semibold text-slate-800"
+              className="block text-base font-semibold text-ink"
             >
               {hasExistingPin ? '새 PIN 번호' : 'PIN 번호'}
             </label>
@@ -171,7 +171,7 @@ export function PinSettingsModal({ staff, onSuccess, onClose }: PinSettingsModal
               onChange={(e) => setNewPin(e.target.value.replace(/[^0-9]/g, ''))}
               placeholder="4~6자리 숫자"
               autoComplete="new-password"
-              className="mt-1.5 w-full rounded-xl border-2 border-slate-300 px-4 py-3 text-xl tracking-widest text-slate-900 focus:border-teal-600 focus:outline-none"
+              className="mt-1.5 w-full rounded-xl border-2 border-border-card px-4 py-3 text-xl tracking-widest text-ink focus:border-primary focus:outline-none"
             />
           </div>
 
@@ -179,7 +179,7 @@ export function PinSettingsModal({ staff, onSuccess, onClose }: PinSettingsModal
           <div>
             <label
               htmlFor="new-pin-confirm-input"
-              className="block text-base font-semibold text-slate-800"
+              className="block text-base font-semibold text-ink"
             >
               {hasExistingPin ? '새 PIN 번호 확인' : 'PIN 번호 확인'}
             </label>
@@ -193,20 +193,11 @@ export function PinSettingsModal({ staff, onSuccess, onClose }: PinSettingsModal
               onChange={(e) => setNewPinConfirm(e.target.value.replace(/[^0-9]/g, ''))}
               placeholder="동일한 4~6자리 숫자 재입력"
               autoComplete="new-password"
-              className="mt-1.5 w-full rounded-xl border-2 border-slate-300 px-4 py-3 text-xl tracking-widest text-slate-900 focus:border-teal-600 focus:outline-none"
+              className="mt-1.5 w-full rounded-xl border-2 border-border-card px-4 py-3 text-xl tracking-widest text-ink focus:border-primary focus:outline-none"
             />
           </div>
 
-          {/* 저장 버튼 */}
-          <button
-            type="submit"
-            disabled={isSubmitting || !newPin || !newPinConfirm}
-            className="mt-2 flex h-14 w-full items-center justify-center rounded-2xl bg-teal-700 text-xl font-bold text-white shadow hover:bg-teal-800 disabled:bg-slate-300 disabled:text-slate-500"
-          >
-            {isSubmitting ? '저장 중…' : hasExistingPin ? 'PIN 번호 변경하기' : 'PIN 번호 등록하기'}
-          </button>
-
-          {/* PIN 해제 버튼 (기존 PIN이 있을 때) */}
+          {/* PIN 해제 버튼 (기존 PIN이 있을 때) — 파괴적 행동이라 좌우 쌍과 분리해 둔다 */}
           {hasExistingPin && (
             <button
               type="button"
@@ -218,13 +209,24 @@ export function PinSettingsModal({ staff, onSuccess, onClose }: PinSettingsModal
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-12 w-full rounded-2xl text-lg font-semibold text-slate-600 hover:bg-slate-100"
-          >
-            닫기
-          </button>
+          {/* 좌 보조(닫기) / 우 주요(저장) (DESIGN.md §8.5) */}
+          <div className="mt-2 grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-14 w-full items-center justify-center rounded-2xl bg-btn-neutral text-lg font-semibold text-ink hover:brightness-95"
+            >
+              닫기
+            </button>
+
+            <button
+              type="submit"
+              disabled={isSubmitting || !newPin || !newPinConfirm}
+              className="flex h-14 w-full items-center justify-center rounded-2xl bg-primary px-2 text-lg font-bold text-white shadow hover:brightness-95 disabled:bg-btn-neutral disabled:text-ink-tertiary"
+            >
+              {isSubmitting ? '저장 중…' : hasExistingPin ? 'PIN 번호 변경하기' : 'PIN 번호 등록하기'}
+            </button>
+          </div>
         </form>
       </div>
     </div>

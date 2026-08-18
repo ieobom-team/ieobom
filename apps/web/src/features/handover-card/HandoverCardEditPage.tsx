@@ -155,13 +155,11 @@ export function HandoverCardEditPage() {
       backTo={`/handover-cards/${cardId}`}
       backLabel="카드로 돌아가기"
     >
-      <h1 className="text-3xl font-bold text-slate-900">카드 검토·수정</h1>
-
       {cards.isPending && <CardsLoading />}
       {cards.isError && <CardsLoadFailed onRetry={() => void cards.refetch()} />}
 
       {cards.isSuccess && card === null && (
-        <p className="text-xl text-slate-600">
+        <p className="text-xl text-ink-muted">
           그 인계 카드를 찾지 못했습니다. 오늘 목록에 없는 카드일 수 있습니다.
         </p>
       )}
@@ -262,12 +260,12 @@ function CardEditForm({
     <section className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center gap-2">
         <CardBadges card={card} />
-        {observedTime !== null && <span className="text-lg text-slate-500">관찰 {observedTime}</span>}
+        {observedTime !== null && <span className="text-lg text-ink-muted">관찰 {observedTime}</span>}
       </div>
 
       <CardUncertainNotes card={card} />
       <CardEvidence card={card} />
-      <p className="text-lg text-slate-500">
+      <p className="text-lg text-ink-muted">
         근거 원문과 관찰 시각은 원문에서 읽은 값이라 고치지 않습니다. 원문이 잘못됐으면 카드가 아니라
         특이사항을 다시 남겨 주세요.
       </p>
@@ -283,7 +281,7 @@ function CardEditForm({
         onSelect={(careRecipientId) => onChange({ careRecipientId })}
       />
 
-      <label htmlFor="statusChange" className="text-2xl font-bold text-slate-900">
+      <label htmlFor="statusChange" className="text-2xl font-bold text-ink">
         상태 변화
       </label>
       <textarea
@@ -292,10 +290,10 @@ function CardEditForm({
         onChange={(event) => onChange({ statusChange: event.target.value })}
         rows={2}
         maxLength={500}
-        className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
+        className="w-full rounded-2xl border-2 border-border-card px-5 py-4 text-2xl text-ink focus:border-primary focus:outline-none"
       />
 
-      <label htmlFor="actionTaken" className="text-2xl font-bold text-slate-900">
+      <label htmlFor="actionTaken" className="text-2xl font-bold text-ink">
         조치
       </label>
       <textarea
@@ -304,14 +302,14 @@ function CardEditForm({
         onChange={(event) => onChange({ actionTaken: event.target.value })}
         rows={2}
         maxLength={500}
-        className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
+        className="w-full rounded-2xl border-2 border-border-card px-5 py-4 text-2xl text-ink focus:border-primary focus:outline-none"
       />
       <SuggestedActionChips
         texts={chipTextsFor(card, 'ACTION_TAKEN')}
         onSelect={(text) => onChange({ actionTaken: text })}
       />
 
-      <label htmlFor="nextAction" className="text-2xl font-bold text-slate-900">
+      <label htmlFor="nextAction" className="text-2xl font-bold text-ink">
         다음 행동
       </label>
       <textarea
@@ -320,7 +318,7 @@ function CardEditForm({
         onChange={(event) => onChange({ nextAction: event.target.value })}
         rows={2}
         maxLength={500}
-        className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
+        className="w-full rounded-2xl border-2 border-border-card px-5 py-4 text-2xl text-ink focus:border-primary focus:outline-none"
       />
       <SuggestedActionChips
         texts={chipTextsFor(card, 'NEXT_ACTION')}
@@ -328,8 +326,8 @@ function CardEditForm({
       />
 
       <fieldset className="flex flex-col gap-4">
-        <legend className="text-2xl font-bold text-slate-900">제안 담당 직종</legend>
-        <p className="text-lg text-slate-500">
+        <legend className="text-2xl font-bold text-ink">제안 담당 직종</legend>
+        <p className="text-lg text-ink-muted">
           {hasNextAction
             ? 'AI 제안입니다. 다시 눌러 해제할 수 있고, 배정 화면에서 또 고칠 수 있습니다.'
             : '다음 행동이 있어야 지정할 수 있습니다.'}
@@ -350,7 +348,7 @@ function CardEditForm({
         </div>
       </fieldset>
 
-      <label htmlFor="suggestedDueTime" className="text-2xl font-bold text-slate-900">
+      <label htmlFor="suggestedDueTime" className="text-2xl font-bold text-ink">
         제안 기한
       </label>
       <input
@@ -358,12 +356,12 @@ function CardEditForm({
         type="time"
         value={draft.suggestedDueTime}
         onChange={(event) => onChange({ suggestedDueTime: event.target.value })}
-        className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
+        className="w-full rounded-2xl border-2 border-border-card px-5 py-4 text-2xl text-ink focus:border-primary focus:outline-none"
       />
 
       <fieldset className="flex flex-col gap-3">
-        <legend className="text-2xl font-bold text-slate-900">안전 관련 표시</legend>
-        <p className="text-lg text-slate-500">
+        <legend className="text-2xl font-bold text-ink">안전 관련 표시</legend>
+        <p className="text-lg text-ink-muted">
           {card.safetyRelated
             ? '이 카드는 지금 목록 맨 위에 올라갑니다.'
             : '낙상 · 발열 · 식사 저하 · 투약 변경은 서버가 자동으로 잡습니다. 그 밖의 것은 직접 표시해 주세요.'}
@@ -419,7 +417,7 @@ function SuggestedActionChips({
           key={text}
           type="button"
           onClick={() => onSelect(text)}
-          className="min-h-12 rounded-full border-2 border-teal-600 bg-teal-50 px-4 py-2 text-lg font-semibold text-teal-900 hover:bg-teal-100 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300"
+          className="min-h-12 rounded-full border-2 border-primary bg-primary-soft px-4 py-2 text-lg font-semibold text-primary hover:brightness-95 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
         >
           {text}
         </button>
@@ -451,9 +449,9 @@ function RecipientPicker({
 }) {
   return (
     <fieldset className="flex flex-col gap-3">
-      <legend className="text-2xl font-bold text-slate-900">대상 어르신</legend>
+      <legend className="text-2xl font-bold text-ink">대상 어르신</legend>
 
-      {loading && <p className="text-xl text-slate-600">어르신 목록을 불러오는 중입니다…</p>}
+      {loading && <p className="text-xl text-ink-muted">어르신 목록을 불러오는 중입니다…</p>}
       {failed && (
         <div className="flex flex-col gap-4 rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4">
           <p className="text-xl text-amber-900">어르신 목록을 불러오지 못했습니다.</p>
@@ -473,7 +471,7 @@ function RecipientPicker({
             >
               <span className="flex flex-wrap items-baseline gap-x-3">
                 <span>{recipient.name}</span>
-                <span className="text-lg font-normal text-slate-500">{recipient.code}</span>
+                <span className="text-lg font-normal text-ink-muted">{recipient.code}</span>
               </span>
             </BigButton>
           </li>

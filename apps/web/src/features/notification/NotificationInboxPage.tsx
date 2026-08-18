@@ -64,7 +64,7 @@ export function NotificationInboxPage() {
 
       {/* 로딩 */}
       {notifications.isPending && (
-        <p className="text-xl text-slate-500">알림을 불러오는 중…</p>
+        <p className="text-xl text-ink-muted">알림을 불러오는 중…</p>
       )}
 
       {/* 오류 — 다른 화면은 영향받지 않는다. (완료 조건) */}
@@ -82,8 +82,8 @@ export function NotificationInboxPage() {
       {notifications.isSuccess && isEmpty && (
         <div className="flex flex-col items-center gap-4 py-16 text-center">
           <span className="text-5xl">🔔</span>
-          <p className="text-2xl font-bold text-slate-700">알림이 없습니다</p>
-          <p className="text-lg text-slate-500">
+          <p className="text-2xl font-bold text-ink">알림이 없습니다</p>
+          <p className="text-lg text-ink-muted">
             새 업무가 배정되면 여기에 표시됩니다.
           </p>
         </div>
@@ -92,7 +92,7 @@ export function NotificationInboxPage() {
       {/* 오늘 알림 */}
       {today.length > 0 && (
         <section>
-          <h2 className="mb-4 text-2xl font-bold text-slate-900">오늘 알림</h2>
+          <h2 className="mb-4 text-2xl font-bold text-ink">오늘 알림</h2>
           <ul className="flex flex-col gap-4">
             {today.map((n) => (
               <li key={n.id}>
@@ -114,11 +114,11 @@ export function NotificationInboxPage() {
           <button
             type="button"
             onClick={() => setPastOpen((v) => !v)}
-            className="flex w-full items-center justify-between rounded-2xl border-2 border-slate-200 bg-white px-5 py-4 text-xl font-bold text-slate-700"
+            className="flex w-full items-center justify-between rounded-2xl border-2 border-border-card bg-white px-5 py-4 text-xl font-bold text-ink"
             aria-expanded={pastOpen}
           >
             <span>지난 알림 ({past.length}건)</span>
-            <span className="text-slate-400">{pastOpen ? '▲' : '▼'}</span>
+            <span className="text-ink-tertiary">{pastOpen ? '▲' : '▼'}</span>
           </button>
 
           {pastOpen && (
