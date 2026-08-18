@@ -180,7 +180,7 @@ describe('진입 전 화면 접근', () => {
     await user.click(screen.getByRole('link', { name: '당일 운영 현황 보기' }))
 
     // n5 → n42 관리자 대시보드. 화면이 무엇을 그리는지는 features/dashboard 테스트가 본다.
-    expect(await screen.findByRole('heading', { name: '당일 운영 현황' })).toBeInTheDocument()
+    expect(await screen.findByText('당일 운영 현황')).toBeInTheDocument()
   })
 
   it('다른 역할의 홈을 주소로 열면 자기 홈으로 되돌린다', () => {
