@@ -455,7 +455,7 @@ describe('인계 카드 정리로 넘기기 (n16 → n18)', () => {
 
     await user.click(await screen.findByRole('button', { name: '인계 카드 보기' }))
 
-    expect(await screen.findByRole('heading', { name: '인계 카드' })).toBeInTheDocument()
+    expect(await screen.findByText('오늘의 인계 카드')).toBeInTheDocument()
   })
 })
 

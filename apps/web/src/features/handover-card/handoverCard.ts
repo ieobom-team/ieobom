@@ -63,11 +63,6 @@ export type CardStats = {
   unresolvedCount: number
 }
 
-export type RecipientOption = {
-  id: number
-  name: string
-}
-
 /**
  * 어르신별로 묶인 카드를 하나의 평탄한(flat) 목록으로 모은다.
  */
@@ -87,16 +82,6 @@ export function getCardStats(list: HandoverCardList): CardStats {
     totalCount: all.length + list.unresolved.length,
     unresolvedCount: list.unresolved.length,
   }
-}
-
-/**
- * 필터 선택용 어르신 목록을 추출한다.
- */
-export function extractRecipients(list: HandoverCardList): RecipientOption[] {
-  return list.recipients.map((r) => ({
-    id: r.careRecipientId,
-    name: r.careRecipientName,
-  }))
 }
 
 /**
@@ -178,30 +163,37 @@ export function safetyFirst(cards: readonly HandoverCard[]): HandoverCard[] {
 }
 
 /**
- * 탭 필터 및 어르신 필터에 따라 카드를 정렬·추려낸다.
+ * 탭 필터에 따라 카드를 정렬·추려낸다.
  */
-export function filterCards(
-  cards: readonly HandoverCard[],
-  filter: CardFilterType,
-  careRecipientId: number | null = null,
-): HandoverCard[] {
-  let filtered =
-    careRecipientId !== null ? cards.filter((c) => c.careRecipientId === careRecipientId) : cards
-
+export function filterCards(cards: readonly HandoverCard[], filter: CardFilterType): HandoverCard[] {
   switch (filter) {
     case 'NEEDS_REVIEW':
-      filtered = filtered.filter((c) => c.reviewStatus === 'NEEDS_REVIEW')
-      return safetyFirst(filtered)
+      return safetyFirst(cards.filter((c) => c.reviewStatus === 'NEEDS_REVIEW'))
     case 'SAFETY':
-      filtered = filtered.filter((c) => c.safetyRelated)
-      return sortLatestFirst(filtered)
+      return sortLatestFirst(cards.filter((c) => c.safetyRelated))
     case 'REVIEWED':
-      filtered = filtered.filter((c) => c.reviewStatus === 'REVIEWED')
-      return sortLatestFirst(filtered)
+      return sortLatestFirst(cards.filter((c) => c.reviewStatus === 'REVIEWED'))
     case 'ALL':
     default:
-      return sortInboxCards(filtered)
+      return sortInboxCards([...cards])
   }
+}
+
+/**
+ * 어르신 이름 실시간 검색. (HandoverCreatePage TargetStep과 동일한 부분일치 방식)
+ *
+ * 대상 어르신을 가리지 못한 카드(`careRecipientName`이 `null`)는 이름이 없어 검색어와
+ * 매칭될 수 없다 — 애초에 이 목록(검토 Inbox)에 섞이지 않으므로 문제가 되지 않는다.
+ */
+export function filterByRecipientName(
+  cards: readonly HandoverCard[],
+  keyword: string,
+): HandoverCard[] {
+  const trimmed = keyword.trim()
+  if (trimmed === '') {
+    return [...cards]
+  }
+  return cards.filter((c) => c.careRecipientName?.includes(trimmed) ?? false)
 }
 
 /** 관찰 시각을 `HH:MM` 으로. 원문에서 시각을 읽지 못한 카드는 `null` 이다. */
@@ -341,4 +333,17 @@ export function dateLabel(date: string): string {
     return date
   }
   return `${Number(matched[1])}월 ${Number(matched[2])}일`
+}
+
+const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토']
+
+/** `2026-08-14` 를 `2026-08-14 (금)` 으로. 인계 카드 목록 상단 표기 전용(n18). */
+export function dateLabelWithWeekday(date: string): string {
+  const matched = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
+  if (matched === null) {
+    return date
+  }
+  const [, year, month, day] = matched
+  const parsed = new Date(Number(year), Number(month) - 1, Number(day))
+  return `${date} (${WEEKDAY_LABELS[parsed.getDay()]})`
 }
