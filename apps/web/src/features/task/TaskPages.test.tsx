@@ -457,7 +457,7 @@ describe('후속 업무 배정 (n26 → n27 · n28 · n29 · n30)', () => {
   it('카드의 제안값으로 채워져 열리며 제안된 직종의 소속 직원만 드롭다운에 노출된다', async () => {
     renderApp('/handover-cards/31/tasks/new')
 
-    expect(await screen.findByLabelText('다음 행동')).toHaveValue('저녁 식사량 확인')
+    expect(await screen.findByLabelText('후속 업무')).toHaveValue('저녁 식사량 확인')
     expect(screen.getByLabelText('기한')).toHaveValue('17:00')
 
     const select = screen.getByLabelText('담당자 (선택)') as HTMLSelectElement
@@ -467,6 +467,18 @@ describe('후속 업무 배정 (n26 → n27 · n28 · n29 · n30)', () => {
     expect(screen.getByRole('option', { name: '최민재 (ST-004)' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: '정유진 (ST-005)' })).toBeInTheDocument()
     expect(screen.queryByRole('option', { name: '김하늘 (ST-001)' })).not.toBeInTheDocument()
+  })
+
+  it('인계 카드 요약에 어르신 이름·카드 요약을 보여주고 원문 근거 링크로 카드 상세로 이동한다', async () => {
+    renderApp('/handover-cards/31/tasks/new')
+
+    // 카드 요약은 새 API 없이 이미 로드된 카드 값(statusChange)을 그대로 쓴다
+    expect(await screen.findByText('인계 카드 요약')).toBeInTheDocument()
+    expect(screen.getByText(/^김말순/)).toBeInTheDocument()
+    expect(screen.getByText('점심 식사량 저하')).toBeInTheDocument()
+
+    const link = screen.getByRole('link', { name: /원문 근거 확인 가능/ })
+    expect(link).toHaveAttribute('href', '/handover-cards/31')
   })
 
   it('직종을 바꾸면 해당 직종의 직원 목록으로 바뀌고 직원을 골라 배정할 수 있다', async () => {
@@ -483,7 +495,7 @@ describe('후속 업무 배정 (n26 → n27 · n28 · n29 · n30)', () => {
 
     await user.selectOptions(select, 'ST-001')
 
-    await user.click(screen.getByRole('button', { name: '업무로 배정하기' }))
+    await user.click(screen.getByRole('button', { name: '업무 배정 완료' }))
 
     const notice = await screen.findByRole('status')
     expect(within(notice).getByRole('heading', { name: '업무를 배정했습니다' })).toBeInTheDocument()
@@ -494,7 +506,7 @@ describe('후속 업무 배정 (n26 → n27 · n28 · n29 · n30)', () => {
     const user = userEvent.setup()
     renderApp('/handover-cards/31/tasks/new')
 
-    const button = await screen.findByRole('button', { name: '업무로 배정하기' })
+    const button = await screen.findByRole('button', { name: '업무 배정 완료' })
     await user.click(button)
 
     const notice = await screen.findByRole('status')

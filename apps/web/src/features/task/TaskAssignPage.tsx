@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useEffect, useState, type ReactNode } from 'react'
+import { ArrowRight } from 'lucide-react'
+import { Link, useNavigate, useParams } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
 import { ApiError, type ApiFieldError } from '../../shared/api/client'
 import { BigButton } from '../../shared/ui/BigButton'
 import { PageLayout } from '../../shared/ui/PageLayout'
 import { CardsLoadFailed, CardsLoading } from '../handover-card/CardsLoadState'
-import { findCard, jobRoleLabel, JOB_ROLE_LABELS } from '../handover-card/handoverCard'
-import type { JobRole } from '../handover-card/handoverCardApi'
+import { findCard, highlightSummary, jobRoleLabel, JOB_ROLE_LABELS } from '../handover-card/handoverCard'
+import type { HandoverCard, JobRole } from '../handover-card/handoverCardApi'
 import { useHandoverCards } from '../handover-card/useHandoverCards'
 import type { Staff } from '../session/staffDirectory'
 import { useSession } from '../session/sessionContext'
@@ -107,15 +108,11 @@ export function TaskAssignPage() {
       backTo={`/handover-cards/${cardId}`}
       backLabel="카드로 돌아가기"
     >
-      <header>
-        <h1 className="text-3xl font-bold text-slate-900">후속 업무 배정</h1>
-      </header>
-
       {cards.isPending && <CardsLoading />}
       {cards.isError && <CardsLoadFailed onRetry={() => void cards.refetch()} />}
 
       {cards.isSuccess && card === null && (
-        <p className="text-xl text-slate-600">
+        <p className="text-xl text-ink-muted">
           그 인계 카드를 찾지 못했습니다. 오늘 목록에 없는 카드일 수 있습니다.
         </p>
       )}
@@ -138,7 +135,7 @@ export function TaskAssignPage() {
         draft !== null &&
         created === null && (
           <TaskForm
-            careRecipientName={card.careRecipientName ?? '대상 어르신'}
+            card={card}
             draft={draft}
             staffList={staffList}
             errors={errors}
@@ -190,7 +187,7 @@ function Problems({ errors, notice }: { errors: ApiFieldError[]; notice: string 
 
 /** n27 · n28 — AI 제안값이 채워진 배정 화면. */
 function TaskForm({
-  careRecipientName,
+  card,
   draft,
   staffList,
   errors,
@@ -199,7 +196,7 @@ function TaskForm({
   onChange,
   onSubmit,
 }: {
-  careRecipientName: string
+  card: HandoverCard
   draft: TaskDraft
   staffList: Staff[]
   errors: ApiFieldError[]
@@ -210,18 +207,14 @@ function TaskForm({
 }) {
   return (
     <section className="flex flex-col gap-6">
-      <p className="text-xl text-slate-600">
-        입소자 <span className="font-semibold text-slate-900">{careRecipientName}</span>
-      </p>
+      <HandoverCardSummary card={card} />
 
       <Problems errors={errors} notice={notice} />
 
-      <p className="text-lg text-slate-500">
-        아래 값은 카드에서 제안한 내용으로 미리 채워져 있습니다. 그대로 두거나 고쳐서 확정해 주세요.
-      </p>
+      <p className="text-lg text-ink-muted">AI 제안 - 검토 후 수정해주세요.</p>
 
-      <label htmlFor="content" className="text-2xl font-bold text-slate-900">
-        다음 행동
+      <label htmlFor="content" className="text-2xl font-bold text-ink">
+        후속 업무
       </label>
       <textarea
         id="content"
@@ -229,17 +222,16 @@ function TaskForm({
         onChange={(event) => onChange({ content: event.target.value })}
         rows={3}
         maxLength={500}
-        className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
+        className="w-full rounded-2xl border-2 border-border-card px-5 py-4 text-2xl text-ink focus:border-primary focus:outline-none"
       />
 
       <fieldset className="flex flex-col gap-4">
-        <legend className="text-2xl font-bold text-slate-900">담당 직종</legend>
-        <p className="text-lg text-slate-500">담당자를 특정하지 않고 직종으로만 배정할 수 있습니다.</p>
-        <div className="flex flex-col gap-3">
+        <legend className="text-2xl font-bold text-ink">담당 직종</legend>
+        <p className="text-lg text-ink-muted">담당자를 특정하지 않고 직종으로만 배정할 수 있습니다.</p>
+        <div className="flex flex-wrap gap-2">
           {JOB_ROLES.map((role) => (
-            <BigButton
+            <JobRoleChip
               key={role}
-              tone="plain"
               selected={draft.assigneeJobRole === role}
               onClick={() =>
                 onChange({
@@ -250,7 +242,7 @@ function TaskForm({
               }
             >
               {jobRoleLabel(role)}
-            </BigButton>
+            </JobRoleChip>
           ))}
         </div>
       </fieldset>
@@ -262,10 +254,10 @@ function TaskForm({
 
         return (
           <div className="flex flex-col gap-2">
-            <label htmlFor="assigneeName" className="text-2xl font-bold text-slate-900">
+            <label htmlFor="assigneeName" className="text-2xl font-bold text-ink">
               담당자 (선택)
             </label>
-            <p className="text-lg text-slate-500">
+            <p className="text-lg text-ink-muted">
               {draft.assigneeJobRole
                 ? `${jobRoleLabel(draft.assigneeJobRole)} 직종 직원만 표시됩니다.`
                 : '특정 담당자를 지정하지 않으면 선택한 직종으로만 배정됩니다.'}
@@ -283,7 +275,7 @@ function TaskForm({
                   assigneeStaffCode: code,
                 })
               }}
-              className="w-full rounded-2xl border-2 border-slate-300 bg-white px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
+              className="w-full rounded-2xl border-2 border-border-card bg-white px-5 py-4 text-2xl text-ink focus:border-primary focus:outline-none"
             >
               <option value="">직종만 배정 (특정인 미지정)</option>
               {/* 현재 선택값이 목록에 없으면(예: 카드 프리필로 이름만 있는 경우) fallback 옵션 추가 */}
@@ -301,10 +293,10 @@ function TaskForm({
         )
       })()}
 
-      <label htmlFor="dueTime" className="text-2xl font-bold text-slate-900">
+      <label htmlFor="dueTime" className="text-2xl font-bold text-ink">
         기한
       </label>
-      <p className="text-lg text-slate-500">
+      <p className="text-lg text-ink-muted">
         오늘 어르신이 하원하는 시각을 넘겨 지정할 수 없습니다.
       </p>
       <input
@@ -312,11 +304,63 @@ function TaskForm({
         type="time"
         value={draft.dueTime}
         onChange={(event) => onChange({ dueTime: event.target.value })}
-        className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
+        className="w-full rounded-2xl border-2 border-border-card px-5 py-4 text-2xl text-ink focus:border-primary focus:outline-none"
       />
 
-      <BigButton onClick={onSubmit}>{saving ? '배정하는 중…' : '업무로 배정하기'}</BigButton>
+      <BigButton onClick={onSubmit}>{saving ? '배정하는 중…' : '업무 배정 완료'}</BigButton>
     </section>
+  )
+}
+
+/**
+ * "인계 카드 요약" 박스. (완료 조건 — 어르신 이름·카드 요약·원문 근거 링크)
+ *
+ * 새 API를 부르지 않는다. 이미 로드된 `card`(카드 목록 응답)의 값을 그대로 재사용한다 —
+ * `highlightSummary`는 상태 변화 → 조치 → 다음 행동 → 근거 원문 순으로 첫 값을 골라 같은 방식으로
+ * 요약하는, 현장 홈에서도 쓰는 대표 문구 함수다. (Manyfast F-SNBVHR — 이 카드는 #92가 확정한 데이터다)
+ */
+function HandoverCardSummary({ card }: { card: HandoverCard }) {
+  return (
+    <div className="rounded-2xl border-2 border-border-card bg-white px-5 py-5">
+      <p className="text-lg font-semibold text-ink-muted">인계 카드 요약</p>
+      <p className="mt-1 text-2xl font-bold text-ink">
+        {card.careRecipientName ?? '대상 어르신'}
+        {card.careRecipientName && <span className="ml-1 text-xl font-normal text-ink-muted">어르신</span>}
+      </p>
+      <p className="mt-2 text-xl text-ink-muted">{highlightSummary(card)}</p>
+      <Link
+        to={`/handover-cards/${card.id}`}
+        className="mt-3 inline-flex items-center gap-1 text-lg font-semibold text-primary hover:underline"
+      >
+        원문 근거 확인 가능 <ArrowRight size={18} strokeWidth={2.4} aria-hidden="true" />
+      </Link>
+    </div>
+  )
+}
+
+/** 담당 직종 단일 선택 칩. 짧은 고정 목록이라 드롭다운 대신 아웃라인 pill을 쓴다(DESIGN.md §8.4·§2.1). */
+function JobRoleChip({
+  children,
+  selected,
+  onClick,
+}: {
+  children: ReactNode
+  selected: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onClick}
+      className={`min-h-10 rounded-full px-5 py-2.5 text-lg font-semibold transition-colors ${
+        selected
+          ? 'bg-primary text-white'
+          : 'border border-border-card bg-white text-ink hover:bg-primary-soft'
+      }`}
+    >
+      {children}
+    </button>
   )
 }
 
@@ -332,10 +376,10 @@ function TaskCreatedNotice({
 }) {
   return (
     <section role="status" className="flex flex-col gap-6">
-      <div className="rounded-2xl border-2 border-teal-600 bg-teal-50 px-5 py-6">
-        <h2 className="text-2xl font-bold text-teal-900">업무를 배정했습니다</h2>
-        <p className="mt-3 text-xl text-teal-900">{task.content}</p>
-        <p className="mt-2 text-lg text-teal-800">
+      <div className="rounded-2xl border-2 border-success/40 bg-success/10 px-5 py-6">
+        <h2 className="text-2xl font-bold text-success">업무를 배정했습니다</h2>
+        <p className="mt-3 text-xl text-ink">{task.content}</p>
+        <p className="mt-2 text-lg text-ink-muted">
           담당{' '}
           {task.assigneeName ?? (task.assigneeJobRoleLabel ?? '미정')}
           {task.assigneeName !== null && task.assigneeJobRoleLabel !== null
