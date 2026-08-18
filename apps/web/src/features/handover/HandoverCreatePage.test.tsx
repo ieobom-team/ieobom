@@ -110,12 +110,16 @@ function renderApp(initialPath = '/field/handovers/new') {
   )
 }
 
-/** n8 직접 관찰 → n11 → n13 까지 온다. */
-async function 직접_본_내용을_텍스트로(user: ReturnType<typeof userEvent.setup>, 내용: string) {
-  await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
-  await user.click(screen.getByRole('button', { name: /텍스트로 쓰기/ }))
+/**
+ * #135 부터 관찰 구분(직접 관찰)·입력 방식(음성 미지원 기기는 텍스트)은 이미 기본값이 채워진
+ * 채로 뜬다. 텍스트 내용만 채우면 저장할 수 있는 상태가 된다.
+ */
+async function 텍스트로_내용_채우기(user: ReturnType<typeof userEvent.setup>, 내용: string) {
   await user.type(screen.getByLabelText(/보신 그대로/), 내용)
-  await user.click(screen.getByRole('button', { name: '다음' }))
+}
+
+async function 추가_설정_펼치기(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /추가 설정/ }))
 }
 
 describe('현장 홈에서 들어오기', () => {
@@ -125,53 +129,66 @@ describe('현장 홈에서 들어오기', () => {
 
     await user.click(screen.getByRole('button', { name: /특이사항 남기기/ }))
 
-    expect(screen.getByRole('heading', { name: '어떻게 아신 내용인가요?' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '어느 어르신이신가요?' })).toBeInTheDocument()
   })
 })
 
-describe('입력 방식 선택 (n11)', () => {
+describe('입력 방식 선택 — 한 화면 안에서 바로 고른다', () => {
   it('세 가지 방식이 모두 보이고 고를 수 있다', async () => {
-    const user = userEvent.setup()
     renderApp()
-
-    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
 
     expect(screen.getByRole('button', { name: /텍스트로 쓰기/ })).toBeEnabled()
     expect(screen.getByRole('button', { name: /말로 남기기/ })).toBeEnabled()
     expect(screen.getByRole('button', { name: /체크로 고르기/ })).toBeEnabled()
   })
+
+  it('음성 인식을 지원하지 않는 기기는 텍스트 입력이 기본값이다', async () => {
+    renderApp()
+
+    expect(screen.getByLabelText(/보신 그대로/)).toBeInTheDocument()
+  })
 })
 
-describe('대리 입력과 정보 출처 (n8 → n9)', () => {
-  it('다른 분께 들었다고 하면 정보 출처를 고르는 항목이 나온다', async () => {
+describe('추가 설정 — 관찰 구분·정보 출처 (§2.3 인라인 확장, §2.4 스마트 기본값)', () => {
+  it('기본값은 직접 관찰이며 접힌 채로도 값이 보인다', async () => {
+    renderApp()
+
+    expect(screen.getByRole('button', { name: /추가 설정.*직접 관찰/ })).toBeInTheDocument()
+  })
+
+  it('펼치면 직접 관찰이 이미 선택돼 있고 정보 출처는 묻지 않는다', async () => {
     const user = userEvent.setup()
     renderApp()
 
-    await user.click(screen.getByRole('button', { name: /다른 분께 들었어요/ }))
+    await 추가_설정_펼치기(user)
+
+    expect(screen.getByRole('button', { name: '제가 직접 봤어요' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.queryByRole('heading', { name: /어느 분께 들으셨나요/ })).not.toBeInTheDocument()
+  })
+
+  it('다른 분께 들었다고 바꾸면 정보 출처를 고르는 항목이 인라인으로 나온다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await 추가_설정_펼치기(user)
+    await user.click(screen.getByRole('button', { name: '다른 분께 들었어요' }))
 
     expect(screen.getByRole('heading', { name: /어느 분께 들으셨나요/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '보호자' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '운전원' })).toBeInTheDocument()
   })
 
-  it('직접 봤다고 하면 정보 출처를 묻지 않는다', async () => {
-    const user = userEvent.setup()
-    renderApp()
-
-    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
-
-    expect(screen.queryByRole('heading', { name: /어느 분께 들으셨나요/ })).not.toBeInTheDocument()
-  })
-
   it('입력자와 정보 출처를 갈라서 보낸다', async () => {
     const user = userEvent.setup()
     renderApp()
 
-    await user.click(screen.getByRole('button', { name: /다른 분께 들었어요/ }))
+    await 추가_설정_펼치기(user)
+    await user.click(screen.getByRole('button', { name: '다른 분께 들었어요' }))
     await user.click(screen.getByRole('button', { name: '보호자' }))
-    await user.click(screen.getByRole('button', { name: /텍스트로 쓰기/ }))
-    await user.type(screen.getByLabelText(/보신 그대로/), '밤사이 잠을 못 주무셨대요.')
-    await user.click(screen.getByRole('button', { name: '다음' }))
+    await 텍스트로_내용_채우기(user, '밤사이 잠을 못 주무셨대요.')
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
@@ -182,12 +199,12 @@ describe('대리 입력과 정보 출처 (n8 → n9)', () => {
   })
 })
 
-describe('텍스트 입력으로 등록 (n13 → n15 → n16)', () => {
+describe('텍스트 입력으로 등록', () => {
   it('어르신과 입력 시점을 함께 담아 등록한다', async () => {
     const user = userEvent.setup()
     renderApp()
 
-    await 직접_본_내용을_텍스트로(user, '점심 드시고 나서 오른쪽 다리를 계속 주무르셨어요.')
+    await 텍스트로_내용_채우기(user, '점심 드시고 나서 오른쪽 다리를 계속 주무르셨어요.')
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
@@ -199,7 +216,7 @@ describe('텍스트 입력으로 등록 (n13 → n15 → n16)', () => {
       inputMethod: 'TEXT',
       proxyInput: false,
     })
-    // 입력 시점은 지금 시각이 채워져 있고, 계약대로 오프셋 없는 지역 시각이다.
+    // 입력 시점은 화면을 연 시각이 채워져 있고, 계약대로 오프셋 없는 지역 시각이다.
     expect(보낸_요청[0].occurredAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/)
   })
 
@@ -207,7 +224,7 @@ describe('텍스트 입력으로 등록 (n13 → n15 → n16)', () => {
     const user = userEvent.setup()
     renderApp()
 
-    await 직접_본_내용을_텍스트로(user, '오후 내내 기침을 하셨어요.')
+    await 텍스트로_내용_채우기(user, '오후 내내 기침을 하셨어요.')
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
@@ -217,13 +234,13 @@ describe('텍스트 입력으로 등록 (n13 → n15 → n16)', () => {
   })
 })
 
-describe('저장 중 연결 끊김 — 임시 저장과 자동 재전송 (n16 → n17, #9)', () => {
+describe('저장 중 연결 끊김 — 임시 저장과 자동 재전송 (#9)', () => {
   it('연결이 안 되면 실패로 끝내지 않고 기기에 임시 저장했다고 안내한다', async () => {
     네트워크_끊김 = true
     const user = userEvent.setup()
     renderApp()
 
-    await 직접_본_내용을_텍스트로(user, '점심을 거의 안 드셨어요.')
+    await 텍스트로_내용_채우기(user, '점심을 거의 안 드셨어요.')
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
@@ -240,7 +257,7 @@ describe('저장 중 연결 끊김 — 임시 저장과 자동 재전송 (n16 �
     const user = userEvent.setup()
     renderApp()
 
-    await 직접_본_내용을_텍스트로(user, '점심을 거의 안 드셨어요.')
+    await 텍스트로_내용_채우기(user, '점심을 거의 안 드셨어요.')
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
@@ -255,7 +272,7 @@ describe('저장 중 연결 끊김 — 임시 저장과 자동 재전송 (n16 �
     const user = userEvent.setup()
     renderApp()
 
-    await 직접_본_내용을_텍스트로(user, '점심을 거의 안 드셨어요.')
+    await 텍스트로_내용_채우기(user, '점심을 거의 안 드셨어요.')
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
     await screen.findByRole('heading', { name: '임시 저장 완료' })
@@ -270,7 +287,7 @@ describe('저장 중 연결 끊김 — 임시 저장과 자동 재전송 (n16 �
     const user = userEvent.setup()
     renderApp()
 
-    await 직접_본_내용을_텍스트로(user, '점심을 거의 안 드셨어요.')
+    await 텍스트로_내용_채우기(user, '점심을 거의 안 드셨어요.')
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
     await screen.findByRole('heading', { name: '임시 저장 완료' })
@@ -283,7 +300,7 @@ describe('저장 중 연결 끊김 — 임시 저장과 자동 재전송 (n16 �
   })
 })
 
-describe('음성 입력으로 등록 (n12 → n15 → n16)', () => {
+describe('음성 입력으로 등록', () => {
   class 가짜_인식기 {
     onresult: ((event: unknown) => void) | null = null
     onend: (() => void) | null = null
@@ -308,7 +325,6 @@ describe('음성 입력으로 등록 (n12 → n15 → n16)', () => {
     const user = userEvent.setup()
     renderApp()
 
-    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
     await user.click(screen.getByRole('button', { name: /말로 남기기/ }))
     await user.click(screen.getByRole('button', { name: /눌러서 말하기/ }))
 
@@ -319,7 +335,6 @@ describe('음성 입력으로 등록 (n12 → n15 → n16)', () => {
     const textarea = await screen.findByLabelText(/인식된 내용/)
     expect(textarea).toHaveValue('점심을 거의 안 드셨어요')
 
-    await user.click(screen.getByRole('button', { name: '다음' }))
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
@@ -331,7 +346,6 @@ describe('음성 입력으로 등록 (n12 → n15 → n16)', () => {
     const user = userEvent.setup()
     renderApp()
 
-    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
     await user.click(screen.getByRole('button', { name: /말로 남기기/ }))
     await user.click(screen.getByRole('button', { name: /눌러서 말하기/ }))
     await user.click(screen.getByRole('button', { name: '이전' }))
@@ -339,11 +353,36 @@ describe('음성 입력으로 등록 (n12 → n15 → n16)', () => {
     expect(인식기.stop).toHaveBeenCalled()
   })
 
+  it('다른 입력 방식으로 바꾸면(같은 화면 안에서도) 듣기를 멈춘다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole('button', { name: /말로 남기기/ }))
+    await user.click(screen.getByRole('button', { name: /눌러서 말하기/ }))
+    await user.click(screen.getByRole('button', { name: /텍스트로 쓰기/ }))
+
+    expect(인식기.stop).toHaveBeenCalled()
+  })
+
+  it('듣는 중에 저장을 누르면 마이크를 멈추고 이어서 저장한다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole('button', { name: /말로 남기기/ }))
+    await user.click(screen.getByRole('button', { name: /눌러서 말하기/ }))
+    인식기.onresult?.({ results: [[{ transcript: '점심을 거의 안 드셨어요' }]] })
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    expect(인식기.stop).toHaveBeenCalled()
+    await screen.findByRole('heading', { name: '제출 완료' })
+    expect(보낸_요청[0]).toMatchObject({ inputMethod: 'VOICE', rawText: '점심을 거의 안 드셨어요' })
+  })
+
   it('마이크 권한이 없으면 안내하고 듣기를 멈춘 상태로 둔다', async () => {
     const user = userEvent.setup()
     renderApp()
 
-    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
     await user.click(screen.getByRole('button', { name: /말로 남기기/ }))
     await user.click(screen.getByRole('button', { name: /눌러서 말하기/ }))
     인식기.onerror?.({ error: 'not-allowed' })
@@ -353,17 +392,14 @@ describe('음성 입력으로 등록 (n12 → n15 → n16)', () => {
   })
 })
 
-
-describe('체크 입력으로 등록 (n14 → n15 → n16)', () => {
+describe('체크 입력으로 등록', () => {
   it('고른 항목이 문장으로 합쳐져 체크 방식으로 저장된다', async () => {
     const user = userEvent.setup()
     renderApp()
 
-    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
     await user.click(screen.getByRole('button', { name: /체크로 고르기/ }))
     await user.click(screen.getByRole('checkbox', { name: /낙상 위험 행동 관찰/ }))
     await user.click(screen.getByRole('checkbox', { name: /투약 거부 또는 누락/ }))
-    await user.click(screen.getByRole('button', { name: '다음' }))
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
@@ -378,11 +414,9 @@ describe('체크 입력으로 등록 (n14 → n15 → n16)', () => {
     const user = userEvent.setup()
     renderApp()
 
-    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
     await user.click(screen.getByRole('button', { name: /체크로 고르기/ }))
     await user.click(screen.getByRole('checkbox', { name: /투약 거부 또는 누락/ }))
     await user.click(screen.getByRole('checkbox', { name: /낙상 위험 행동 관찰/ }))
-    await user.click(screen.getByRole('button', { name: '다음' }))
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
@@ -390,25 +424,24 @@ describe('체크 입력으로 등록 (n14 → n15 → n16)', () => {
     expect(보낸_요청[0].rawText).toBe('체크 항목: 낙상 위험 행동 관찰, 투약 거부 또는 누락')
   })
 
-  it('아무것도 고르지 않고 다음을 누르면 하나 이상 고르라고 안내한다', async () => {
+  it('아무것도 고르지 않고 저장하면 하나 이상 고르라고 안내한다', async () => {
     const user = userEvent.setup()
     renderApp()
 
-    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
     await user.click(screen.getByRole('button', { name: /체크로 고르기/ }))
-    await user.click(screen.getByRole('button', { name: '다음' }))
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('하나 이상 선택')
     expect(보낸_요청).toHaveLength(0)
   })
 })
 
-describe('음성 인식 미지원 브라우저 (n11)', () => {
+describe('음성 인식 미지원 브라우저', () => {
   it('말로 남기기를 눌러도 화면을 옮기지 않고 텍스트로 남기라고 안내한다', async () => {
     const user = userEvent.setup()
     renderApp()
 
-    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
     await user.click(screen.getByRole('button', { name: /말로 남기기/ }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('텍스트로 남겨')
@@ -420,12 +453,12 @@ describe('음성 인식 미지원 브라우저 (n11)', () => {
  * 저장 뒤 구조화 호출. LLM 은 서버 뒤에 있어 여기서는 호출과 안내만 본다.
  * 실제 스키마 강제와 근거 대조는 백엔드 테스트와 `./gradlew llmLiveTest` 가 본다.
  */
-describe('인계 카드 정리로 넘기기 (n16 → n18)', () => {
+describe('인계 카드 정리로 넘기기', () => {
   it('저장한 인계 하나에 대해 구조화를 한 번만 부른다', async () => {
     const user = userEvent.setup()
     renderApp()
 
-    await 직접_본_내용을_텍스트로(user, '점심을 거의 안 드셨어요.')
+    await 텍스트로_내용_채우기(user, '점심을 거의 안 드셨어요.')
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
@@ -437,7 +470,7 @@ describe('인계 카드 정리로 넘기기 (n16 → n18)', () => {
     const user = userEvent.setup()
     renderApp()
 
-    await 직접_본_내용을_텍스트로(user, '점심을 거의 안 드셨어요.')
+    await 텍스트로_내용_채우기(user, '점심을 거의 안 드셨어요.')
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
@@ -452,7 +485,7 @@ describe('인계 카드 정리로 넘기기 (n16 → n18)', () => {
     const user = userEvent.setup()
     renderApp()
 
-    await 직접_본_내용을_텍스트로(user, '점심을 거의 안 드셨어요.')
+    await 텍스트로_내용_채우기(user, '점심을 거의 안 드셨어요.')
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
@@ -464,7 +497,7 @@ describe('인계 카드 정리로 넘기기 (n16 → n18)', () => {
     const user = userEvent.setup()
     renderApp()
 
-    await 직접_본_내용을_텍스트로(user, '점심을 거의 안 드셨어요.')
+    await 텍스트로_내용_채우기(user, '점심을 거의 안 드셨어요.')
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
@@ -483,24 +516,41 @@ describe('인계 카드 정리로 넘기기 (n16 → n18)', () => {
   })
 })
 
-describe('보완할 항목 안내', () => {
-  it('내용을 비운 채 다음을 누르면 무엇을 채워야 하는지 알려 준다', async () => {
+describe('기기별 마지막 사용 입력 방식 기억 (#135)', () => {
+  it('체크 방식으로 저장에 성공하면, 하나 더 남기기에서는 체크가 기본값이 된다', async () => {
     const user = userEvent.setup()
     renderApp()
 
-    await user.click(screen.getByRole('button', { name: /제가 직접 봤어요/ }))
-    await user.click(screen.getByRole('button', { name: /텍스트로 쓰기/ }))
-    await user.click(screen.getByRole('button', { name: '다음' }))
+    await user.click(screen.getByRole('button', { name: /체크로 고르기/ }))
+    await user.click(screen.getByRole('checkbox', { name: /낙상 위험 행동 관찰/ }))
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('입력 내용')
-    expect(screen.getByRole('heading', { name: /무슨 일이 있었나요/ })).toBeInTheDocument()
+    await screen.findByRole('heading', { name: '제출 완료' })
+    await user.click(screen.getByRole('button', { name: '하나 더 남기기' }))
+
+    // 다시 체크로 고르기를 누르지 않아도 체크리스트가 바로 보인다.
+    expect(screen.getByRole('checkbox', { name: /낙상 위험 행동 관찰/ })).toBeInTheDocument()
+  })
+})
+
+describe('보완할 항목 안내', () => {
+  it('필수 항목을 비운 채 저장하면 무엇을 채워야 하는지 한 번에 알려 준다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('입력 내용')
+    expect(alert).toHaveTextContent('대상 어르신')
   })
 
   it('어르신을 고르지 않고 저장하면 저장하지 않고 안내한다', async () => {
     const user = userEvent.setup()
     renderApp()
 
-    await 직접_본_내용을_텍스트로(user, '오후 내내 기침을 하셨어요.')
+    await 텍스트로_내용_채우기(user, '오후 내내 기침을 하셨어요.')
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('대상 어르신')
@@ -522,13 +572,15 @@ describe('보완할 항목 안내', () => {
     const user = userEvent.setup()
     renderApp()
 
-    await 직접_본_내용을_텍스트로(user, '오후 내내 기침을 하셨어요.')
+    await 텍스트로_내용_채우기(user, '오후 내내 기침을 하셨어요.')
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('입력 시점')
     expect(alert).toHaveTextContent('입력 내용')
+    // 입력 시점은 접힌 "추가 설정" 안에 있으므로 안내와 함께 펼쳐져야 고칠 수 있다.
+    expect(screen.getByLabelText(/언제 있었던 일인가요/)).toBeInTheDocument()
   })
 
   it('고른 어르신이 목록에 없으면 다시 고르도록 안내한다', async () => {
@@ -543,7 +595,7 @@ describe('보완할 항목 안내', () => {
     const user = userEvent.setup()
     renderApp()
 
-    await 직접_본_내용을_텍스트로(user, '오후 내내 기침을 하셨어요.')
+    await 텍스트로_내용_채우기(user, '오후 내내 기침을 하셨어요.')
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
@@ -557,7 +609,7 @@ describe('어르신 목록', () => {
     const user = userEvent.setup()
     renderApp()
 
-    await 직접_본_내용을_텍스트로(user, '오후 내내 기침을 하셨어요.')
+    await 텍스트로_내용_채우기(user, '오후 내내 기침을 하셨어요.')
     await screen.findByRole('button', { name: /김말순/ })
     await user.type(screen.getByLabelText(/이름이나 식별번호로 찾기/), '박')
 
@@ -570,7 +622,7 @@ describe('어르신 목록', () => {
     const user = userEvent.setup()
     renderApp()
 
-    await 직접_본_내용을_텍스트로(user, '오후 내내 기침을 하셨어요.')
+    await 텍스트로_내용_채우기(user, '오후 내내 기침을 하셨어요.')
 
     expect(await screen.findByText(/어르신 목록을 불러오지 못했습니다/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '목록 다시 불러오기' })).toBeInTheDocument()
