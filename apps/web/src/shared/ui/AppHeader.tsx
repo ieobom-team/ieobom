@@ -131,9 +131,9 @@ export function AppHeader({
           {/* 1행 좌측: 로고 (뒤로가기 유무와 무관하게 항상 고정 노출) */}
           <Link
             to={homePath}
-            className="flex items-center gap-2 text-2xl font-bold tracking-tight text-primary hover:brightness-90 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
+            className="flex items-center hover:brightness-90 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
           >
-            <span>이어봄</span>
+            <img src="/logo.png" alt="이어봄" className="h-8 w-auto" />
           </Link>
 
           {/* 1행 우측: 이름/역할 칩 → 본인 바꾸기 → PIN 설정 → 알림함 (모바일은 칩 드롭다운으로 축약, #114) */}
