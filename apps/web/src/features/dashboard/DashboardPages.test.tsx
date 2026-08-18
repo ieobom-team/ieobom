@@ -433,6 +433,6 @@ describe('진입 역할', () => {
   it('현장 근무자는 운영 현황을 주소로 열어도 자기 홈으로 간다', () => {
     renderApp('/admin/dashboard', 'FIELD_WORKER')
 
-    expect(screen.getByRole('heading', { name: '현장 홈' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /특이사항 남기기/ })).toBeInTheDocument()
   })
 })

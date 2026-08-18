@@ -80,6 +80,15 @@ beforeEach(() => {
           }),
         )
       }
+      // 현장 홈 요약 카드가 함께 부른다. 이 파일은 인계 카드 화면만 본다 — 빈 목록으로 둔다.
+      if (input.includes('/api/tasks')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ date: '2026-08-11', tasks: [] }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        )
+      }
       throw new Error(`테스트가 예상하지 못한 호출입니다: ${input}`)
     }),
   )
@@ -111,7 +120,7 @@ describe('인계 카드 목록 (n18 · n19)', () => {
     const user = userEvent.setup()
     renderApp('/field')
 
-    await user.click(screen.getByRole('button', { name: /인계 카드 보기/ }))
+    await user.click(screen.getByRole('button', { name: /^인계 카드/ }))
 
     expect(await screen.findByRole('heading', { name: '인계 카드' })).toBeInTheDocument()
   })

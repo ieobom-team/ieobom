@@ -1,4 +1,5 @@
 import { jobRoleLabel } from '../handover-card/handoverCard'
+import type { Staff } from '../session/staffDirectory'
 import type { TaskResponse } from './taskApi'
 
 /**
@@ -7,6 +8,26 @@ import type { TaskResponse } from './taskApi'
  * 판정은 하지 않는다. 상태·대리 완료 여부는 서버가 정해서 내려주고 여기서는 그 값을 어떻게
  * 보여 줄지만 정한다. (`docs/contracts/task-api.md`)
  */
+
+/**
+ * 내게 직접 배정된 업무. (`TaskListPage` "내게 배정된 업무" · 현장 홈 요약이 같은 기준을 쓴다)
+ */
+export function myAssignedTasks(
+  tasks: readonly TaskResponse[],
+  staff: Staff | undefined,
+): TaskResponse[] {
+  return tasks.filter((task) => task.assigneeName === staff?.name)
+}
+
+/**
+ * 담당자 없이 내 직종에만 열려 있는 업무. (`TaskListPage` "내 직종에 열려 있는 업무")
+ */
+export function myOpenTasks(
+  tasks: readonly TaskResponse[],
+  staff: Staff | undefined,
+): TaskResponse[] {
+  return tasks.filter((task) => task.assigneeName === null && task.assigneeJobRole === staff?.jobRole)
+}
 
 /** 담당 직종·이름 중 있는 것을 한 줄로. 담당은 직종 또는 이름 중 하나만 있어도 된다. */
 export function assigneeLabel(task: TaskResponse): string {

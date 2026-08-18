@@ -7,9 +7,12 @@ import {
   filterCards,
   findCard,
   flattenCards,
+  generalCards,
   getCardStats,
+  highlightSummary,
   observedTimeLabel,
   safetyFirst,
+  safetyRelatedCards,
   sortInboxCards,
   sortLatestFirst,
   suggestionLabel,
@@ -129,6 +132,40 @@ describe('Inbox 정렬 및 필터링 (F-SNBVHR display · rules)', () => {
   it('createdAtTimeLabel은 등록 시각을 HH:MM으로 돌려준다', () => {
     expect(createdAtTimeLabel('2026-08-11T13:45:00')).toBe('13:45')
     expect(createdAtTimeLabel(null)).toBeNull()
+  })
+})
+
+describe('안전/일반 분리와 대표 문구 (현장 홈 "오늘 특이사항" 요약)', () => {
+  const 목록 = [
+    카드({ id: 1, safetyRelated: false, statusChange: '점심 식사량 저하', createdAt: '2026-08-11T09:00:00' }),
+    카드({ id: 2, safetyRelated: true, statusChange: '낙상 위험 발견', createdAt: '2026-08-11T11:00:00' }),
+    카드({ id: 3, safetyRelated: false, statusChange: '기분 좋게 오전 활동 참여', createdAt: '2026-08-11T12:00:00' }),
+  ]
+
+  it('safetyRelatedCards는 안전 카드만 최신순으로 돌려준다', () => {
+    expect(safetyRelatedCards(목록).map((c) => c.id)).toEqual([2])
+  })
+
+  it('generalCards는 일반 카드만 최신순으로 돌려준다', () => {
+    expect(generalCards(목록).map((c) => c.id)).toEqual([3, 1])
+  })
+
+  it('대표 문구는 상태 변화를 우선 쓴다', () => {
+    expect(highlightSummary(카드({ statusChange: '점심 식사량 저하' }))).toBe('점심 식사량 저하')
+  })
+
+  it('상태 변화가 없으면 조치, 다음 행동, 근거 원문 순으로 대신한다', () => {
+    expect(
+      highlightSummary(카드({ statusChange: null, actionTaken: '죽으로 변경' })),
+    ).toBe('죽으로 변경')
+    expect(
+      highlightSummary(카드({ statusChange: null, actionTaken: null, nextAction: '보호자 안내' })),
+    ).toBe('보호자 안내')
+    expect(
+      highlightSummary(
+        카드({ statusChange: null, actionTaken: null, nextAction: null, evidenceText: '점심을 거의 안 드셨어요' }),
+      ),
+    ).toBe('점심을 거의 안 드셨어요')
   })
 })
 
