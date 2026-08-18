@@ -96,7 +96,7 @@ describe('진입 역할·본인 식별 선택', () => {
     await user.click(screen.getByRole('button', { name: /관리자·센터장/ }))
     await user.click(await screen.findByRole('button', { name: /김하늘/ }))
 
-    expect(screen.getByRole('heading', { name: '관리자 홈' })).toBeInTheDocument()
+    expect(screen.getByText('관리자 홈')).toBeInTheDocument()
   })
 
   it('고른 값은 이후 화면에서 입력자로 쓸 수 있게 남는다', async () => {
@@ -169,7 +169,7 @@ describe('진입 전 화면 접근', () => {
 
     renderApp('/')
 
-    expect(screen.getByRole('heading', { name: '관리자 홈' })).toBeInTheDocument()
+    expect(screen.getByText('관리자 홈')).toBeInTheDocument()
   })
 
   it('관리자 홈에서 당일 운영 현황으로 들어간다', async () => {

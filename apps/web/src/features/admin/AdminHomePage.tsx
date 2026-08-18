@@ -11,15 +11,14 @@ import { AdminStaffPinResetSection } from './AdminStaffPinResetSection'
 export function AdminHomePage() {
   return (
     <PageLayout title="관리자 홈" showBottomNav maxWidth="4xl">
-      <h1 className="text-3xl font-bold text-slate-900">관리자 홈</h1>
-      <p className="mt-4 text-xl text-slate-600">
+      <p className="text-xl text-ink-muted">
         오늘 등록된 인계와 아직 닫히지 않은 업무를 한 화면에서 확인합니다.
       </p>
 
       <div className="mt-4 flex flex-col gap-4">
         <Link
           to="/admin/dashboard"
-          className="flex min-h-20 w-full items-center rounded-2xl bg-teal-700 px-6 py-5 text-2xl font-semibold text-white hover:bg-teal-800"
+          className="flex min-h-20 w-full items-center rounded-2xl bg-primary px-6 py-5 text-2xl font-semibold text-white hover:brightness-95"
         >
           당일 운영 현황 보기
         </Link>
@@ -27,7 +26,7 @@ export function AdminHomePage() {
         {/* n58 — 어르신 명단 화면(n49)으로 이동한다. */}
         <Link
           to="/admin/care-recipients"
-          className="flex min-h-20 w-full items-center rounded-2xl border-2 border-slate-300 bg-white px-6 py-5 text-2xl font-semibold text-slate-900 hover:border-teal-600 hover:bg-teal-50"
+          className="flex min-h-20 w-full items-center rounded-2xl border-2 border-border-card bg-white px-6 py-5 text-2xl font-semibold text-ink hover:border-primary hover:bg-primary-soft"
         >
           어르신 명단
         </Link>
