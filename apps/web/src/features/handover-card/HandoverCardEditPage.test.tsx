@@ -195,7 +195,8 @@ describe('검토·수정 화면으로 들어가기 (n21 · n24 → n25)', () => 
 
     await user.click(await screen.findByRole('link', { name: '카드 검토·수정하기' }))
 
-    expect(await screen.findByRole('heading', { name: '카드 검토·수정' })).toBeInTheDocument()
+    // 화면 제목은 AppHeader 2행이 보여준다 — 본문에 별도 heading을 두지 않는다(#88 후속 코멘트).
+    expect(await screen.findByText('카드 검토·수정')).toBeInTheDocument()
   })
 
   it('검토 필요 항목 화면에서 어르신을 지정하러 들어간다', async () => {
@@ -205,7 +206,7 @@ describe('검토·수정 화면으로 들어가기 (n21 · n24 → n25)', () => 
 
     await user.click(await screen.findByRole('link', { name: '어르신 지정하고 고치기' }))
 
-    expect(await screen.findByRole('heading', { name: '카드 검토·수정' })).toBeInTheDocument()
+    expect(await screen.findByText('카드 검토·수정')).toBeInTheDocument()
   })
 
   it('카드가 들고 있던 값으로 채워져 열린다', async () => {
