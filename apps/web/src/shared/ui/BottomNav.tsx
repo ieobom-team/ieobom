@@ -46,7 +46,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="하단 빠른 이동"
-      className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md"
+      className="fixed bottom-0 left-0 right-0 z-40 border-t border-border-divider bg-surface-modal/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md"
     >
       <div className="mx-auto flex h-18 max-w-2xl items-center justify-around px-2">
         {items.map((item) => {
@@ -56,25 +56,25 @@ export function BottomNav() {
             <Link
               key={item.path}
               to={item.path}
-              className={`flex flex-1 flex-col items-center justify-center py-1 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 ${
-                active ? 'font-bold text-teal-800' : 'font-medium text-slate-500 hover:text-slate-900'
+              className={`flex flex-1 flex-col items-center justify-center py-1 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
+                active ? 'font-bold text-primary' : 'font-medium text-ink-muted hover:text-ink'
               }`}
             >
               <span className="flex items-center justify-center" aria-hidden="true">
                 <Icon
                   size={26}
                   strokeWidth={active ? 2.5 : 2.2}
-                  className={active ? 'text-teal-800' : 'text-slate-500'}
+                  className={active ? 'text-primary' : 'text-ink-muted'}
                 />
               </span>
               <span
                 className={`mt-1 text-xs font-semibold sm:text-sm ${
-                  active ? 'text-teal-900' : 'text-slate-600'
+                  active ? 'text-primary' : 'text-ink-muted'
                 }`}
               >
                 {item.label}
               </span>
-              {active && <span className="mt-0.5 h-1 w-6 rounded-full bg-teal-600" />}
+              {active && <span className="mt-0.5 h-1 w-6 rounded-full bg-primary" />}
             </Link>
           )
         })}
