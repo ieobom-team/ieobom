@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Check } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
 import { ApiError, type ApiFieldError } from '../../shared/api/client'
@@ -334,18 +335,17 @@ function CardEditForm({
             ? 'AI 제안입니다. 다시 눌러 해제할 수 있고, 배정 화면에서 또 고칠 수 있습니다.'
             : '다음 행동이 있어야 지정할 수 있습니다.'}
         </p>
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap gap-2">
           {JOB_ROLES.map((role) => (
-            <BigButton
+            <JobRoleChip
               key={role}
-              tone="plain"
               selected={draft.suggestedJobRole === role}
               onClick={() =>
                 onChange({ suggestedJobRole: draft.suggestedJobRole === role ? null : role })
               }
             >
               {jobRoleLabel(role)}
-            </BigButton>
+            </JobRoleChip>
           ))}
         </div>
       </fieldset>
@@ -428,11 +428,40 @@ function SuggestedActionChips({
   )
 }
 
+/** 담당 직종 단일 선택 칩. 짧은 고정 목록이라 세로 스택 대신 가로 알약형으로 배치한다(DESIGN.md §8.4·§2.1). */
+function JobRoleChip({
+  children,
+  selected,
+  onClick,
+}: {
+  children: ReactNode
+  selected: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onClick}
+      className={`min-h-10 rounded-full px-5 py-2.5 text-lg font-semibold transition-colors ${
+        selected
+          ? 'bg-primary text-white'
+          : 'border border-border-card bg-white text-ink hover:bg-primary-soft'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
 /**
  * 대상 어르신 지정. (Manyfast F-SNBVHR exceptions)
  *
  * AI 가 가리지 못한 카드를 확정하는 **유일한 경로**다. 어르신 없이 검토 완료가 되면 그 카드로 만든
  * 문구가 누구의 기록인지 말할 수 없으므로, 서버도 어르신 없는 카드는 검토 완료로 올리지 않는다.
+ *
+ * 어르신이 늘어도 화면 자체 길이는 늘지 않도록 `HandoverCreatePage`의 `RecipientSection`과 같은
+ * 패턴(선택 상태 배너 · 이름/식별번호 검색 · 목록 내부 스크롤)을 쓴다. (#143)
  */
 function RecipientPicker({
   selected,
@@ -449,9 +478,48 @@ function RecipientPicker({
   onRetry: () => void
   onSelect: (careRecipientId: number | null) => void
 }) {
+  const [keyword, setKeyword] = useState('')
+  const shown = useMemo(() => {
+    const trimmed = keyword.trim()
+    if (trimmed === '') {
+      return recipients
+    }
+    return recipients.filter(
+      (recipient) => recipient.name.includes(trimmed) || recipient.code.includes(trimmed),
+    )
+  }, [keyword, recipients])
+  const selectedRecipient = recipients.find((recipient) => recipient.id === selected) ?? null
+
   return (
     <fieldset className="flex flex-col gap-3">
       <legend className="text-2xl font-bold text-ink">대상 어르신</legend>
+
+      {selectedRecipient !== null && (
+        <div className="flex items-center justify-between gap-4 rounded-2xl border-2 border-primary bg-primary-soft px-5 py-4">
+          <span className="flex items-center gap-2 text-xl font-semibold text-ink">
+            <Check className="size-6 shrink-0 text-primary" aria-hidden="true" />
+            선택됨: {selectedRecipient.name} 어르신
+            <span className="text-lg font-normal text-ink-muted">{selectedRecipient.code}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => onSelect(null)}
+            className="shrink-0 text-lg font-semibold text-ink-muted underline hover:text-ink"
+          >
+            선택 해제
+          </button>
+        </div>
+      )}
+
+      <label htmlFor="cardRecipientKeyword" className="text-xl text-ink-muted">
+        이름이나 식별번호로 찾기
+      </label>
+      <input
+        id="cardRecipientKeyword"
+        value={keyword}
+        onChange={(event) => setKeyword(event.target.value)}
+        className="w-full rounded-2xl border-2 border-border-card px-5 py-4 text-2xl text-ink focus:border-primary focus:outline-none"
+      />
 
       {loading && <p className="text-xl text-ink-muted">어르신 목록을 불러오는 중입니다…</p>}
       {failed && (
@@ -462,9 +530,12 @@ function RecipientPicker({
           </BigButton>
         </div>
       )}
+      {!loading && !failed && shown.length === 0 && (
+        <p className="text-xl text-ink-muted">찾으시는 어르신이 목록에 없습니다.</p>
+      )}
 
-      <ul className="flex flex-col gap-3">
-        {recipients.map((recipient) => (
+      <ul className="flex max-h-72 flex-col gap-3 overflow-y-auto pr-1">
+        {shown.map((recipient) => (
           <li key={recipient.id}>
             <BigButton
               tone="plain"
