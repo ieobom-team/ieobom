@@ -265,7 +265,7 @@ describe('카드 항목 수정 (n25 → n21)', () => {
     await user.type(조치, '죽으로 바꿔 드림')
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
-    expect(await screen.findByRole('heading', { name: '김말순' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /^김말순/ })).toBeInTheDocument()
     expect(screen.getByText('죽으로 바꿔 드림')).toBeInTheDocument()
   })
 
@@ -301,7 +301,7 @@ describe('검토 상태 전환', () => {
 
     await user.click(await screen.findByRole('button', { name: '저장하고 검토 완료' }))
 
-    expect(await screen.findByRole('heading', { name: '김말순' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /^김말순/ })).toBeInTheDocument()
     expect(screen.getByText('검토 완료')).toBeInTheDocument()
   })
 
@@ -359,7 +359,7 @@ describe('대상 어르신 지정 (n24 → 확정)', () => {
     await user.click(await screen.findByRole('button', { name: /박순자/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
-    expect(await screen.findByRole('heading', { name: '박순자' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /^박순자/ })).toBeInTheDocument()
 
     await user.click(screen.getByRole('link', { name: '목록으로' }))
     expect(await screen.findByRole('heading', { name: /박순자/ })).toBeInTheDocument()
@@ -415,7 +415,7 @@ describe('AI 가 확신하지 못한 항목 강조 (F-SNBVHR display)', () => {
   it('다 채워진 카드에는 붙지 않는다', async () => {
     renderApp('/handover-cards/31')
 
-    await screen.findByRole('heading', { name: '김말순' })
+    await screen.findByRole('heading', { name: /^김말순/ })
     expect(screen.queryByText(/AI가 채우지 못한 곳/)).not.toBeInTheDocument()
   })
 })

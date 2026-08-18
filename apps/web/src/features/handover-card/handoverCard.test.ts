@@ -8,6 +8,8 @@ import {
   filterByRecipientName,
   filterCards,
   findCard,
+  observedDateTimeLabel,
+  reviewStatusLabel,
   flattenCards,
   generalCards,
   getCardStats,
@@ -222,6 +224,22 @@ describe('시각과 날짜', () => {
   it('요일 포함 날짜는 YYYY-MM-DD (요일) 형태로 바꾼다', () => {
     // 2026-08-14는 금요일이다
     expect(dateLabelWithWeekday('2026-08-14')).toBe('2026-08-14 (금)')
+  })
+
+  it('관찰 일시는 요일 포함 날짜와 시각을 한 줄로 합친다 (HandoverCardDetailPage 헤더)', () => {
+    // 2026-08-11은 화요일이다
+    expect(observedDateTimeLabel('2026-08-11T12:40:00')).toBe('2026-08-11 (화) 12:40')
+  })
+
+  it('원문에서 시각을 읽지 못한 카드는 관찰 일시를 보여주지 않는다', () => {
+    expect(observedDateTimeLabel(null)).toBeNull()
+  })
+})
+
+describe('검토 상태 라벨 (HandoverCardDetailPage 헤더 — CardBadges와 같은 문구)', () => {
+  it('검토 필요/검토 완료 문구를 돌려준다', () => {
+    expect(reviewStatusLabel('NEEDS_REVIEW')).toBe('검토 필요')
+    expect(reviewStatusLabel('REVIEWED')).toBe('검토 완료')
   })
 })
 
