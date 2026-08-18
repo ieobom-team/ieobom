@@ -376,6 +376,27 @@ describe('대상 어르신 지정 (n24 → 확정)', () => {
 
     expect(await screen.findByRole('heading', { name: '대상 어르신 미정' })).toBeInTheDocument()
   })
+
+  it('이름으로 찾으면 일치하는 어르신만 목록에 남는다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.type(await screen.findByLabelText('이름이나 식별번호로 찾기'), '박순자')
+
+    expect(screen.getByRole('button', { name: /박순자/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^김말순/ })).not.toBeInTheDocument()
+  })
+
+  it('어르신을 고르면 선택 상태 배너가 뜨고, 선택 해제로 지울 수 있다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(await screen.findByRole('button', { name: /박순자/ }))
+    expect(await screen.findByText(/선택됨: 박순자 어르신/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '선택 해제' }))
+    expect(screen.queryByText(/선택됨:/)).not.toBeInTheDocument()
+  })
 })
 
 describe('안전 관련 직접 표시 (F-SNBVHR rules)', () => {
