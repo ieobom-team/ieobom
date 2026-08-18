@@ -149,6 +149,62 @@ describe('입력 방식 선택 — 한 화면 안에서 바로 고른다', () =>
   })
 })
 
+describe('화면 순서 — 입력 방식이 어르신 선택보다 먼저 온다 (#141, #135의 순서 반전)', () => {
+  it('"어떻게 남기시겠어요?"가 "어느 어르신이신가요?"보다 먼저 나온다', async () => {
+    renderApp()
+
+    const 제목들 = screen
+      .getAllByRole('heading', { level: 2 })
+      .map((heading) => heading.textContent)
+    const 방식_위치 = 제목들.findIndex((text) => text?.includes('어떻게 남기시겠어요'))
+    const 어르신_위치 = 제목들.findIndex((text) => text?.includes('어느 어르신이신가요'))
+
+    expect(방식_위치).toBeGreaterThanOrEqual(0)
+    expect(어르신_위치).toBeGreaterThan(방식_위치)
+  })
+})
+
+describe('원문 기반 어르신 자동 매칭 (#141, Manyfast F-YJJJUX v46)', () => {
+  it('원문에 어르신 이름이 정확히 1명 포함되면 칩을 누르지 않아도 그 어르신으로 저장된다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await 텍스트로_내용_채우기(user, '김말순 어르신이 점심을 거의 안 드셨어요.')
+
+    const 김말순_칩 = await screen.findByRole('button', { name: /김말순/ })
+    expect(김말순_칩).toHaveClass('border-primary')
+
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    await screen.findByRole('heading', { name: '제출 완료' })
+    expect(보낸_요청[0].careRecipientId).toBe(1)
+  })
+
+  it('이름이 없거나 여러 명과 겹치면 자동으로 채우지 않고 기존 검증이 그대로 뜬다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await 텍스트로_내용_채우기(user, '김말순 님과 박순자 님이 함께 산책하셨어요.')
+    await screen.findByRole('button', { name: /박순자/ })
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('대상 어르신')
+    expect(보낸_요청).toHaveLength(0)
+  })
+
+  it('자동으로 채워진 뒤에도 사용자가 다른 어르신을 직접 고르면 그 선택이 유지된다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await 텍스트로_내용_채우기(user, '김말순 어르신이 점심을 거의 안 드셨어요.')
+    await user.click(await screen.findByRole('button', { name: /박순자/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    await screen.findByRole('heading', { name: '제출 완료' })
+    expect(보낸_요청[0].careRecipientId).toBe(2)
+  })
+})
+
 describe('추가 설정 — 관찰 구분·정보 출처 (§2.3 인라인 확장, §2.4 스마트 기본값)', () => {
   it('기본값은 직접 관찰이며 접힌 채로도 값이 보인다', async () => {
     renderApp()

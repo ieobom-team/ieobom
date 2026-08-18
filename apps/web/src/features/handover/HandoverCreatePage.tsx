@@ -32,14 +32,21 @@ import {
   validateDraft,
   type HandoverDraft,
 } from './handoverForm'
+import { matchRecipients } from './recipientMatch'
 
 /**
  * 유저플로우 "새 플로우 3" n7~n16 — 현장 특이사항 입력.
  *
- * #135(Manyfast `F-YJJJUX` v45 — §2.3 인라인 확장 + §2.4 스마트 기본값, #116 현장 실측 검토)부터는
- * 화면 전환형 단계 대신 **한 화면 안에서** 어르신 → 입력 방식(+내용) → 추가 설정(관찰 구분 ·
- * 정보 출처 · 입력 시점) 순으로 인라인 확장한다. 관찰 구분·입력 방식·입력 시점은 기본값이 채워진
- * 채로 뜨고, 사용자는 필요할 때만 바꾼다.
+ * #141(Manyfast `F-YJJJUX` v46 — action/display/rules)부터는 **입력 방식(+내용) → 어르신 선택 →
+ * 추가 설정(관찰 구분 · 정보 출처 · 입력 시점)** 순으로 인라인 확장한다(#135의 "어르신 최상단"
+ * 순서를 반전). 발화 원문에 이미 어르신이 언급돼 있으면 굳이 칩을 먼저 눌러야 할 이유가 없기
+ * 때문이다. 관찰 구분·입력 방식·입력 시점은 기본값이 채워진 채로 뜨고, 사용자는 필요할 때만
+ * 바꾼다.
+ *
+ * **원문 기반 어르신 자동 매칭**(`recipientMatch.ts`)도 #141에서 들어왔다. 입력 원문과 명단을
+ * 로컬 문자열로만 대조하며(LLM 미호출), 정확히 1명과 일치하면 그 어르신을 자동으로 고른 상태로
+ * 보여 준다. 사용자가 칩을 한 번이라도 직접 누르면(`recipientTouched`) 그 뒤로는 자동 매칭이
+ * 그 선택을 덮어쓰지 않는다 — 방금 고른 걸 타이핑할 때마다 지우면 안 되기 때문이다.
  *
  * 음성 인식기는 이 컴포넌트(부모)가 쥐고 있다 — 저장 버튼이 "듣는 중이면 멈추고 정리가 끝나면
  * 이어서 저장"을 하려면 녹음기를 손에 쥐고 있어야 한다. **상시 녹음 금지**(Manyfast rules)는
@@ -104,6 +111,26 @@ export function HandoverCreatePage() {
   const recipients = useActiveRecipients()
   const queryClient = useQueryClient()
 
+  /** 사용자가 어르신 칩을 한 번이라도 직접 눌렀는지. 누른 뒤로는 자동 매칭이 그 선택을 덮어쓰지 않는다. */
+  const [recipientTouched, setRecipientTouched] = useState(false)
+  const recipientMatch = useMemo(
+    () => matchRecipients(draft.rawText, recipients.data ?? []),
+    [draft.rawText, recipients.data],
+  )
+
+  // 원문과 명단을 대조해 정확히 1명과 일치하면 자동으로 채운다. (Manyfast F-YJJJUX rules — #141)
+  // 사용자가 이미 직접 골랐다면(`recipientTouched`) 계속 타이핑해도 그 선택을 건드리지 않는다.
+  useEffect(() => {
+    if (recipientTouched) {
+      return
+    }
+    setDraft((current) =>
+      current.careRecipientId === recipientMatch.autoSelectedId
+        ? current
+        : { ...current, careRecipientId: recipientMatch.autoSelectedId },
+    )
+  }, [recipientMatch.autoSelectedId, recipientTouched])
+
   /** 저장 성공 → 인계 카드 정리. 결과는 안내에만 쓰고 입력 흐름을 막지 않는다. */
   const structure = useMutation({
     mutationFn: structureHandover,
@@ -163,6 +190,8 @@ export function HandoverCreatePage() {
       // 고른 어르신이 목록에서 사라진 경우. 다시 고르게 목록을 새로 받아 온다.
       if (error.code === 'CARE_RECIPIENT_NOT_FOUND') {
         setDraft((current) => ({ ...current, careRecipientId: null }))
+        // 자동 매칭이 방금 지운 값을 곧바로 다시 채우지 않도록 직접 고르게 한다.
+        setRecipientTouched(true)
         void recipients.refetch()
         setNotice('고르신 어르신을 목록에서 찾지 못했습니다. 목록에서 다시 골라 주세요.')
         return
@@ -287,6 +316,7 @@ export function HandoverCreatePage() {
     setPendingSave(false)
     setSavedName('')
     setQueuedInfo(null)
+    setRecipientTouched(false)
     structure.reset()
     setOutcome('form')
   }
@@ -327,15 +357,6 @@ export function HandoverCreatePage() {
 
       <Problems errors={errors} notice={notice} />
 
-      <RecipientSection
-        draft={draft}
-        recipients={recipients.data ?? []}
-        loading={recipients.isPending}
-        loadFailed={recipients.isError}
-        onRetryLoad={() => void recipients.refetch()}
-        onPick={(careRecipientId) => update({ careRecipientId })}
-      />
-
       <MethodSection
         draft={draft}
         onPickMethod={pickMethod}
@@ -345,6 +366,18 @@ export function HandoverCreatePage() {
         voiceFinishing={voiceFinishing}
         voiceNotice={voiceNotice}
         onToggleVoiceListening={toggleVoiceListening}
+      />
+
+      <RecipientSection
+        draft={draft}
+        recipients={recipientMatch.sorted}
+        loading={recipients.isPending}
+        loadFailed={recipients.isError}
+        onRetryLoad={() => void recipients.refetch()}
+        onPick={(careRecipientId) => {
+          setRecipientTouched(true)
+          update({ careRecipientId })
+        }}
       />
 
       <SettingsSection
@@ -417,7 +450,13 @@ function Pill({
   )
 }
 
-/** 어르신 선택 — 화면 최상단에 두고 항상 보이게 한다. (Manyfast F-YJJJUX display) */
+/**
+ * 어르신 선택 — 입력 방식 아래, 항상 화면에 보이는 채로 둔다. (Manyfast F-YJJJUX display)
+ *
+ * `recipients`는 이미 원문과 대조해 정렬된 목록이다(`recipientMatch.ts`). 정확히 1명과 일치하면
+ * `draft.careRecipientId`가 자동으로 채워져 있고, 여기서는 그 칩을 그대로 강조해 보여 주기만
+ * 한다 — 숨겨진 자동 선택은 쓰지 않는다.
+ */
 function RecipientSection({
   draft,
   recipients,
