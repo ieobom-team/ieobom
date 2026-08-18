@@ -227,12 +227,27 @@ describe('저장 중 연결 끊김 — 임시 저장과 자동 재전송 (n16 �
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
-    expect(await screen.findByRole('heading', { name: '기기에 임시 저장했습니다' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '임시 저장 완료' })).toBeInTheDocument()
     expect(screen.getByText(/다시 입력하지 않으셔도 됩니다/)).toBeInTheDocument()
     // 실패로 끝나지 않았으므로 재입력을 요구하는 오류 화면(보완할 항목)은 뜨지 않는다.
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     // 서버에는 실제로 닿지 않았다.
     expect(보낸_요청).toHaveLength(0)
+  })
+
+  it('안내 카드에 저장 시간·어르신·입력 방식을 보여준다', async () => {
+    네트워크_끊김 = true
+    const user = userEvent.setup()
+    renderApp()
+
+    await 직접_본_내용을_텍스트로(user, '점심을 거의 안 드셨어요.')
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    await screen.findByRole('heading', { name: '임시 저장 완료' })
+    expect(screen.getByText('저장 시간')).toBeInTheDocument()
+    expect(screen.getByText(/^김말순/)).toBeInTheDocument()
+    expect(screen.getByText('텍스트로 쓰기')).toBeInTheDocument()
   })
 
   it('현장 홈으로 돌아가면 대기 중인 건수가 보인다', async () => {
@@ -243,7 +258,7 @@ describe('저장 중 연결 끊김 — 임시 저장과 자동 재전송 (n16 �
     await 직접_본_내용을_텍스트로(user, '점심을 거의 안 드셨어요.')
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
-    await screen.findByRole('heading', { name: '기기에 임시 저장했습니다' })
+    await screen.findByRole('heading', { name: '임시 저장 완료' })
 
     await user.click(screen.getByRole('button', { name: '현장 홈으로' }))
 
@@ -258,7 +273,7 @@ describe('저장 중 연결 끊김 — 임시 저장과 자동 재전송 (n16 �
     await 직접_본_내용을_텍스트로(user, '점심을 거의 안 드셨어요.')
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
-    await screen.findByRole('heading', { name: '기기에 임시 저장했습니다' })
+    await screen.findByRole('heading', { name: '임시 저장 완료' })
 
     네트워크_끊김 = false
     window.dispatchEvent(new Event('online'))

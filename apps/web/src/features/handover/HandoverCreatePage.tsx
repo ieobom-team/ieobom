@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Check } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ApiError, NETWORK_UNAVAILABLE, type ApiFieldError } from '../../shared/api/client'
@@ -15,7 +16,7 @@ import { useSession } from '../session/sessionContext'
 import { createHandover } from './handoverApi'
 import { INFO_SOURCES, infoSourceLabel, type InfoSource } from './infoSource'
 import { CHECK_ITEMS } from './checkItems'
-import { INPUT_METHODS, type InputMethod } from './inputMethod'
+import { findInputMethod, INPUT_METHODS, type InputMethod } from './inputMethod'
 import { enqueue, OFFLINE_QUEUE_KEY } from './offlineQueue'
 import {
   createSpeechRecognizer,
@@ -62,6 +63,15 @@ export function HandoverCreatePage() {
   const [savedName, setSavedName] = useState<string>('')
   /** 연결이 끊겨 대기열에 넣으면서 원본 음성을 빼야 했는지. */
   const [queuedAudioDropped, setQueuedAudioDropped] = useState(false)
+  /**
+   * 임시 저장 안내 카드에 보여줄 값. 서버가 안 닿아 응답이 없으므로 화면이 들고 있던
+   * `draft`·`recipients`에서 그대로 뽑는다 — 새 API를 부르지 않는다.
+   */
+  const [queuedInfo, setQueuedInfo] = useState<{
+    occurredAt: string
+    careRecipientName: string
+    inputMethod: InputMethod
+  } | null>(null)
 
   // 새 입력의 대상 목록이므로 이용 종료한 어르신은 빠진다. (Manyfast F-LUDCWW rules)
   const recipients = useActiveRecipients()
@@ -100,6 +110,12 @@ export function HandoverCreatePage() {
         setErrors([])
         setNotice(null)
         setQueuedAudioDropped(audioData !== undefined)
+        setQueuedInfo({
+          occurredAt: draft.occurredAt,
+          careRecipientName:
+            recipients.data?.find((r) => r.id === draft.careRecipientId)?.name ?? '대상 어르신',
+          inputMethod: draft.inputMethod ?? 'TEXT',
+        })
         setStep('queued')
         return
       }
@@ -203,6 +219,7 @@ export function HandoverCreatePage() {
     setErrors([])
     setNotice(null)
     setSavedName('')
+    setQueuedInfo(null)
     structure.reset()
     setStep('proxy')
   }
@@ -221,8 +238,16 @@ export function HandoverCreatePage() {
     )
   }
 
-  if (step === 'queued') {
-    return <QueuedNotice audioDropped={queuedAudioDropped} onAnother={startAnother} />
+  if (step === 'queued' && queuedInfo !== null) {
+    return (
+      <QueuedNotice
+        audioDropped={queuedAudioDropped}
+        occurredAt={queuedInfo.occurredAt}
+        careRecipientName={queuedInfo.careRecipientName}
+        inputMethod={queuedInfo.inputMethod}
+        onAnother={startAnother}
+      />
+    )
   }
 
   return (
@@ -771,34 +796,63 @@ function formatOccurredAt(occurredAt: string): string {
  */
 function QueuedNotice({
   audioDropped,
+  occurredAt,
+  careRecipientName,
+  inputMethod,
   onAnother,
 }: {
   audioDropped: boolean
+  occurredAt: string
+  careRecipientName: string
+  inputMethod: InputMethod
   onAnother: () => void
 }) {
   const navigate = useNavigate()
 
   return (
     <PageLayout title="임시 저장">
-      <section role="status" className="rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-6">
-        <h1 className="text-3xl font-bold text-amber-900">기기에 임시 저장했습니다</h1>
-        <p className="mt-3 text-2xl text-amber-900">
-          지금은 연결이 안 돼 보내지 못했지만, 입력하신 내용은 안전하게 남아 있습니다.
-        </p>
-        <p className="mt-2 text-xl text-amber-800">
-          연결이 회복되면 자동으로 다시 보내 드립니다. 다시 입력하지 않으셔도 됩니다.
+      <section role="status" className="flex flex-col items-center gap-3 rounded-2xl border-2 border-border-card bg-white px-5 py-8 text-center">
+        <span className="flex h-20 w-20 items-center justify-center rounded-full bg-primary-soft">
+          <Check size={40} strokeWidth={3} className="text-primary" aria-hidden="true" />
+        </span>
+        <h1 className="text-3xl font-bold text-ink">임시 저장 완료</h1>
+        <p className="text-xl text-ink-muted">입력하신 특이사항이 안전하게 저장되었습니다</p>
+      </section>
+
+      <dl className="flex flex-col gap-3 rounded-2xl border-2 border-border-card bg-white px-5 py-5">
+        <div className="flex items-center justify-between gap-3 text-xl">
+          <dt className="font-semibold text-ink-muted">저장 시간</dt>
+          <dd className="text-ink">{formatOccurredAt(occurredAt)}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-3 text-xl">
+          <dt className="font-semibold text-ink-muted">어르신</dt>
+          <dd className="text-ink">{careRecipientName} 어르신</dd>
+        </div>
+        <div className="flex items-center justify-between gap-3 text-xl">
+          <dt className="font-semibold text-ink-muted">입력 방식</dt>
+          <dd className="text-ink">{findInputMethod(inputMethod).label}</dd>
+        </div>
+      </dl>
+
+      <section className="rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4">
+        <p className="text-xl text-amber-900">
+          지금은 연결이 안 돼 보내지 못했지만, 입력하신 내용은 안전하게 남아 있습니다. 연결이
+          회복되면 자동으로 다시 보내 드립니다. 다시 입력하지 않으셔도 됩니다.
         </p>
         {audioDropped && (
-          <p className="mt-2 text-xl text-amber-800">
+          <p className="mt-2 text-xl text-amber-900">
             다만 녹음한 원본 음성은 함께 보관하지 못했습니다. 인식된 글은 그대로 보내집니다.
           </p>
         )}
       </section>
 
-      <BigButton onClick={() => navigate('/field')}>현장 홈으로</BigButton>
-      <BigButton tone="plain" onClick={onAnother}>
-        하나 더 남기기
-      </BigButton>
+      {/* 좌 보조(회색) / 우 주요(오렌지) — #90 SavedNotice와 같은 구성(DESIGN.md §8.5) */}
+      <div className="grid grid-cols-2 gap-4">
+        <BigButton tone="plain" onClick={onAnother}>
+          하나 더 남기기
+        </BigButton>
+        <BigButton onClick={() => navigate('/field')}>현장 홈으로</BigButton>
+      </div>
     </PageLayout>
   )
 }
