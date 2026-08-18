@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   canRecordOriginalAudio,
   createSpeechRecognizer,
@@ -162,6 +162,8 @@ describe('인식기', () => {
 
     recognizer?.start()
     await Promise.resolve()
+    // 멈추라고 해야 한 번의 말하기가 끝난다. 그냥 끊긴 것이라면 이어서 다시 시작한다. (#149)
+    recognizer?.stop()
     fake.onend?.()
 
     expect(fake.start).toHaveBeenCalledOnce()
@@ -194,6 +196,7 @@ describe('인식기', () => {
 
     recognizer?.start()
     await Promise.resolve()
+    recognizer?.stop()
     fake.onend?.()
 
     expect(onError).toHaveBeenCalledWith(expect.stringContaining('아무 말도 들리지 않았습니다'))
@@ -207,6 +210,7 @@ describe('인식기', () => {
     recognizer?.start()
     await Promise.resolve()
     fake.onresult?.({ results: [[{ transcript: '점심을 거의 안 드셨어요' }]] as never } as never)
+    recognizer?.stop()
     fake.onend?.()
 
     expect(onError).not.toHaveBeenCalled()
@@ -222,6 +226,147 @@ describe('인식기', () => {
     fake.onerror?.({ error: 'not-allowed' } as never)
     fake.onend?.()
 
+    expect(onError).toHaveBeenCalledOnce()
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('마이크 권한'))
+  })
+})
+
+/**
+ * 끊긴 인식 이어 가기. (#149)
+ *
+ * Android 는 `continuous` 를 지키지 않고 말이 끊기는 즉시 세션을 닫는다. 사용자가 멈추라고 하기
+ * 전까지는 다시 시작해 한 번의 말하기로 이어 준다. 여기서 보는 것은 "앞 내용을 잃지 않는다"와
+ * **"이어 가기가 상시 녹음이 되지 않는다"**(Manyfast F-YJJJUX rules)다.
+ */
+describe('끊긴 인식 이어 가기', () => {
+  /** Android 가 무음에서 세션을 닫기까지 걸리는 시간. 진단 로그 기준 약 5초다. */
+  const 무음_종료 = 6_000
+  /** 재시작을 걸어 둔 간격(100ms)보다 넉넉히. */
+  const 재시작_대기 = 300
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    fake = new FakeRecognition()
+    vi.stubGlobal('webkitSpeechRecognition', function FakeCtor() {
+      return fake
+    })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /** 인식이 스스로 한 번 끊겼다가 이어지는 것을 흉내 낸다. */
+  function 한_번_끊겼다_이어짐(조용한_시간 = 무음_종료) {
+    vi.advanceTimersByTime(조용한_시간)
+    fake.onend?.()
+    vi.advanceTimersByTime(재시작_대기)
+  }
+
+  function 말함(transcript: string) {
+    fake.onresult?.({ results: [[{ transcript }]] as never } as never)
+  }
+
+  it('말이 끊겨도 다시 시작하고 앞 문장을 잃지 않는다', () => {
+    const onTranscript = vi.fn()
+    createSpeechRecognizer(onTranscript, vi.fn(), vi.fn())?.start()
+
+    말함('점심을 거의 안 드셨어요')
+    한_번_끊겼다_이어짐()
+    말함('오후에도 그러셨어요')
+
+    expect(fake.start).toHaveBeenCalledTimes(2)
+    expect(onTranscript).toHaveBeenLastCalledWith('점심을 거의 안 드셨어요 오후에도 그러셨어요')
+  })
+
+  it('중간에 쉬는 것만으로는 끝나지 않는다', () => {
+    const onEnd = vi.fn()
+    createSpeechRecognizer(vi.fn(), onEnd, vi.fn())?.start()
+
+    말함('점심을 거의 안 드셨어요')
+    한_번_끊겼다_이어짐()
+    한_번_끊겼다_이어짐()
+
+    expect(onEnd).not.toHaveBeenCalled()
+  })
+
+  it('20초 넘게 조용하면 끝내고 안내한다', () => {
+    const onEnd = vi.fn()
+    const onError = vi.fn()
+    createSpeechRecognizer(vi.fn(), onEnd, onError)?.start()
+
+    // 6초씩 네 번이면 마지막으로 인식된 시각에서 20초를 넘긴다.
+    한_번_끊겼다_이어짐()
+    한_번_끊겼다_이어짐()
+    한_번_끊겼다_이어짐()
+    한_번_끊겼다_이어짐()
+
+    expect(onEnd).toHaveBeenCalledWith(null)
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('아무 말도 들리지 않았습니다'))
+  })
+
+  it('계속 말하는 중이어도 5분 상한을 넘기지 않는다 — 상시 녹음 금지', () => {
+    const onEnd = vi.fn()
+    createSpeechRecognizer(vi.fn(), onEnd, vi.fn())?.start()
+
+    // 10초마다 말하며 끊겼다 이어지기를 6분치 반복한다.
+    for (let i = 0; i < 40; i += 1) {
+      말함(`${i}번째 `)
+      한_번_끊겼다_이어짐(10_000)
+    }
+
+    expect(onEnd).toHaveBeenCalledWith(null)
+
+    // 상한을 넘긴 뒤로는 아무리 기다려도 다시 시작하지 않는다.
+    const 시작한_횟수 = fake.start.mock.calls.length
+    vi.advanceTimersByTime(60_000)
+    expect(fake.start).toHaveBeenCalledTimes(시작한_횟수)
+  })
+
+  it('사용자가 멈추면 다시 시작하지 않는다', () => {
+    const recognizer = createSpeechRecognizer(vi.fn(), vi.fn(), vi.fn())
+    recognizer?.start()
+
+    말함('점심을 거의 안 드셨어요')
+    recognizer?.stop()
+    fake.onend?.()
+    vi.advanceTimersByTime(재시작_대기)
+
+    expect(fake.start).toHaveBeenCalledOnce()
+  })
+
+  it('시작하자마자 끝나는 것이 반복되면 접는다 — 마이크 표시만 깜빡이게 두지 않는다', () => {
+    const onError = vi.fn()
+    createSpeechRecognizer(vi.fn(), vi.fn(), onError)?.start()
+
+    for (let i = 0; i < 5; i += 1) {
+      한_번_끊겼다_이어짐(0)
+    }
+
+    expect(fake.start).toHaveBeenCalledTimes(3)
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('아무 말도 들리지 않았습니다'))
+  })
+
+  it('no-speech 는 잠깐 끊긴 것으로 보고 안내 없이 이어 간다', () => {
+    const onError = vi.fn()
+    createSpeechRecognizer(vi.fn(), vi.fn(), onError)?.start()
+
+    말함('점심을')
+    fake.onerror?.({ error: 'no-speech' } as never)
+    한_번_끊겼다_이어짐()
+
+    expect(fake.start).toHaveBeenCalledTimes(2)
+    expect(onError).not.toHaveBeenCalled()
+  })
+
+  it('마이크 권한 거부는 되살릴 수 없으므로 그 자리에서 끝낸다', () => {
+    const onError = vi.fn()
+    createSpeechRecognizer(vi.fn(), vi.fn(), onError)?.start()
+
+    fake.onerror?.({ error: 'not-allowed' } as never)
+    한_번_끊겼다_이어짐()
+
+    expect(fake.start).toHaveBeenCalledOnce()
     expect(onError).toHaveBeenCalledOnce()
     expect(onError).toHaveBeenCalledWith(expect.stringContaining('마이크 권한'))
   })
