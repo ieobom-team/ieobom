@@ -47,6 +47,13 @@ describe('인식 조각 합치기', () => {
     expect(mergeTranscript('안녕하세요', '')).toBe('안녕하세요')
     expect(mergeTranscript('', '안녕하세요')).toBe('안녕하세요')
   })
+
+  it('서로 다른 조각이 붙을 때 단어가 들러붙지 않는다', () => {
+    expect(mergeTranscript('안녕하세요', '태호 어르신')).toBe('안녕하세요 태호 어르신')
+    // 한쪽이 이미 띄어쓰기를 물고 있으면 더 띄우지 않는다.
+    expect(mergeTranscript('안녕하세요 ', '태호 어르신')).toBe('안녕하세요 태호 어르신')
+    expect(mergeTranscript('안녕하세요', ' 태호 어르신')).toBe('안녕하세요 태호 어르신')
+  })
 })
 
 describe('원본 음성을 저장할 수 있는 기기인지', () => {
@@ -266,6 +273,29 @@ describe('끊긴 인식 이어 가기', () => {
   function 말함(transcript: string) {
     fake.onresult?.({ results: [[{ transcript }]] as never } as never)
   }
+
+  it('이어진 뒤에도 누적본이 겹쳐 쌓이지 않는다 (#151)', () => {
+    const onTranscript = vi.fn()
+    createSpeechRecognizer(onTranscript, vi.fn(), vi.fn())?.start()
+
+    말함('안녕하세요 태호 어르신 잘 계시나요')
+    한_번_끊겼다_이어짐()
+
+    // 실기기에서 나온 그대로다. Android 는 이어진 세션에서도 누적 스냅샷을 인덱스마다 쌓는다.
+    fake.onresult?.({
+      results: [
+        [{ transcript: '뭐' }],
+        [{ transcript: '뭐 아프신데나' }],
+        [{ transcript: '뭐 아프신데나 하여 뭐' }],
+        [{ transcript: '뭐 아프신데나 하여 뭐 피부가' }],
+        [{ transcript: '뭐 아프신데나 하여 뭐 피부가 가렵다고요' }],
+      ] as never,
+    } as never)
+
+    expect(onTranscript).toHaveBeenLastCalledWith(
+      '안녕하세요 태호 어르신 잘 계시나요 뭐 아프신데나 하여 뭐 피부가 가렵다고요',
+    )
+  })
 
   it('말이 끊겨도 다시 시작하고 앞 문장을 잃지 않는다', () => {
     const onTranscript = vi.fn()

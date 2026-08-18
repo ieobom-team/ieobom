@@ -206,6 +206,9 @@ export function speechErrorMessage(error: string): string {
  *
  * 데스크톱에서 같은 말을 정말로 두 번 연달아 하면 한 번으로 합쳐지지만, 겹쳐 쌓인 문장을
  * 사용자가 지우게 하는 쪽이 훨씬 나쁘다.
+ *
+ * **한 인식 세션 안의 조각들끼리만 부른다.** 끊겼다 이어진 앞 세션의 문장을 시작값으로 넣으면
+ * 접두사 검사가 영원히 어긋난다(#151) — 그건 `createSpeechRecognizer` 가 따로 앞에 붙인다.
  */
 export function mergeTranscript(combined: string, next: string): string {
   if (next === '') {
@@ -222,7 +225,9 @@ export function mergeTranscript(combined: string, next: string): string {
     // 방금 받은 것을 그대로 다시 준 경우. 무시한다.
     return combined
   }
-  return combined + next
+  // 서로 다른 조각이다. 양쪽 다 띄어쓰기를 안 물고 있으면 단어가 붙어 버리므로 사이를 띄운다.
+  const separator = /\s$/.test(combined) || /^\s/.test(next) ? '' : ' '
+  return combined + separator + next
 }
 
 /**
@@ -320,11 +325,17 @@ export function createSpeechRecognizer(
   }
 
   recognition.onresult = (event) => {
-    let combined = carried
+    // **이번 세션 안에서 먼저 합치고, 앞 세션까지의 문장은 그 뒤에 앞으로 붙인다.** (#151)
+    //
+    // `carried` 를 시작값으로 깔고 합치면 안 된다. Android 가 주는 누적본에는 앞 세션 내용이
+    // 들어 있을 리 없어서 `mergeTranscript` 의 접두사 검사가 영원히 어긋나고, 걸러야 할 누적본이
+    // 전부 이어 붙는다 — "뭐 / 뭐 아프신데나 / 뭐 아프신데나 하여 뭐" 가 그대로 쌓인다.
+    let spoken = ''
     for (let i = 0; i < event.results.length; i += 1) {
-      combined = mergeTranscript(combined, event.results[i][0].transcript)
+      spoken = mergeTranscript(spoken, event.results[i][0].transcript)
     }
-    if (combined !== carried) {
+    const combined = `${carried}${spoken}`
+    if (spoken !== '') {
       heardAnything = true
       lastHeardAt = Date.now()
       failedSessions = 0
