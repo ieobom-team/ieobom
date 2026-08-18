@@ -1,3 +1,4 @@
+import { List } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
 import { ApiError } from '../../shared/api/client'
@@ -46,11 +47,26 @@ export function HandoverCardDetailPage() {
               {card.careRecipientName ?? '대상 어르신 미정'}
               {card.careRecipientName && <span className="ml-1 text-2xl font-normal text-ink-muted">어르신</span>}
             </h1>
-            {/* 날짜(요일)·시각·검토 상태를 한 줄에 인라인으로 (예: "2026-08-14 (금) 10:25 입력 / 검토 필요") */}
-            <p className="text-lg text-ink-muted">
-              {observedDateTime !== null && `${observedDateTime} 입력 / `}
-              {reviewStatusLabel(card.reviewStatus)}
-            </p>
+            <div className="flex items-center justify-between gap-3">
+              {/* 날짜(요일)·시각·검토 상태를 한 줄에 인라인으로 (예: "2026-08-14 (금) 10:25 입력 / 검토 필요") */}
+              <p className="text-lg text-ink-muted">
+                {observedDateTime !== null && `${observedDateTime} 입력 / `}
+                {reviewStatusLabel(card.reviewStatus)}
+              </p>
+
+              {/*
+               * 검토·수정 저장, 후속 업무 배정 완료가 replace 로 이 화면에 떨어지는데(#134), 그 시점엔
+               * 헤더 뒤로가기가 실제 히스토리를 먼저 타서 "목록으로" 라벨과 달리 목록으로 안 갈 수 있다.
+               * 스크롤 없이 바로 보이는 위치에 목록으로 가는 확실한 경로를 따로 둔다. (#137)
+               */}
+              <Link
+                to="/handover-cards"
+                className="inline-flex shrink-0 items-center gap-1 text-lg font-semibold text-primary hover:underline"
+              >
+                <List size={18} strokeWidth={2.4} aria-hidden="true" />
+                인계 카드 목록으로
+              </Link>
+            </div>
           </header>
 
           <article className="rounded-2xl border-2 border-border-card bg-white px-5 py-5">
