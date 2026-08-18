@@ -26,14 +26,18 @@
 
   --spacing-xxs: 4px;
   --spacing-xs: 8px;
-  --spacing-sm: 12px;
-  --spacing-md: 16px;
-  --spacing-lg: 24px;
-  --spacing-xl: 40px;
 
   --font-sans: Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR',
     sans-serif;
 }
+
+/*
+ * §5 spacing 값 중 sm/md/lg/xl 은 여기서 --spacing-* 로 선언하지 않는다.
+ * Tailwind v4는 --spacing-{key} 를 max-w-*·w-*·min-w-* 의 네임드 사이즈(sm=24rem, md=28rem, ...)에도
+ * 그대로 재사용하기 때문에, sm/md/lg/xl 이름으로 재정의하면 그 유틸리티들이 여기 정의한 작은 px 값으로
+ * 깨진다(실측: PIN 모달이 폭 16px로 붕괴). 코드 전체가 이미 p-4·gap-3 같은 Tailwind 기본 숫자 스케일로
+ * §5 값을 구현하고 있어 이 named 토큰은 실사용이 없었다 — 그래서 안전하게 제거했다.
+ */
 
 /*
  * 큰 글씨·큰 버튼이 기본이다. 사용자 상당수가 고령이고 돌봄 중에 한 손으로 화면을 만진다.
