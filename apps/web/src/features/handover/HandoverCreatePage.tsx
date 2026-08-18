@@ -20,6 +20,7 @@ import { findInputMethod, INPUT_METHODS, type InputMethod } from './inputMethod'
 import { readLastInputMethod, resolveDefaultInputMethod, writeLastInputMethod } from './lastInputMethod'
 import { enqueue, OFFLINE_QUEUE_KEY } from './offlineQueue'
 import {
+  canRecordOriginalAudio,
   createSpeechRecognizer,
   isSpeechRecognitionSupported,
   type SpeechRecognizer,
@@ -646,6 +647,17 @@ function VoiceContent({
       <p className="text-xl text-ink-muted">
         마이크를 누르고 말씀하시면 아래에 글로 남습니다. 다시 누르면 멈춥니다.
       </p>
+
+      {/*
+        휴대전화·태블릿은 원본 음성을 저장하지 못한다. 페이지가 마이크를 잡는 순간 인식이
+        멈추기 때문이다(#146 · `speechRecognition.ts`). 카드에서 다시 들을 수 없다는 것을
+        녹음하기 전에 알려 준다 — 나중에 카드에서 음성이 없는 것을 발견하게 두지 않는다.
+      */}
+      {!canRecordOriginalAudio() && (
+        <p className="text-lg text-ink-muted">
+          이 기기에서는 말씀하신 내용이 글로만 남습니다. 원본 음성은 저장되지 않습니다.
+        </p>
+      )}
 
       <div className="flex flex-col items-center gap-3 rounded-lg border border-border-card bg-surface-card px-5 py-8">
         <button
