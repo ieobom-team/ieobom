@@ -1,11 +1,16 @@
-import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useState, type ReactNode } from 'react'
+import { ArrowRight } from 'lucide-react'
+import { Link, useNavigate, useParams } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
 import { ApiError } from '../../shared/api/client'
 import { BigButton } from '../../shared/ui/BigButton'
 import { PageLayout } from '../../shared/ui/PageLayout'
+import { CardsLoadFailed, CardsLoading } from '../handover-card/CardsLoadState'
+import { cardEntries, findCard, observedDateTimeLabel } from '../handover-card/handoverCard'
+import type { HandoverCard } from '../handover-card/handoverCardApi'
+import { useHandoverCards } from '../handover-card/useHandoverCards'
 import { useSession } from '../session/sessionContext'
-import { assigneeLabel, claimedAgoLabel, claimStatusLabel, completionLabel, dueTimeLabel } from './task'
+import { claimedAgoLabel, claimStatusLabel, completionLabel, dueTimeLabel } from './task'
 import { TasksLoadFailed, TasksLoading } from './TaskLoadState'
 import {
   claimTask,
@@ -45,6 +50,11 @@ function buildClaimNotice(response: TaskClaimResponse): ClaimNotice {
  * **완료 처리 버튼은 이미 완료된 업무에서도 눌린다.** 다시 누르면 아무것도 바뀌지 않고
  * 중복 완료 안내가 뜬다(`alreadyCompleted`, Manyfast F-IVFNPC exceptions) — 업무를 다시 확인하러 온
  * 사람에게 "실패했다"가 아니라 "누가 언제 이미 확인했는지"를 보여 주기 위해서다.
+ *
+ * "연결된 인계 카드"는 새 API를 만들지 않고 이미 있는 `useHandoverCards` + `findCard`로 오늘 목록에서
+ * 찾는다(Manyfast F-SNBVHR). 오늘 목록에 없으면(예: 날짜가 바뀜) 조용히 생략하지 않고 그 사실을
+ * 안내한다(DESIGN.md §8.5 Empty State) — 빈 자리가 "아직 안 불렀다"인지 "없다"인지 구분되지 않으면
+ * 다음 근무자가 카드를 못 찾는 이유를 알 수 없다.
  */
 export function TaskDetailPage() {
   const { taskId } = useParams()
@@ -52,6 +62,7 @@ export function TaskDetailPage() {
   const { session } = useSession()
   const task = useTask(Number(taskId))
   const updateCache = useTaskCacheUpdate()
+  const cards = useHandoverCards()
 
   const [stage, setStage] = useState<Stage>('idle')
   const [confirmedByName, setConfirmedByName] = useState(session?.staff.name ?? '')
@@ -60,6 +71,8 @@ export function TaskDetailPage() {
 
   const [claimNotice, setClaimNotice] = useState<ClaimNotice | null>(null)
   const [claimError, setClaimError] = useState<string | null>(null)
+
+  const linkedCard = task.data && cards.data ? findCard(cards.data, task.data.handoverCardId) : null
 
   const complete = useMutation({
     mutationFn: (completedByName: string) =>
@@ -124,16 +137,29 @@ export function TaskDetailPage() {
 
   return (
     <PageLayout title="업무 상세" backTo="/tasks" backLabel="업무 목록으로">
-      <header>
-        <h1 className="text-3xl font-bold text-slate-900">업무 상세</h1>
-      </header>
-
       {task.isPending && <TasksLoading />}
       {task.isError && <TasksLoadFailed onRetry={() => void task.refetch()} />}
 
       {task.isSuccess && (
         <>
           <TaskDetail task={task.data} />
+
+          <LinkedHandoverCard
+            handoverCardId={task.data.handoverCardId}
+            isPending={cards.isPending}
+            isError={cards.isError}
+            onRetry={() => void cards.refetch()}
+            card={linkedCard}
+          />
+
+          {linkedCard !== null && linkedCard.exportAllowed && (
+            <Link
+              to={`/handover-cards/${linkedCard.id}/export`}
+              className="block rounded-2xl bg-primary px-6 py-5 text-center text-2xl font-semibold text-white hover:brightness-95"
+            >
+              기록 문구 출력
+            </Link>
+          )}
 
           {claimNotice !== null && <ClaimResult notice={claimNotice} />}
 
@@ -181,39 +207,139 @@ export function TaskDetailPage() {
   )
 }
 
+/** "업무 핵심 정보" — 담당 직종 / 담당자 / 기한 / 처리 상태 / 업무 내용을 라벨 달린 행으로 보여준다. */
 function TaskDetail({ task }: { task: TaskResponse }) {
   const completed = completionLabel(task)
+  const isDone = task.status === 'DONE'
 
   return (
-    <section className="flex flex-col gap-4 rounded-2xl border-2 border-slate-200 bg-white px-5 py-6">
-      <p className="text-lg text-slate-500">{task.careRecipientName}</p>
-      <p className="text-2xl font-semibold text-slate-900">{task.content}</p>
-      <p className="text-xl text-slate-700">
-        담당 {assigneeLabel(task)} · 기한 {dueTimeLabel(task)}
-      </p>
-      <p className="flex flex-wrap gap-2">
-        <span
-          className={`rounded-full px-4 py-2 text-lg font-semibold ${
-            task.status === 'DONE'
-              ? 'bg-slate-200 text-slate-700'
-              : 'bg-amber-100 text-amber-900'
-          }`}
-        >
-          {task.statusLabel}
-        </span>
-        {/* 담당 표시는 직종만 배정 · 담당자 확정 두 가지를 구분한다. (Manyfast F-IVFNPC display) */}
-        <span
-          className={`rounded-full px-4 py-2 text-lg font-semibold ${
-            task.assigneeName === null
-              ? 'bg-slate-100 text-slate-700'
-              : 'bg-teal-100 text-teal-900'
-          }`}
-        >
-          {claimStatusLabel(task)}
-        </span>
-      </p>
-      {completed !== null && <p className="text-lg text-slate-600">{completed}</p>}
+    <section
+      aria-label="업무 핵심 정보"
+      className="flex flex-col gap-4 rounded-2xl border-2 border-border-card bg-white px-5 py-6"
+    >
+      <h2 className="text-lg font-bold text-ink">업무 핵심 정보</h2>
+      <dl className="flex flex-col gap-3">
+        <InfoRow label="담당 직종">{task.assigneeJobRoleLabel ?? '미정'}</InfoRow>
+        <InfoRow label="담당자">
+          {task.assigneeName ?? '미지정'}
+          {/* 담당 표시는 직종만 배정 · 담당자 확정 두 가지를 구분한다. (Manyfast F-IVFNPC display) */}
+          <span
+            className={`ml-2 rounded-full px-3 py-1 text-base font-semibold ${
+              task.assigneeName === null
+                ? 'bg-btn-neutral text-ink-muted'
+                : 'border border-border-card bg-white text-ink'
+            }`}
+          >
+            {claimStatusLabel(task)}
+          </span>
+        </InfoRow>
+        {/* dueTime은 항상 당일 HH:MM(TIME 컬럼, docs/contracts/task-api.md)이라 별도 날짜값이 없다 —
+            그래서 "오늘"은 계산이 아니라 이 제품의 불변 조건이다. */}
+        <InfoRow label="기한">{dueTimeLabel(task)} (오늘)</InfoRow>
+        <InfoRow label="처리 상태">
+          <span className={`font-semibold ${isDone ? 'text-success' : 'text-primary'}`}>
+            {task.statusLabel}
+          </span>
+        </InfoRow>
+        <InfoRow label="업무 내용">{task.content}</InfoRow>
+      </dl>
+      {completed !== null && <p className="text-lg text-ink-muted">{completed}</p>}
     </section>
+  )
+}
+
+function InfoRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <dt className="text-lg font-semibold text-ink-muted">{label}</dt>
+      <dd className="text-xl text-ink">{children}</dd>
+    </div>
+  )
+}
+
+/**
+ * "연결된 인계 카드" — task.handoverCardId로 오늘 카드 목록에서 찾아 어르신·인계 일시·분류·
+ * 상태 변화·조치·다음 행동·원문 근거를 보여준다. (Manyfast F-SNBVHR)
+ *
+ * 카드를 찾지 못하면 블록을 생략하지 않고 그 자리에 안내를 남긴다. (DESIGN.md §8.5 Empty State)
+ */
+function LinkedHandoverCard({
+  handoverCardId,
+  isPending,
+  isError,
+  onRetry,
+  card,
+}: {
+  handoverCardId: number
+  isPending: boolean
+  isError: boolean
+  onRetry: () => void
+  card: HandoverCard | null
+}) {
+  return (
+    <section
+      aria-label="연결된 인계 카드"
+      className="flex flex-col gap-3 rounded-2xl border-2 border-border-card bg-white px-5 py-6"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-bold text-ink">연결된 인계 카드</h2>
+        {card !== null && (
+          <Link
+            to={`/handover-cards/${handoverCardId}`}
+            className="inline-flex items-center gap-1 text-lg font-semibold text-primary hover:underline"
+          >
+            원문 근거 확인 가능 <ArrowRight size={18} strokeWidth={2.4} aria-hidden="true" />
+          </Link>
+        )}
+      </div>
+
+      {isPending && <CardsLoading />}
+      {isError && <CardsLoadFailed onRetry={onRetry} />}
+      {!isPending && !isError && card === null && (
+        <p className="rounded-xl border-2 border-amber-400 bg-amber-50 px-4 py-3 text-lg text-amber-900">
+          연결된 인계 카드를 찾지 못했습니다. 오늘 목록에 없는 카드일 수 있습니다.
+        </p>
+      )}
+      {card !== null && <LinkedCardBody card={card} />}
+    </section>
+  )
+}
+
+function LinkedCardBody({ card }: { card: HandoverCard }) {
+  const observed = observedDateTimeLabel(card.observedAt)
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xl font-bold text-ink">
+        {card.careRecipientName ?? '대상 어르신 미정'}
+        {card.careRecipientName && <span className="ml-1 text-lg font-normal text-ink-muted">어르신</span>}
+      </p>
+      <p className="text-lg text-ink-muted">인계 일시 {observed ?? '시각 미상'}</p>
+      <span
+        className={`w-fit rounded-full px-3 py-1 text-base font-semibold ${
+          card.safetyRelated ? 'bg-primary-soft text-primary' : 'bg-btn-neutral text-ink-muted'
+        }`}
+      >
+        {card.safetyRelated ? '안전' : '일반'}
+      </span>
+
+      <dl className="flex flex-col gap-2">
+        {cardEntries(card).map((entry) => (
+          <div key={entry.key} className="flex flex-col gap-0.5">
+            <dt className="text-base font-semibold text-ink-muted">{entry.label}</dt>
+            <dd className={`text-lg ${entry.value === null ? 'text-ink-tertiary' : 'text-ink'}`}>
+              {entry.value ?? '없음'}
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      {/* 원문 근거는 상시 펼침 — 접거나 클릭으로 가리지 않는다. (Manyfast F-SNBVHR rules) */}
+      <figure className="rounded-xl border-l-4 border-border-card bg-surface-card px-4 py-3">
+        <figcaption className="text-base font-semibold text-ink-muted">원문 근거</figcaption>
+        <blockquote className="mt-1 text-lg text-ink">“{card.evidenceText}”</blockquote>
+      </figure>
+    </div>
   )
 }
 
@@ -223,12 +349,12 @@ function ClaimResult({ notice }: { notice: ClaimNotice }) {
     <section
       role="status"
       className={`flex flex-col gap-2 rounded-2xl border-2 px-5 py-6 ${
-        notice.tone === 'success' ? 'border-teal-600 bg-teal-50' : 'border-amber-400 bg-amber-50'
+        notice.tone === 'success' ? 'border-success/40 bg-success/10' : 'border-amber-400 bg-amber-50'
       }`}
     >
       <p
         className={`text-xl font-semibold ${
-          notice.tone === 'success' ? 'text-teal-900' : 'text-amber-900'
+          notice.tone === 'success' ? 'text-success' : 'text-amber-900'
         }`}
       >
         {notice.text}
@@ -240,8 +366,8 @@ function ClaimResult({ notice }: { notice: ClaimNotice }) {
 /** n59 — 수행 확인됨? */
 function ConfirmPerformed({ onYes, onNo }: { onYes: () => void; onNo: () => void }) {
   return (
-    <section className="flex flex-col gap-4 rounded-2xl border-2 border-teal-600 bg-teal-50 px-5 py-6">
-      <p className="text-xl font-semibold text-teal-900">
+    <section className="flex flex-col gap-4 rounded-2xl border-2 border-primary bg-primary-soft px-5 py-6">
+      <p className="text-xl font-semibold text-primary">
         수행자가 이 업무를 처리했다고 확인하셨나요?
       </p>
       <BigButton onClick={onYes}>예, 확인했습니다</BigButton>
@@ -272,10 +398,10 @@ function DelegateModal({
     <section
       role="dialog"
       aria-label="완료 확인"
-      className="flex flex-col gap-4 rounded-2xl border-2 border-teal-600 bg-white px-5 py-6"
+      className="flex flex-col gap-4 rounded-2xl border-2 border-primary bg-white px-5 py-6"
     >
-      <p className="text-xl font-semibold text-slate-900">확인한 사람의 이름을 남겨 주세요</p>
-      <p className="text-lg text-slate-600">
+      <p className="text-xl font-semibold text-ink">확인한 사람의 이름을 남겨 주세요</p>
+      <p className="text-lg text-ink-muted">
         담당자와 다른 이름이면 대리 완료로 기록됩니다.
       </p>
 
@@ -285,7 +411,7 @@ function DelegateModal({
         </p>
       )}
 
-      <label htmlFor="confirmedByName" className="text-xl font-semibold text-slate-900">
+      <label htmlFor="confirmedByName" className="text-xl font-semibold text-ink">
         확인자 이름
       </label>
       <input
@@ -293,7 +419,7 @@ function DelegateModal({
         value={confirmedByName}
         onChange={(event) => onChangeName(event.target.value)}
         maxLength={50}
-        className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
+        className="w-full rounded-2xl border-2 border-border-card px-5 py-4 text-2xl text-ink focus:border-primary focus:outline-none"
       />
 
       <BigButton onClick={onSubmit}>{saving ? '처리하는 중…' : '완료 처리'}</BigButton>
@@ -320,22 +446,22 @@ function CompletionResult({
       className={`flex flex-col gap-4 rounded-2xl border-2 px-5 py-6 ${
         result.alreadyCompleted
           ? 'border-amber-400 bg-amber-50'
-          : 'border-teal-600 bg-teal-50'
+          : 'border-success/40 bg-success/10'
       }`}
     >
       <h2
         className={`text-2xl font-bold ${
-          result.alreadyCompleted ? 'text-amber-900' : 'text-teal-900'
+          result.alreadyCompleted ? 'text-amber-900' : 'text-success'
         }`}
       >
         {result.alreadyCompleted ? '이미 완료 처리된 업무입니다' : '완료 처리했습니다'}
       </h2>
       {result.notice !== null && (
-        <p className={result.alreadyCompleted ? 'text-lg text-amber-900' : 'text-lg text-teal-900'}>
+        <p className={result.alreadyCompleted ? 'text-lg text-amber-900' : 'text-lg text-ink'}>
           {result.notice}
         </p>
       )}
-      {completed !== null && <p className="text-lg text-slate-700">{completed}</p>}
+      {completed !== null && <p className="text-lg text-ink-muted">{completed}</p>}
 
       <BigButton onClick={onBackToList}>업무 목록으로</BigButton>
     </section>
