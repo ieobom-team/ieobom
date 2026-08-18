@@ -24,7 +24,7 @@ export function HandoverCardBody({ card }: { card: HandoverCard }) {
       <div className="flex flex-wrap items-center gap-2">
         <CardBadges card={card} />
         {observedTime !== null && (
-          <span className="text-lg text-slate-500">관찰 {observedTime}</span>
+          <span className="text-lg text-ink-muted">관찰 {observedTime}</span>
         )}
       </div>
 
@@ -33,12 +33,12 @@ export function HandoverCardBody({ card }: { card: HandoverCard }) {
       <dl className="flex flex-col gap-3">
         {cardEntries(card).map((entry) => (
           <div key={entry.key} className="flex flex-col gap-1">
-            <dt className="text-lg font-semibold text-slate-500">{entry.label}</dt>
-            <dd className={`text-xl ${entry.value === null ? 'text-slate-400' : 'text-slate-900'}`}>
+            <dt className="text-lg font-semibold text-ink-muted">{entry.label}</dt>
+            <dd className={`text-xl ${entry.value === null ? 'text-ink-tertiary' : 'text-ink'}`}>
               {entry.value ?? '없음'}
             </dd>
             {entry.key === 'nextAction' && suggestion !== null && (
-              <dd className="text-lg text-slate-500">{suggestion}</dd>
+              <dd className="text-lg text-ink-muted">{suggestion}</dd>
             )}
           </div>
         ))}
@@ -54,23 +54,26 @@ export function HandoverCardBody({ card }: { card: HandoverCard }) {
  *
  * 둘 다 서버가 정한 값이다. 안전 여부는 지정 키워드 자동 판정이나 직원 직접 표시에서 오고,
  * 검토 상태는 카드가 만들어질 때 검토 필요로 시작한다.
+ *
+ * 안전 관련·검토 필요 배지는 같은 primary 톤을 쓴다(DESIGN.md §3 — 안전 주의 뱃지도 status-attention과
+ * 같은 Primary Orange). 둘 다 강조 배지라 아이콘·문구로 구분한다. 검토 완료만 success(초록)로 갈린다.
  */
 export function CardBadges({ card }: { card: HandoverCard }) {
   return (
     <>
       {card.safetyRelated && (
-        <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-3 py-1 text-lg font-bold text-rose-900">
+        <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-3 py-1 text-lg font-bold text-primary">
           <AlertTriangle size={18} strokeWidth={2.4} aria-hidden="true" className="shrink-0" />
           안전 관련
         </span>
       )}
       {card.reviewStatus === 'NEEDS_REVIEW' && (
-        <span className="rounded-full bg-amber-100 px-3 py-1 text-lg font-bold text-amber-900">
+        <span className="rounded-full bg-primary-soft px-3 py-1 text-lg font-bold text-primary">
           검토 필요
         </span>
       )}
       {card.reviewStatus === 'REVIEWED' && (
-        <span className="rounded-full bg-teal-100 px-3 py-1 text-lg font-bold text-teal-900">
+        <span className="rounded-full bg-success/10 px-3 py-1 text-lg font-bold text-success">
           검토 완료
         </span>
       )}
@@ -107,12 +110,12 @@ export function CardUncertainNotes({ card }: { card: HandoverCard }) {
  */
 export function CardEvidence({ card }: { card: HandoverCard }) {
   return (
-    <figure className="rounded-xl border-l-4 border-slate-300 bg-slate-50 px-4 py-3">
-      <figcaption className="text-lg font-semibold text-slate-500">근거 원문</figcaption>
-      <blockquote className="mt-1 text-xl text-slate-800">“{card.evidenceText}”</blockquote>
+    <figure className="rounded-xl border-l-4 border-border-card bg-surface-card px-4 py-3">
+      <figcaption className="text-lg font-semibold text-ink-muted">근거 원문</figcaption>
+      <blockquote className="mt-1 text-xl text-ink">“{card.evidenceText}”</blockquote>
       {card.hasAudio && (
         <div className="mt-3">
-          <p className="text-lg font-semibold text-slate-500">남기신 원본 음성</p>
+          <p className="text-lg font-semibold text-ink-muted">남기신 원본 음성</p>
           {/* preload="none": 카드가 여러 장 있는 목록에서 누르지도 않은 음성을 미리 받지 않는다. */}
           <audio
             controls
