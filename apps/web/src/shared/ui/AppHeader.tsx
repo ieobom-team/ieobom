@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Bell, ChevronLeft, KeyRound } from 'lucide-react'
-import { Link } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { useUnreadCount } from '../../features/notification/useNotifications'
 import { findEntryRole, homePathOf } from '../../features/session/entryRole'
 import { PinSettingsModal } from '../../features/session/PinSettingsModal'
@@ -70,10 +70,28 @@ export function AppHeader({
   const isMobile = useIsMobileHeader()
   const [isSessionMenuOpen, setIsSessionMenuOpen] = useState(false)
   const sessionMenuRef = useRef<HTMLDivElement>(null)
+  const location = useLocation()
+  const navigate = useNavigate()
 
   const shouldShowBack = showBack || Boolean(backTo) || Boolean(onBack)
   const homePath = session ? homePathOf(session.entryRole) : '/'
   const role = session ? findEntryRole(session.entryRole) : null
+
+  /**
+   * 뒤로가기 — 실제로 들어온 이전 화면이 있으면 거기로, 없으면(알림함·직접 URL·새로고침 등)
+   * 화면이 지정한 고정 `backTo`로 폴백한다. (#134)
+   *
+   * `location.key === 'default'`는 이 라우터 인스턴스에서 아직 클라이언트 내비게이션을 한 번도
+   * 겪지 않은 첫 진입(또는 새로고침으로 라우터 상태가 새로 생긴 경우)임을 뜻한다 — 그때는
+   * `navigate(-1)`이 앱 밖 히스토리로 나갈 수 있어 안전하지 않으므로 고정 경로를 쓴다.
+   */
+  const handleSmartBack = () => {
+    if (location.key !== 'default') {
+      navigate(-1)
+      return
+    }
+    navigate(backTo ?? homePath)
+  }
 
   const handlePinUpdateSuccess = (updatedStaff: Staff) => {
     updateStaff(updatedStaff)
@@ -257,24 +275,14 @@ export function AppHeader({
         {/* 2행: title이 있을 때만 노출 */}
         {title &&
           (shouldShowBack ? (
-            onBack ? (
-              <button
-                type="button"
-                onClick={onBack}
-                className={`${TITLE_ROW_BASE} ${TITLE_ROW_INTERACTIVE} border-t border-border-divider`}
-                aria-label={backLabel}
-              >
-                {titleRowContent}
-              </button>
-            ) : (
-              <Link
-                to={backTo ?? homePath}
-                className={`${TITLE_ROW_BASE} ${TITLE_ROW_INTERACTIVE} border-t border-border-divider`}
-                aria-label={backLabel}
-              >
-                {titleRowContent}
-              </Link>
-            )
+            <button
+              type="button"
+              onClick={onBack ?? handleSmartBack}
+              className={`${TITLE_ROW_BASE} ${TITLE_ROW_INTERACTIVE} border-t border-border-divider`}
+              aria-label={backLabel}
+            >
+              {titleRowContent}
+            </button>
           ) : (
             <div className={`${TITLE_ROW_BASE} border-t border-border-divider`}>
               {titleRowContent}

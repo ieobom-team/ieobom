@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router'
+import { Link, MemoryRouter, Route, Routes } from 'react-router'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppHeader } from './AppHeader'
@@ -170,5 +170,72 @@ describe('sm 미만(모바일)', () => {
     renderHeader()
 
     expect(screen.getByRole('link', { name: /알림함/ })).toBeInTheDocument()
+  })
+})
+
+/**
+ * 2행 뒤로가기 — 실제로 들어온 이전 화면이 있으면 거기로, 없으면 고정 backTo로 폴백한다. (#134)
+ *
+ * "관리자 현황 → 인계 카드 상세 → 뒤로가기"처럼 화면마다 다른 곳에서 들어오는 공유 화면에서,
+ * 뒤로가기가 항상 같은 고정 목록으로만 가던 문제를 고친다.
+ */
+describe('2행 뒤로가기 (#134 — 히스토리 기반 + 고정 backTo 폴백)', () => {
+  beforeEach(() => {
+    mockMatchMedia(false)
+  })
+
+  function renderInRoutes(initialEntries: string[]) {
+    return render(
+      <QueryClientProvider client={createQueryClient()}>
+        <SessionProvider>
+          <MemoryRouter initialEntries={initialEntries}>
+            <Routes>
+              <Route
+                path="/b"
+                element={
+                  <>
+                    <AppHeader title="B 화면" backTo="/fallback" backLabel="뒤로" showSession={false} />
+                    <Link to="/a">A로 이동</Link>
+                  </>
+                }
+              />
+              <Route
+                path="/a"
+                element={
+                  <>
+                    <AppHeader title="A 화면" backTo="/fallback" backLabel="뒤로" showSession={false} />
+                    <p>A 화면 본문</p>
+                  </>
+                }
+              />
+              <Route path="/fallback" element={<p>폴백 화면 본문</p>} />
+            </Routes>
+          </MemoryRouter>
+        </SessionProvider>
+      </QueryClientProvider>,
+    )
+  }
+
+  it('앱 안에서 실제로 이동해 들어온 경우, 뒤로가기는 고정 backTo가 아니라 실제 이전 화면으로 간다', async () => {
+    const user = userEvent.setup()
+    renderInRoutes(['/b'])
+
+    await user.click(screen.getByRole('link', { name: 'A로 이동' }))
+    expect(await screen.findByText('A 화면 본문')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '뒤로' }))
+
+    // 고정 backTo("폴백 화면")가 아니라 실제로 있었던 B 화면으로 돌아간다.
+    expect(await screen.findByRole('link', { name: 'A로 이동' })).toBeInTheDocument()
+    expect(screen.queryByText('폴백 화면 본문')).not.toBeInTheDocument()
+  })
+
+  it('알림함·직접 URL 등 앱 안에서 이동해 들어온 이력이 없으면, 고정 backTo로 폴백한다', async () => {
+    const user = userEvent.setup()
+    renderInRoutes(['/a'])
+
+    await user.click(screen.getByRole('button', { name: '뒤로' }))
+
+    expect(await screen.findByText('폴백 화면 본문')).toBeInTheDocument()
   })
 })

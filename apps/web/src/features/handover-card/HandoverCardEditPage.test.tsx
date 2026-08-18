@@ -362,7 +362,7 @@ describe('대상 어르신 지정 (n24 → 확정)', () => {
 
     expect(await screen.findByRole('heading', { name: /^박순자/ })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('link', { name: '목록으로' }))
+    await user.click(screen.getByRole('button', { name: '목록으로' }))
     expect(await screen.findByRole('heading', { name: /박순자/ })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /가리지 못한 항목/ })).not.toBeInTheDocument()
   })
