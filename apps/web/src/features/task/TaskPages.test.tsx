@@ -230,7 +230,7 @@ describe('업무 목록 (n31 · n32)', () => {
 
     await user.click(screen.getByRole('button', { name: /^오늘의 업무/ }))
 
-    expect(await screen.findByRole('heading', { name: '오늘의 업무' })).toBeInTheDocument()
+    expect(await screen.findByText('오늘의 후속 업무')).toBeInTheDocument()
   })
 
   it('담당·기한·상태를 함께 보여 준다', async () => {
@@ -263,6 +263,27 @@ describe('업무 목록 (n31 · n32)', () => {
     expect(열린업무목록.getByText('물 챙겨 드리기')).toBeInTheDocument()
     // '내가 처리할게요'가 뜨는 업무는 직종 배지로 '직종만 배정'을 함께 보여 준다.
     expect(within(열린업무목록.getByRole('button', { name: /물 챙겨 드리기/ })).getByText('직종만 배정')).toBeInTheDocument()
+  })
+
+  it('현황 요약 타일이 내게 배정된 업무 + 내 직종에 열려 있는 업무 기준으로 정확히 표시된다', async () => {
+    목록_응답 = {
+      status: 200,
+      body: {
+        date: '2026-08-12',
+        tasks: [
+          업무({ id: 4, content: '저녁 식사량 확인', assigneeName: '김하늘', status: 'PENDING', statusLabel: '미처리' }),
+          열린업무({ id: 5, content: '물 챙겨 드리기', assigneeJobRole: 'CAREGIVER', assigneeJobRoleLabel: '요양보호사' }),
+          // 다른 직원에게 배정된 업무는 이 화면 범위 밖이라 집계에서도 빠져야 한다.
+          업무({ id: 6, content: '이도윤 담당 업무', assigneeName: '이도윤', status: 'DONE', statusLabel: '완료' }),
+        ],
+      },
+    }
+    renderApp()
+
+    await screen.findByText('저녁 식사량 확인')
+    // 전체 = 내 업무(1) + 열린 업무(1) = 2, 둘 다 미처리라 전체·미처리 타일이 함께 '2개'
+    expect(screen.getAllByText('2개')).toHaveLength(2)
+    expect(screen.getByText('0개')).toBeInTheDocument() // 완료 없음. 다른 직원 업무는 집계에서 빠진다
   })
 
   it('다른 직원에게 배정되었거나 다른 직종에 열린 업무는 보이지 않는다', async () => {
@@ -308,7 +329,7 @@ describe('업무 상세와 완료 처리 (n35 · n59 · n60 · n33)', () => {
     await user.click(await screen.findByRole('button', { name: '완료 처리' }))
     await user.click(screen.getByRole('button', { name: '아니오' }))
 
-    expect(await screen.findByRole('heading', { name: '오늘의 업무' })).toBeInTheDocument()
+    expect(await screen.findByText('오늘의 후속 업무')).toBeInTheDocument()
   })
 
   it('수행 확인 후 확인자 이름으로 완료 처리하면 대리 완료 여부와 확인자를 보여 준다', async () => {
