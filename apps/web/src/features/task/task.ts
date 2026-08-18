@@ -29,6 +29,30 @@ export function myOpenTasks(
   return tasks.filter((task) => task.assigneeName === null && task.assigneeJobRole === staff?.jobRole)
 }
 
+export type MyTaskStats = {
+  totalCount: number
+  pendingCount: number
+  doneCount: number
+}
+
+/**
+ * `TaskListPage` 현황 요약 타일 전용 집계.
+ *
+ * 조직 전체가 아니라 이 화면이 원래 보여주는 범위(내게 배정된 업무 + 내 직종에 열려 있는 업무)만
+ * 더한다. 두 목록은 담당자 조건이 서로 배타적(이름 일치 vs 이름 없음)이라 겹치지 않는다.
+ */
+export function myTaskStats(
+  myTasks: readonly TaskResponse[],
+  openTasks: readonly TaskResponse[],
+): MyTaskStats {
+  const all = [...myTasks, ...openTasks]
+  return {
+    totalCount: all.length,
+    pendingCount: all.filter((task) => task.status === 'PENDING').length,
+    doneCount: all.filter((task) => task.status === 'DONE').length,
+  }
+}
+
 /** 담당 직종·이름 중 있는 것을 한 줄로. 담당은 직종 또는 이름 중 하나만 있어도 된다. */
 export function assigneeLabel(task: TaskResponse): string {
   if (task.assigneeName !== null && task.assigneeJobRoleLabel !== null) {
