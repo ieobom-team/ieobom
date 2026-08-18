@@ -54,7 +54,7 @@ export function AppHeader({
 
   return (
     <>
-      <header className={`border-b border-slate-200 bg-white ${className}`}>
+      <header className={`border-b border-border-divider bg-white ${className}`}>
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
           {/* 좌측: 뒤로가기 또는 로고/홈 */}
           <div className="flex items-center gap-3">
@@ -63,7 +63,7 @@ export function AppHeader({
                 <button
                   type="button"
                   onClick={onBack}
-                  className="flex min-h-12 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-lg font-semibold text-slate-800 hover:border-teal-600 hover:bg-teal-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300"
+                  className="flex min-h-12 items-center gap-1.5 rounded-xl border border-border-card bg-white px-3 py-2 text-lg font-semibold text-ink hover:border-primary hover:bg-primary-soft focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
                   aria-label={backLabel}
                 >
                   <ArrowLeft size={20} strokeWidth={2.4} aria-hidden="true" />
@@ -72,7 +72,7 @@ export function AppHeader({
               ) : (
                 <Link
                   to={backTo ?? homePath}
-                  className="flex min-h-12 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-lg font-semibold text-slate-800 hover:border-teal-600 hover:bg-teal-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300"
+                  className="flex min-h-12 items-center gap-1.5 rounded-xl border border-border-card bg-white px-3 py-2 text-lg font-semibold text-ink hover:border-primary hover:bg-primary-soft focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
                   aria-label={backLabel}
                 >
                   <ArrowLeft size={20} strokeWidth={2.4} aria-hidden="true" />
@@ -82,14 +82,14 @@ export function AppHeader({
             ) : (
               <Link
                 to={homePath}
-                className="flex items-center gap-2 text-2xl font-bold tracking-tight text-teal-800 hover:text-teal-900 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300"
+                className="flex items-center gap-2 text-2xl font-bold tracking-tight text-primary hover:brightness-90 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
               >
                 <span>이어봄</span>
               </Link>
             )}
 
             {title && (
-              <span className="hidden text-xl font-bold text-slate-900 sm:inline">
+              <span className="hidden text-xl font-bold text-ink sm:inline">
                 · {title}
               </span>
             )}
@@ -103,7 +103,7 @@ export function AppHeader({
                 id="pin-settings-btn"
                 type="button"
                 onClick={() => setIsPinModalOpen(true)}
-                className="flex min-h-10 items-center gap-1 rounded-xl border border-slate-300 bg-white px-2.5 py-1 text-sm font-semibold text-slate-700 whitespace-nowrap hover:border-teal-600 hover:bg-teal-50 hover:text-teal-800 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300 sm:px-3 sm:py-1.5 sm:text-base"
+                className="flex min-h-10 items-center gap-1 rounded-xl border border-border-card bg-white px-2.5 py-1 text-sm font-semibold text-ink-muted whitespace-nowrap hover:border-primary hover:bg-primary-soft hover:text-primary focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 sm:px-3 sm:py-1.5 sm:text-base"
                 title={session.staff.hasPin ? 'PIN 번호 변경 / 해제' : 'PIN 번호 신규 등록'}
               >
                 <KeyRound size={16} strokeWidth={2.2} aria-hidden="true" />
@@ -113,7 +113,7 @@ export function AppHeader({
               <Link
                 id="notification-inbox-btn"
                 to="/notifications"
-                className="relative flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-slate-300 bg-white p-2 text-slate-700 hover:border-teal-600 hover:bg-teal-50 hover:text-teal-800 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300 sm:px-3 sm:py-1.5"
+                className="relative flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-border-card bg-white p-2 text-ink-muted hover:border-primary hover:bg-primary-soft hover:text-primary focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 sm:px-3 sm:py-1.5"
                 aria-label={
                   unreadCount > 0 ? `알림함 (미읽음 ${unreadCount}건)` : '알림함'
                 }
@@ -129,10 +129,10 @@ export function AppHeader({
                 )}
               </Link>
 
-              <div className="flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-sm whitespace-nowrap sm:gap-2 sm:px-3 sm:py-1.5 sm:text-base">
-                <span className="font-semibold text-slate-900">{session.staff.name}</span>
-                <span className="hidden text-slate-500 sm:inline">{session.staff.code}</span>
-                <span className="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-800 sm:text-sm">
+              <div className="flex items-center gap-1.5 rounded-full bg-btn-neutral px-2.5 py-1 text-sm whitespace-nowrap sm:gap-2 sm:px-3 sm:py-1.5 sm:text-base">
+                <span className="font-semibold text-ink">{session.staff.name}</span>
+                <span className="hidden text-ink-muted sm:inline">{session.staff.code}</span>
+                <span className="rounded-full bg-primary-soft px-2 py-0.5 text-xs font-semibold text-primary sm:text-sm">
                   {role.label}
                 </span>
                 {session.staff.hasPin && (
@@ -147,7 +147,7 @@ export function AppHeader({
               <button
                 type="button"
                 onClick={leave}
-                className="rounded-xl border border-slate-300 bg-white px-2.5 py-1 text-sm font-semibold text-slate-700 whitespace-nowrap hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300 sm:px-3 sm:py-1.5 sm:text-base"
+                className="rounded-xl border border-border-card bg-white px-2.5 py-1 text-sm font-semibold text-ink-muted whitespace-nowrap hover:border-primary hover:bg-primary-soft focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 sm:px-3 sm:py-1.5 sm:text-base"
               >
                 본인 바꾸기
               </button>

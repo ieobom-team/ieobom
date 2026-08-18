@@ -46,7 +46,7 @@ export function PageLayout({
   const widthClass = MAX_WIDTH_CLASSES[maxWidth]
 
   return (
-    <div className={`min-h-svh bg-slate-50 text-slate-900 ${className}`}>
+    <div className={`min-h-svh bg-canvas text-ink ${className}`}>
       <AppHeader
         title={title}
         backTo={backTo}

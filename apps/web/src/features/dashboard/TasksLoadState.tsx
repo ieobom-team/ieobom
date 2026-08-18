@@ -8,16 +8,16 @@ import { BigButton } from '../../shared/ui/BigButton'
  * 실패한 영역에만 안내를 붙인다. (Manyfast F-HQTFLK exceptions)
  */
 export function TasksLoading() {
-  return <p className="text-xl text-slate-600">업무를 불러오는 중입니다…</p>
+  return <p className="text-xl text-ink-muted">업무를 불러오는 중입니다…</p>
 }
 
 export function TasksLoadFailed({ onRetry }: { onRetry: () => void }) {
   return (
     <div
       role="alert"
-      className="flex flex-col gap-4 rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4"
+      className="flex flex-col gap-4 rounded-2xl border-2 border-primary bg-primary-soft px-5 py-4"
     >
-      <p className="text-xl text-amber-900">업무를 불러오지 못했습니다.</p>
+      <p className="text-xl text-ink">업무를 불러오지 못했습니다.</p>
       <BigButton tone="plain" onClick={onRetry}>
         다시 불러오기
       </BigButton>
