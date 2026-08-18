@@ -26,7 +26,7 @@
 |---|---|---|
 | 1 | **Manyfast** | 개발 명세의 유일한 진실 공급원(SSOT). PRD · Requirement · Feature · Spec |
 | 2 | **GitHub Issue** | Manyfast 명세를 하나의 검토 가능한 구현 단위로 배정한 작업 지시 |
-| 3 | **코드 · PR · `docs/`** | 실제 구현과 기술 계약(API · JSON · DB) |
+| 3 | **코드 · PR · `docs/`** | 실제 구현과 기술 계약(API · JSON · DB · UI 디자인) |
 | 4 | **Notion** | 회의·인터뷰·일정·결정 배경. **개발 요구사항으로 직접 사용하지 않는다** |
 
 - Notion 회의에서 나온 내용은 **Manyfast에 반영·버전 저장되기 전까지 개발 요구사항이 아니다.**
@@ -138,3 +138,4 @@ Claude Code가 아닌 에이전트도 이 파일들을 절차서로 읽고 같�
 - [docs/architecture.md](docs/architecture.md) — 디렉터리 구조, 패키지·엔티티 설계
 - [docs/conventions.md](docs/conventions.md) — 브랜치 · 커밋 · PR · 라벨 규칙
 - [docs/contracts/](docs/contracts) — API · JSON · DB 계약
+- [docs/DESIGN.md](docs/DESIGN.md) — UI 디자인 시스템, 컬러 팔레트, 컴포넌트 패턴

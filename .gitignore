@@ -35,3 +35,8 @@ scratch/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# --- 목업 / 임시 리소스 ---
+0818Tue-ui/
+0818Tue-ui-2/
+
