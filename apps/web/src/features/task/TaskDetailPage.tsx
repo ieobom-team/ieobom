@@ -181,7 +181,14 @@ export function TaskDetailPage() {
             </p>
           )}
 
-          {result !== null && <CompletionResult result={result} onBackToList={() => navigate('/tasks')} />}
+          {/* replace: true — 뒤로가기를 누르면 방금 완료 처리를 끝낸 이 화면이 아니라
+              업무 상세로 들어오기 전 화면으로 곧장 가야 한다. (#134) */}
+          {result !== null && (
+            <CompletionResult
+              result={result}
+              onBackToList={() => navigate('/tasks', { replace: true })}
+            />
+          )}
 
           {result === null && stage === 'idle' && (
             <BigButton onClick={startConfirm}>완료 처리</BigButton>

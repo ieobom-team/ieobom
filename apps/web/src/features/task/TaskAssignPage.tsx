@@ -147,10 +147,12 @@ export function TaskAssignPage() {
         )}
 
       {created !== null && (
+        // replace: true — 뒤로가기를 누르면 방금 배정을 끝낸 이 "배정 완료" 화면이 아니라
+        // 배정하러 들어오기 전 화면으로 곧장 가야 한다. (#134)
         <TaskCreatedNotice
           task={created}
-          onBackToCard={() => navigate(`/handover-cards/${cardId}`)}
-          onBackToList={() => navigate('/handover-cards')}
+          onBackToCard={() => navigate(`/handover-cards/${cardId}`, { replace: true })}
+          onBackToList={() => navigate('/handover-cards', { replace: true })}
         />
       )}
     </PageLayout>

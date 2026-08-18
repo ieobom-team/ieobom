@@ -101,7 +101,9 @@ export function HandoverCardEditPage() {
         return
       }
       setNotice(null)
-      navigate(`/handover-cards/${parsed}`)
+      // replace: true — 뒤로가기를 누르면 방금 저장을 끝낸 이 수정 화면이 아니라
+      // 수정하러 들어오기 전 화면으로 곧장 가야 한다. (#134)
+      navigate(`/handover-cards/${parsed}`, { replace: true })
     },
     onError: (error: unknown) => fail(error, '저장하지 못했습니다. 잠시 뒤 다시 눌러 주세요.'),
   })

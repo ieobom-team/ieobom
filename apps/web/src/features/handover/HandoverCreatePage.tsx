@@ -775,7 +775,9 @@ function SavedNotice({
         <BigButton tone="plain" onClick={onAnother}>
           하나 더 남기기
         </BigButton>
-        <BigButton onClick={() => navigate('/field')}>확인</BigButton>
+        {/* replace: true — 뒤로가기를 누르면 방금 제출을 끝낸 이 "제출 완료" 화면이 아니라
+            남기러 들어오기 전 화면으로 곧장 가야 한다. (#134) */}
+        <BigButton onClick={() => navigate('/field', { replace: true })}>확인</BigButton>
       </div>
     </PageLayout>
   )
@@ -851,7 +853,9 @@ function QueuedNotice({
         <BigButton tone="plain" onClick={onAnother}>
           하나 더 남기기
         </BigButton>
-        <BigButton onClick={() => navigate('/field')}>현장 홈으로</BigButton>
+        {/* replace: true — 뒤로가기를 누르면 방금 임시 저장을 끝낸 이 화면이 아니라
+            남기러 들어오기 전 화면으로 곧장 가야 한다. (#134) */}
+        <BigButton onClick={() => navigate('/field', { replace: true })}>현장 홈으로</BigButton>
       </div>
     </PageLayout>
   )
