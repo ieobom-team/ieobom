@@ -470,7 +470,7 @@ function RecipientSection({
   loading: boolean
   loadFailed: boolean
   onRetryLoad: () => void
-  onPick: (id: number) => void
+  onPick: (id: number | null) => void
 }) {
   const [keyword, setKeyword] = useState('')
   const shown = useMemo(() => {
@@ -482,12 +482,31 @@ function RecipientSection({
       (recipient) => recipient.name.includes(trimmed) || recipient.code.includes(trimmed),
     )
   }, [keyword, recipients])
+  const selected = recipients.find((recipient) => recipient.id === draft.careRecipientId) ?? null
 
   return (
     <section aria-labelledby="target-heading" className="flex flex-col gap-4">
       <h2 id="target-heading" className="text-2xl font-bold text-ink">
         어느 어르신이신가요?
       </h2>
+
+      {/* 자동 매칭이든 직접 선택이든, 지금 누구로 채워져 있는지 목록 밖에서도 바로 보이게 한다. (#142) */}
+      {selected !== null && (
+        <div className="flex items-center justify-between gap-4 rounded-lg border-2 border-primary bg-primary-soft px-5 py-4">
+          <span className="flex items-center gap-2 text-xl font-semibold text-ink">
+            <Check className="size-6 shrink-0 text-primary" aria-hidden="true" />
+            선택됨: {selected.name} 어르신
+            <span className="text-lg font-normal text-ink-muted">{selected.code}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => onPick(null)}
+            className="shrink-0 text-lg font-semibold text-ink-muted underline hover:text-ink"
+          >
+            선택 해제
+          </button>
+        </div>
+      )}
 
       <label htmlFor="recipientKeyword" className="text-xl text-ink-muted">
         이름이나 식별번호로 찾기
@@ -522,6 +541,9 @@ function RecipientSection({
               onClick={() => onPick(recipient.id)}
             >
               <span className="flex flex-wrap items-baseline gap-x-3">
+                {draft.careRecipientId === recipient.id && (
+                  <Check className="size-6 shrink-0 text-primary" aria-hidden="true" />
+                )}
                 <span>{recipient.name}</span>
                 <span className="text-lg font-normal text-ink-muted">{recipient.code}</span>
               </span>

@@ -8,7 +8,10 @@ import type { CareRecipient } from '../recipient/recipientApi'
  * (`F-SNBVHR`)에서만 일어나고 이 매칭과는 무관하다.
  */
 export type RecipientMatchResult = {
-  /** 이름이 원문에 정확히 1명만 포함될 때만 채워진다. 그 외에는 `null`(자동 채움 안 함). */
+  /**
+   * 이름(3글자면 성 뺀 나머지도 인정)이 원문과 정확히 1명만 일치할 때만 채워진다.
+   * 그 외에는 `null`(자동 채움 안 함).
+   */
   autoSelectedId: number | null
   /** 유사도 높은 순으로 정렬한 후보 목록. 원문이 비어 있으면 원래 순서를 그대로 돌려준다. */
   sorted: CareRecipient[]
@@ -25,17 +28,30 @@ export function matchRecipients(
 
   const scored = recipients.map((recipient) => ({
     recipient,
-    fullMatch: text.includes(recipient.name),
+    // 이름이 3글자면 성 1글자를 뺀 나머지가 원문에 포함돼도 "일치"로 본다(#142 후속 개선).
+    // 2·4글자 이상(2글자 성 등)은 성/이름 경계를 알 수 없어 전체 성함 일치만 본다.
+    match: isNameMatch(text, recipient.name),
     score: longestCommonSubstringLength(text, recipient.name),
   }))
 
-  const fullMatches = scored.filter((entry) => entry.fullMatch)
-  const autoSelectedId = fullMatches.length === 1 ? fullMatches[0].recipient.id : null
+  const matches = scored.filter((entry) => entry.match)
+  const autoSelectedId = matches.length === 1 ? matches[0].recipient.id : null
 
   // Array.prototype.sort는 안정 정렬이라, 점수가 같으면 원래 명단 순서를 그대로 지킨다.
   const sorted = [...scored].sort((a, b) => b.score - a.score).map((entry) => entry.recipient)
 
   return { autoSelectedId, sorted }
+}
+
+function isNameMatch(text: string, name: string): boolean {
+  if (text.includes(name)) {
+    return true
+  }
+  if (name.length === 3) {
+    const givenName = name.slice(1)
+    return text.includes(givenName)
+  }
+  return false
 }
 
 /** 두 문자열이 공유하는 가장 긴 연속 부분 문자열의 길이. 규칙 기반 로컬 유사도 척도로 쓴다. */

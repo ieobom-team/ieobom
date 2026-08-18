@@ -203,6 +203,38 @@ describe('원문 기반 어르신 자동 매칭 (#141, Manyfast F-YJJJUX v46)', 
     await screen.findByRole('heading', { name: '제출 완료' })
     expect(보낸_요청[0].careRecipientId).toBe(2)
   })
+
+  it('성을 빼고 이름만 말해도 유일하면 자동 선택되고, 목록 밖 배너에도 이름이 뜬다 (#142)', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await 텍스트로_내용_채우기(user, '말순 언니가 오늘 컨디션이 좋아 보이셨어요.')
+
+    expect(await screen.findByText(/선택됨: 김말순 어르신/)).toBeInTheDocument()
+    const 김말순_칩 = screen.getByRole('button', { name: /김말순/ })
+    expect(김말순_칩).toHaveClass('border-primary')
+
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    await screen.findByRole('heading', { name: '제출 완료' })
+    expect(보낸_요청[0].careRecipientId).toBe(1)
+  })
+
+  it('배너의 선택 해제를 누르면 선택이 풀리고, 다시 저장하려면 직접 골라야 한다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await 텍스트로_내용_채우기(user, '김말순 어르신이 점심을 거의 안 드셨어요.')
+    await screen.findByText(/선택됨: 김말순 어르신/)
+
+    await user.click(screen.getByRole('button', { name: '선택 해제' }))
+
+    expect(screen.queryByText(/선택됨:/)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('대상 어르신')
+    expect(보낸_요청).toHaveLength(0)
+  })
 })
 
 describe('추가 설정 — 관찰 구분·정보 출처 (§2.3 인라인 확장, §2.4 스마트 기본값)', () => {
