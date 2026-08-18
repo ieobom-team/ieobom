@@ -13,18 +13,13 @@ import { HANDOVER_CARDS_KEY } from '../handover-card/useHandoverCards'
 import type { CareRecipient } from '../recipient/recipientApi'
 import { useActiveRecipients } from '../recipient/useRecipients'
 import { useSession } from '../session/sessionContext'
-import { createHandover } from './handoverApi'
+import { createHandover, transcribeAudio } from './handoverApi'
 import { INFO_SOURCES, infoSourceLabel, type InfoSource } from './infoSource'
 import { CHECK_ITEMS } from './checkItems'
 import { findInputMethod, INPUT_METHODS, type InputMethod } from './inputMethod'
 import { readLastInputMethod, resolveDefaultInputMethod, writeLastInputMethod } from './lastInputMethod'
 import { enqueue, OFFLINE_QUEUE_KEY } from './offlineQueue'
-import {
-  canRecordOriginalAudio,
-  createSpeechRecognizer,
-  isSpeechRecognitionSupported,
-  type SpeechRecognizer,
-} from './speechRecognition'
+import { canRecordVoice, createVoiceRecorder, type VoiceRecorder } from './voiceRecorder'
 import {
   emptyDraft,
   fieldLabel,
@@ -49,10 +44,14 @@ import { matchRecipients } from './recipientMatch'
  * 보여 준다. 사용자가 칩을 한 번이라도 직접 누르면(`recipientTouched`) 그 뒤로는 자동 매칭이
  * 그 선택을 덮어쓰지 않는다 — 방금 고른 걸 타이핑할 때마다 지우면 안 되기 때문이다.
  *
- * 음성 인식기는 이 컴포넌트(부모)가 쥐고 있다 — 저장 버튼이 "듣는 중이면 멈추고 정리가 끝나면
- * 이어서 저장"을 하려면 녹음기를 손에 쥐고 있어야 한다. **상시 녹음 금지**(Manyfast rules)는
- * 방식이 바뀌거나(`useEffect` — `draft.inputMethod`) 화면을 완전히 벗어날 때(언마운트) 둘 다
- * `stop()`을 부르는 것으로 지킨다.
+ * **음성은 기기가 녹음만 하고 서버가 글로 바꾼다**(#147 · Manyfast `F-YJJJUX` rules v49).
+ * 브라우저 내장 인식은 쓰지 않는다 — 이유는 `voiceRecorder.ts` 에 있다. 그래서 글은 말하기를
+ * 멈춘 뒤 변환이 끝나면 **한 번에** 나타나고, 말하는 중에는 채워지지 않는다.
+ *
+ * 녹음기는 이 컴포넌트(부모)가 쥐고 있다 — 저장 버튼이 "녹음 중이면 멈추고 변환이 끝나면 이어서
+ * 저장"을 하려면 녹음기를 손에 쥐고 있어야 한다. **상시 녹음 금지**(Manyfast rules)는 방식이
+ * 바뀌거나(`useEffect` — `draft.inputMethod`) 화면을 완전히 벗어날 때(언마운트) 둘 다 `stop()`을
+ * 부르는 것으로 지킨다.
  *
  * 텍스트(#6)·음성(#8)·체크(#7) 방식을 만들었다. 저장 중 연결이 끊기면 대기열에 넣고
  * 연결이 회복되면 자동으로 다시 보낸다(n17, #9) — `offlineQueue.ts` · `OfflineQueueSync.tsx`.
@@ -68,7 +67,7 @@ type Outcome = 'form' | 'done' | 'queued'
 const SETTINGS_FIELDS = new Set(['proxyInput', 'infoSource', 'occurredAt'])
 
 function defaultInputMethod(): InputMethod {
-  return resolveDefaultInputMethod(readLastInputMethod(), isSpeechRecognitionSupported())
+  return resolveDefaultInputMethod(readLastInputMethod(), canRecordVoice())
 }
 
 export function HandoverCreatePage() {
@@ -81,18 +80,24 @@ export function HandoverCreatePage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   /**
-   * 음성 인식·녹음 상태. 이 화면(부모)이 직접 들고 있는 이유는, 저장 버튼이 "듣는 중에 저장을
-   * 누르면 먼저 멈추고 정리가 끝나면 이어서 저장한다"를 하려면 녹음기를 손에 쥐고 있어야 하기
-   * 때문이다 — 예전 단계형 화면의 "다음"이 하던 자동 멈춤·이어가기를 저장 버튼이 이어받는다.
+   * 녹음 상태. 이 화면(부모)이 직접 들고 있는 이유는, 저장 버튼이 "녹음 중에 저장을 누르면 먼저
+   * 멈추고 변환이 끝나면 이어서 저장한다"를 하려면 녹음기를 손에 쥐고 있어야 하기 때문이다 —
+   * 예전 단계형 화면의 "다음"이 하던 자동 멈춤·이어가기를 저장 버튼이 이어받는다.
    */
-  const [voiceListening, setVoiceListening] = useState(false)
-  const [voiceFinishing, setVoiceFinishing] = useState(false)
-  const [voiceNotice, setVoiceNotice] = useState<string | null>(null)
-  const voiceRecognizerRef = useRef<SpeechRecognizer | null>(null)
+  const [voiceRecording, setVoiceRecording] = useState(false)
   /**
-   * 듣는 중에 저장을 눌렀는지. 마이크가 멈추고 정리가 끝나면(effect가 감지) 이어서 실제 저장으로
-   * 넘어간다. 인식기 콜백(`handleVoiceEnd`)에서 바로 저장을 부르지 않는 이유는, 그 콜백이 마이크를
-   * 누른 시점의 오래된 `draft`(이후 고른 어르신·입력 방식이 반영되지 않은 값)를 들고 있기 때문이다.
+   * 마이크를 멈춘 뒤 글이 나올 때까지. 인코딩과 서버 변환을 하나로 묶어 든다.
+   *
+   * 둘로 나누면 인코딩이 끝나고 변환이 시작되기까지의 짧은 틈에 "아무것도 진행 중이 아닌" 상태가
+   * 생기고, 그 틈을 `pendingSave` effect가 보면 글이 채워지기 전에 저장이 나가 버린다.
+   */
+  const [voiceProcessing, setVoiceProcessing] = useState(false)
+  const [voiceNotice, setVoiceNotice] = useState<string | null>(null)
+  const voiceRecorderRef = useRef<VoiceRecorder | null>(null)
+  /**
+   * 녹음·변환 중에 저장을 눌렀는지. 글이 채워지면(effect가 감지) 이어서 실제 저장으로 넘어간다.
+   * 녹음기 콜백(`handleVoiceEnd`)에서 바로 저장을 부르지 않는 이유는, 그 콜백이 마이크를 누른
+   * 시점의 오래된 `draft`(이후 고른 어르신·입력 방식이 반영되지 않은 값)를 들고 있기 때문이다.
    */
   const [pendingSave, setPendingSave] = useState(false)
   const [savedName, setSavedName] = useState<string>('')
@@ -207,55 +212,86 @@ export function HandoverCreatePage() {
     setNotice(null)
   }
 
-  // 방식을 바꾸면(언마운트 없이도) 듣던 마이크를 놓는다. (Manyfast F-YJJJUX rules — 상시 녹음 금지)
+  // 방식을 바꾸면(언마운트 없이도) 열려 있던 마이크를 놓는다. (Manyfast F-YJJJUX rules — 상시 녹음 금지)
   useEffect(() => {
     if (draft.inputMethod !== 'VOICE') {
-      voiceRecognizerRef.current?.stop()
-      setVoiceListening(false)
-      setVoiceFinishing(false)
+      voiceRecorderRef.current?.stop()
+      setVoiceRecording(false)
+      setVoiceProcessing(false)
     }
   }, [draft.inputMethod])
 
   // 화면을 완전히 벗어날 때도 놓는다.
   useEffect(() => {
     return () => {
-      voiceRecognizerRef.current?.stop()
+      voiceRecorderRef.current?.stop()
     }
   }, [])
 
-  /** 인식·녹음이 모두 끝났을 때. 음성을 얻었으면 draft 에 붙인다. 저장 재개는 아래 effect가 한다. */
-  const handleVoiceEnd = (audioBase64: string | null) => {
-    setVoiceListening(false)
-    setVoiceFinishing(false)
-    if (audioBase64 !== null) {
-      update({ audioData: audioBase64 })
-    }
-  }
+  /**
+   * 녹음한 음성을 글로 바꾼다. (Manyfast F-YJJJUX rules — 서버가 그 음성을 글로 바꿔 돌려준다)
+   *
+   * **실패해도 원본 음성과 글 칸은 그대로 남는다.** draft 의 `audioData` 는 이 호출 전에 이미
+   * 붙어 있고, 여기서는 손대지 않는다. 직원은 글 칸에 직접 입력해 저장을 마칠 수 있다.
+   */
+  const transcribe = useMutation({
+    mutationFn: transcribeAudio,
+    onSuccess: (result) => {
+      setVoiceProcessing(false)
+      update({ rawText: result.text })
+      if (result.text.trim() === '') {
+        setVoiceNotice('아무 말도 들리지 않았습니다. 다시 눌러 말씀하시거나 아래에 직접 적어 주세요.')
+      }
+    },
+    onError: (error: unknown) => {
+      setVoiceProcessing(false)
+      const message =
+        error instanceof ApiError && error.code === NETWORK_UNAVAILABLE
+          ? '연결이 끊겨 글로 바꾸지 못했습니다. 녹음은 그대로 있으니 아래에 직접 적어 주셔도 됩니다.'
+          : '말씀하신 내용을 글로 바꾸지 못했습니다. 녹음은 그대로 저장되니 아래에 직접 적어 주세요.'
+      setVoiceNotice(message)
+    },
+  })
 
-  const toggleVoiceListening = () => {
-    if (voiceListening) {
-      setVoiceFinishing(true)
-      voiceRecognizerRef.current?.stop()
+  /**
+   * 녹음이 끝났을 때. **음성을 먼저 draft 에 붙이고 나서** 변환을 부른다 — 변환이 어떻게 되든
+   * 원본 음성은 저장돼야 한다. (Manyfast F-YJJJUX rules)
+   */
+  const handleVoiceEnd = (audioBase64: string | null) => {
+    setVoiceRecording(false)
+    if (audioBase64 === null) {
+      // 녹음 자체를 얻지 못했다. 이유는 녹음기가 이미 `onError` 로 알렸다.
+      setVoiceProcessing(false)
       return
     }
-    const recognizer = createSpeechRecognizer(
-      (transcript) => update({ rawText: transcript }),
-      handleVoiceEnd,
-      (message) => setVoiceNotice(message),
-    )
-    voiceRecognizerRef.current = recognizer
-    // 새로 말하면 앞서 녹음한 음성은 더 이상 지금 글의 원본이 아니다.
-    update({ audioData: undefined })
-    recognizer?.start()
-    setVoiceListening(true)
+    update({ audioData: audioBase64 })
+    // 스스로 멈춘 경우(5분 상한)에는 아직 안 켜져 있다. 여기서 한 번 더 켜 둔다.
+    setVoiceProcessing(true)
+    transcribe.mutate(audioBase64)
+  }
+
+  const toggleVoiceRecording = () => {
+    if (voiceRecording) {
+      setVoiceProcessing(true)
+      voiceRecorderRef.current?.stop()
+      return
+    }
+    const recorder = createVoiceRecorder(handleVoiceEnd, (message) => setVoiceNotice(message))
+    voiceRecorderRef.current = recorder
+    // 새로 말하면 앞서 녹음한 음성과 그것으로 만든 글은 더 이상 지금 입력의 원본이 아니다.
+    update({ audioData: undefined, rawText: '' })
+    transcribe.reset()
+    recorder.start()
+    setVoiceRecording(true)
     setVoiceNotice(null)
   }
 
   const pickMethod = (inputMethod: InputMethod) => {
-    // 완료 조건 — 음성 인식 미지원 브라우저에서는 텍스트로 대체 안내한다.
-    if (inputMethod === 'VOICE' && !isSpeechRecognitionSupported()) {
+    // 완료 조건 — 녹음할 수 없는 브라우저에서는 텍스트로 대체 안내한다. 인식은 서버가 하므로
+    // 브라우저의 음성 인식 지원 여부는 더 이상 보지 않는다. (#147)
+    if (inputMethod === 'VOICE' && !canRecordVoice()) {
       setErrors([])
-      setNotice('이 브라우저는 음성 인식을 지원하지 않습니다. 텍스트로 남겨 주세요.')
+      setNotice('이 브라우저는 녹음을 지원하지 않습니다. 텍스트로 남겨 주세요.')
       return
     }
     update({ inputMethod })
@@ -281,27 +317,42 @@ export function HandoverCreatePage() {
     save.mutate()
   }
 
-  // 마이크가 멈추고 정리가 끝나길 기다리던 저장을 이어간다. 여기서(effect) 재개해야 그 시점의
-  // 최신 draft(어르신 선택 등)를 보고 검증한다 — 인식기 콜백은 마이크를 켠 시점의 낡은 값을 든다.
+  // 마이크가 멈추고 글이 채워지길 기다리던 저장을 이어간다. 여기서(effect) 재개해야 그 시점의
+  // 최신 draft(어르신 선택 등)를 보고 검증한다 — 녹음기 콜백은 마이크를 켠 시점의 낡은 값을 든다.
   useEffect(() => {
-    if (pendingSave && !voiceListening && !voiceFinishing) {
-      setPendingSave(false)
-      doSubmit()
+    if (!pendingSave || voiceRecording || voiceProcessing) {
+      return
     }
+    // **자동 매칭이 draft 에 반영되기 전에는 저장하지 않는다.** 변환된 글이 들어온 렌더에서는
+    // 어르신 자동 채움이 아직 한 박자 뒤(위 effect)라, 여기서 바로 저장하면 화면에는 어르신이
+    // 선택돼 있는데 "대상 어르신을 선택해 주세요"가 뜬다. 녹음 중에 저장을 누른 경우에만 생기는
+    // 어긋남이다 — 예전에는 말하는 동안 글이 채워져 매칭이 먼저 끝나 있었다. (#147)
+    if (!recipientTouched && draft.careRecipientId !== recipientMatch.autoSelectedId) {
+      return
+    }
+    setPendingSave(false)
+    doSubmit()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingSave, voiceListening, voiceFinishing])
+  }, [
+    pendingSave,
+    voiceRecording,
+    voiceProcessing,
+    draft.careRecipientId,
+    recipientMatch.autoSelectedId,
+    recipientTouched,
+  ])
 
   /**
-   * 아직 듣고 있거나 방금 멈춘 결과를 정리하는 중이면, 먼저 멈추고 정리가 끝나면(위 effect) 이어서
-   * 저장한다 — 예전 단계형 화면에서 "다음"을 누르면 듣기를 자동으로 멈추고 넘어가던 것과 같은
-   * 동작이다. 저장을 한 번 더 눌러야 하는 마찰을 만들지 않는다.
+   * 아직 녹음 중이거나 방금 멈춘 음성을 글로 바꾸는 중이면, 먼저 멈추고 글이 나오면(위 effect)
+   * 이어서 저장한다 — 예전 단계형 화면에서 "다음"을 누르면 녹음을 자동으로 멈추고 넘어가던 것과
+   * 같은 동작이다. 저장을 한 번 더 눌러야 하는 마찰을 만들지 않는다.
    */
   const submit = () => {
-    if (draft.inputMethod === 'VOICE' && (voiceListening || voiceFinishing)) {
+    if (draft.inputMethod === 'VOICE' && (voiceRecording || voiceProcessing)) {
       setPendingSave(true)
-      if (voiceListening) {
-        setVoiceFinishing(true)
-        voiceRecognizerRef.current?.stop()
+      if (voiceRecording) {
+        setVoiceProcessing(true)
+        voiceRecorderRef.current?.stop()
       }
       return
     }
@@ -314,6 +365,9 @@ export function HandoverCreatePage() {
     setNotice(null)
     setSettingsOpen(false)
     setVoiceNotice(null)
+    setVoiceRecording(false)
+    setVoiceProcessing(false)
+    transcribe.reset()
     setPendingSave(false)
     setSavedName('')
     setQueuedInfo(null)
@@ -363,10 +417,10 @@ export function HandoverCreatePage() {
         onPickMethod={pickMethod}
         onChangeRawText={(rawText) => update({ rawText })}
         onChangeChecked={(checkedItems) => update({ checkedItems })}
-        voiceListening={voiceListening}
-        voiceFinishing={voiceFinishing}
+        voiceRecording={voiceRecording}
+        voiceProcessing={voiceProcessing}
         voiceNotice={voiceNotice}
-        onToggleVoiceListening={toggleVoiceListening}
+        onToggleVoiceRecording={toggleVoiceRecording}
       />
 
       <RecipientSection
@@ -391,7 +445,7 @@ export function HandoverCreatePage() {
       />
 
       <BigButton onClick={submit}>
-        {save.isPending ? '저장하는 중…' : voiceFinishing ? '정리하는 중…' : '저장하기'}
+        {save.isPending ? '저장하는 중…' : voiceProcessing ? '글로 바꾸는 중…' : '저장하기'}
       </BigButton>
     </PageLayout>
   )
@@ -621,61 +675,61 @@ function TextContent({ value, onChange }: { value: string; onChange: (value: str
 }
 
 /**
- * 음성 입력 내용. 순수하게 보여 주기만 한다 — 인식기·상시 녹음 금지는 부모(`HandoverCreatePage`)가
- * 쥐고 있다. 저장 버튼이 "듣는 중이면 멈추고 이어서 저장"을 하려면 녹음기가 부모 쪽에 있어야
+ * 음성 입력 내용. 순수하게 보여 주기만 한다 — 녹음기·상시 녹음 금지는 부모(`HandoverCreatePage`)가
+ * 쥐고 있다. 저장 버튼이 "녹음 중이면 멈추고 이어서 저장"을 하려면 녹음기가 부모 쪽에 있어야
  * 하기 때문이다.
+ *
+ * **말하는 중에는 글이 채워지지 않는다.** 멈춘 뒤 서버 변환이 끝나면 한 번에 나타난다.
+ * (Manyfast F-YJJJUX rules) 그래서 기다리는 중임을 화면이 분명히 말해 줘야 한다 — 예전 실시간
+ * 타이핑처럼 글이 흐르지 않으니, 표시가 없으면 멈춘 것처럼 보인다.
  */
 function VoiceContent({
   rawText,
   audioData,
-  listening,
-  finishing,
+  recording,
+  processing,
   notice,
-  onToggleListening,
+  onToggleRecording,
   onChangeRawText,
 }: {
   rawText: string
   audioData: string | undefined
-  listening: boolean
-  finishing: boolean
+  recording: boolean
+  processing: boolean
   notice: string | null
-  onToggleListening: () => void
+  onToggleRecording: () => void
   onChangeRawText: (value: string) => void
 }) {
+  const buttonLabel = processing
+    ? '글로 바꾸는 중…'
+    : recording
+      ? '녹음 중 · 눌러서 멈추기'
+      : '눌러서 말하기'
+
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xl text-ink-muted">
-        마이크를 누르고 말씀하시면 아래에 글로 남습니다. 다시 누르면 멈춥니다.
+        마이크를 누르고 말씀하신 뒤 다시 누르면, 잠시 뒤 아래에 글로 나타납니다.
       </p>
-
-      {/*
-        휴대전화·태블릿은 원본 음성을 저장하지 못한다. 페이지가 마이크를 잡는 순간 인식이
-        멈추기 때문이다(#146 · `speechRecognition.ts`). 카드에서 다시 들을 수 없다는 것을
-        녹음하기 전에 알려 준다 — 나중에 카드에서 음성이 없는 것을 발견하게 두지 않는다.
-      */}
-      {!canRecordOriginalAudio() && (
-        <p className="text-lg text-ink-muted">
-          이 기기에서는 말씀하신 내용이 글로만 남습니다. 원본 음성은 저장되지 않습니다.
-        </p>
-      )}
 
       <div className="flex flex-col items-center gap-3 rounded-lg border border-border-card bg-surface-card px-5 py-8">
         <button
           type="button"
-          onClick={onToggleListening}
-          aria-label={listening ? '듣고 있어요 · 눌러서 멈추기' : '눌러서 말하기'}
-          className={`flex h-20 w-20 items-center justify-center rounded-full text-4xl text-white transition-colors focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 ${
-            listening ? 'animate-pulse bg-primary' : 'bg-surface-dark hover:brightness-110'
+          onClick={onToggleRecording}
+          disabled={processing}
+          aria-label={buttonLabel}
+          className={`flex h-20 w-20 items-center justify-center rounded-full text-4xl text-white transition-colors focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 disabled:opacity-60 ${
+            recording ? 'animate-pulse bg-primary' : 'bg-surface-dark hover:brightness-110'
           }`}
         >
           🎙️
         </button>
-        <p className="text-xl font-semibold text-ink">
-          {finishing ? '정리하는 중…' : listening ? '듣고 있어요 · 눌러서 멈추기' : '눌러서 말하기'}
+        <p role="status" className="text-xl font-semibold text-ink">
+          {buttonLabel}
         </p>
       </div>
 
-      {!listening && !finishing && audioData !== undefined && (
+      {!recording && !processing && audioData !== undefined && (
         <p role="status" className="text-xl text-ink-muted">
           말씀하신 원본 음성도 함께 저장됩니다. 카드에서 다시 들으실 수 있습니다.
         </p>
@@ -688,7 +742,7 @@ function VoiceContent({
       )}
 
       <label htmlFor="voiceText" className="text-xl text-ink-muted">
-        인식된 내용입니다. 다르면 고쳐 주세요.
+        말씀하신 내용입니다. 다르면 고쳐 주세요.
       </label>
       <textarea
         id="voiceText"
@@ -749,19 +803,19 @@ function MethodSection({
   onPickMethod,
   onChangeRawText,
   onChangeChecked,
-  voiceListening,
-  voiceFinishing,
+  voiceRecording,
+  voiceProcessing,
   voiceNotice,
-  onToggleVoiceListening,
+  onToggleVoiceRecording,
 }: {
   draft: HandoverDraft
   onPickMethod: (value: InputMethod) => void
   onChangeRawText: (value: string) => void
   onChangeChecked: (value: string[]) => void
-  voiceListening: boolean
-  voiceFinishing: boolean
+  voiceRecording: boolean
+  voiceProcessing: boolean
   voiceNotice: string | null
-  onToggleVoiceListening: () => void
+  onToggleVoiceRecording: () => void
 }) {
   return (
     <section aria-labelledby="method-heading" className="flex flex-col gap-4">
@@ -777,10 +831,10 @@ function MethodSection({
         <VoiceContent
           rawText={draft.rawText}
           audioData={draft.audioData}
-          listening={voiceListening}
-          finishing={voiceFinishing}
+          recording={voiceRecording}
+          processing={voiceProcessing}
           notice={voiceNotice}
-          onToggleListening={onToggleVoiceListening}
+          onToggleRecording={onToggleVoiceRecording}
           onChangeRawText={onChangeRawText}
         />
       )}

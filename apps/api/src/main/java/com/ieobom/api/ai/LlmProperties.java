@@ -12,6 +12,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *
  * @param baseUrl OpenAI 호환 엔드포인트의 루트
  * @param model 사용할 모델 이름
+ * @param transcriptionModel 음성을 글로 바꿀 때 쓸 모델 이름. 텍스트 모델과 계열이 달라 따로 둔다
  * @param apiKey 비밀값. 로그나 응답에 절대 싣지 않는다
  * @param timeout 응답 대기 한도
  */
@@ -19,6 +20,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record LlmProperties(
 		@DefaultValue("https://api.openai.com/v1") String baseUrl,
 		@DefaultValue("gpt-4.1-mini") String model,
+		@DefaultValue("gpt-4o-transcribe") String transcriptionModel,
 		@DefaultValue("") String apiKey,
 		@DefaultValue("60s") Duration timeout) {
 

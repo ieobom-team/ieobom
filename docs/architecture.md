@@ -71,7 +71,7 @@ VM 한 대에 `docker compose` 로 Caddy · API · MySQL 을 함께 올린다. (
   배포는 Caddy 가 같은 일을 한다. 양쪽 다 브라우저에서 같은 출처다.
 - **`VITE_API_BASE_URL` 을 배포에서 주입하지 않는다.** 값이 비면 `shared/api/client.ts` 가
   상대경로 `/api` 로 호출한다. 배포 주소를 번들에 굳혀 넣지 않아도 된다. ([development.md](./development.md#1-환경변수))
-- **HTTPS 가 필요하다.** 음성 입력(`features/handover/speechRecognition.ts` 의 `webkitSpeechRecognition`)은
+- **HTTPS 가 필요하다.** 음성 입력(`features/handover/voiceRecorder.ts` 의 `getUserMedia`)은
   secure context 에서만 동작한다. 공인 IP 에 `http://` 로 붙이면 배포에서 음성 입력이 그냥 실패한다.
   Caddy 가 Let's Encrypt 인증서를 자동으로 처리한다.
 - **제출 링크가 서버에 묶이지 않는다.** 도메인을 우리가 통제하므로 서버를 옮기거나 IP 가 바뀌어도
@@ -148,6 +148,14 @@ HandoverCard ───┐ N          1 ┌─── Handover      원본 인계 
 음성 바이트가 `Handover`에 있으면 카드 한 장을 볼 때마다 그날 녹음이 통째로 메모리에 올라온다.
 그래서 바이트는 `HandoverAudio`에 두고, "음성이 있는지"만 `Handover.audioMimeType`으로 남긴다.
 데모 규모라 파일 스토리지 없이 DB에 넣고, 한 건 상한은 10MB다(화면은 5분에서 스스로 멈춘다). ([#44](https://github.com/ieobom-team/ieobom/issues/44))
+
+**음성을 글로 바꾸는 것은 서버가 한다.** 브라우저 내장 인식은 쓰지 않는다 — 모바일은 페이지가
+마이크를 잡는 순간 내장 인식이 굶어 녹음과 인식을 함께 할 수 없다([#146](https://github.com/ieobom-team/ieobom/issues/146)).
+기기는 녹음만 하고 `POST /api/handovers/transcribe` 가 글을 돌려준다(`ai/TranscriptionClient`).
+**저장 경로와는 갈라져 있다** — 변환은 인계 기록이 생기기 전에 일어나고 아무것도 저장하지 않는다.
+음성이 `HandoverAudio` 로 들어오는 것은 직원이 글을 확인한 뒤 `POST /api/handovers` 로 다시 올릴
+때다. 두 요청이 `HandoverService` 의 같은 Data URL 파서와 같은 10MB 검증을 공유한다.
+([#147](https://github.com/ieobom-team/ieobom/issues/147))
 
 **`Staff`는 위 그림에 없다.** 직원 명단(`name` 이름, `code` 사번(unique))은 진입 화면이 본인 선택 목록을
 그릴 때만 읽고, 인계·업무는 직원을 **이름 문자열**로 가리키므로 연관관계를 걸지 않는다.

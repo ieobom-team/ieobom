@@ -23,9 +23,13 @@ type PostOutcome = { status: number; body: unknown }
 let 저장_응답: PostOutcome
 let 목록_응답: PostOutcome
 let 구조화_응답: PostOutcome
+/** 서버 음성 인식 응답. (#147) */
+let 전사_응답: PostOutcome
 let 보낸_요청: HandoverCreateRequest[]
 /** 구조화를 요청한 인계 id. LLM 은 서버 뒤에 있으므로 여기서는 호출만 본다. */
 let 구조화_호출: number[]
+/** 전사에 올라간 음성 Data URL. 원본 음성이 그대로 올라갔는지 본다. */
+let 전사_호출: string[]
 /** 저장 호출 자체가 연결 실패로 끝나야 하는 테스트에서 켠다. (#9) */
 let 네트워크_끊김: boolean
 
@@ -39,6 +43,8 @@ function json({ status, body }: PostOutcome) {
 beforeEach(() => {
   보낸_요청 = []
   구조화_호출 = []
+  전사_호출 = []
+  전사_응답 = { status: 200, body: { text: '점심을 거의 안 드셨어요.' } }
   네트워크_끊김 = false
   목록_응답 = { status: 200, body: { careRecipients: 어르신들 } }
   구조화_응답 = {
@@ -73,7 +79,11 @@ beforeEach(() => {
           json({ status: 200, body: { date: '2026-08-11', recipients: [], unresolved: [] } }),
         )
       }
-      // `/api/handovers/{id}/cards` 가 저장 경로보다 먼저 걸려야 한다.
+      // 전사와 `/api/handovers/{id}/cards` 는 저장 경로보다 먼저 걸려야 한다.
+      if (input.includes('/api/handovers/transcribe')) {
+        전사_호출.push((JSON.parse(String(init?.body)) as { audioData: string }).audioData)
+        return Promise.resolve(json(전사_응답))
+      }
       const 구조화 = /\/api\/handovers\/(\d+)\/cards$/.exec(input)
       if (구조화 !== null) {
         구조화_호출.push(Number(구조화[1]))
@@ -142,7 +152,7 @@ describe('입력 방식 선택 — 한 화면 안에서 바로 고른다', () =>
     expect(screen.getByRole('button', { name: /체크로 고르기/ })).toBeEnabled()
   })
 
-  it('음성 인식을 지원하지 않는 기기는 텍스트 입력이 기본값이다', async () => {
+  it('녹음할 수 없는 기기는 텍스트 입력이 기본값이다', async () => {
     renderApp()
 
     expect(screen.getByLabelText(/보신 그대로/)).toBeInTheDocument()
@@ -388,95 +398,212 @@ describe('저장 중 연결 끊김 — 임시 저장과 자동 재전송 (#9)', 
   })
 })
 
+/**
+ * 음성 입력. **기기는 녹음만 하고 서버가 글로 바꾼다.** (#147 · Manyfast F-YJJJUX rules v49)
+ *
+ * 브라우저 내장 인식을 쓰던 시절의 테스트(실시간 타이핑 · 인식 오류 이벤트)는 그 코드와 함께
+ * 사라졌다. 여기서 지키는 것은 **글이 멈춘 뒤 한 번에 나타난다**, **변환이 실패해도 원본 음성과
+ * 글 칸은 남는다**, **상시 녹음이 되지 않는다** 세 가지다.
+ */
 describe('음성 입력으로 등록', () => {
-  class 가짜_인식기 {
-    onresult: ((event: unknown) => void) | null = null
-    onend: (() => void) | null = null
-    onerror: ((event: unknown) => void) | null = null
-    lang = ''
-    continuous = false
-    interimResults = false
-    start = vi.fn()
-    stop = vi.fn()
+  class 가짜_녹음기 {
+    static instances: 가짜_녹음기[] = []
+    state: 'inactive' | 'recording' = 'inactive'
+    mimeType = 'audio/webm'
+    ondataavailable: ((event: { data: Blob }) => void) | null = null
+    onstop: (() => void) | null = null
+
+    constructor() {
+      가짜_녹음기.instances.push(this)
+    }
+
+    start() {
+      this.state = 'recording'
+    }
+
+    stop() {
+      this.state = 'inactive'
+      this.ondataavailable?.({ data: new Blob([new Uint8Array(8)], { type: this.mimeType }) })
+      this.onstop?.()
+    }
   }
-  let 인식기: 가짜_인식기
+
+  let 마이크_해제: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
-    인식기 = new 가짜_인식기()
-    // 화살표 함수는 `new`로 부를 수 없어 생성자 자리에는 일반 함수를 쓴다.
-    vi.stubGlobal('webkitSpeechRecognition', function FakeCtor() {
-      return 인식기
+    가짜_녹음기.instances = []
+    마이크_해제 = vi.fn()
+    vi.stubGlobal('MediaRecorder', 가짜_녹음기)
+    // navigator 를 통째로 바꾸면 userEvent 가 쓰는 것들까지 사라진다. 필요한 것만 얹는다.
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: () => Promise.resolve({ getTracks: () => [{ stop: 마이크_해제 }] }),
+      },
     })
   })
 
-  it('마이크를 눌러 말하면 인식된 내용이 글로 남고, 고쳐서 음성 방식으로 저장된다', async () => {
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'mediaDevices')
+  })
+
+  /** 마이크를 눌러 말하고 다시 눌러 멈추는 것까지. 글은 그 뒤 변환이 끝나야 나타난다. */
+  async function 녹음하고_멈추기(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('button', { name: /말로 남기기/ }))
+    await user.click(screen.getByRole('button', { name: /눌러서 말하기/ }))
+    await waitFor(() => expect(가짜_녹음기.instances).toHaveLength(1))
+    await user.click(screen.getByRole('button', { name: /눌러서 멈추기/ }))
+  }
+
+  it('멈추면 서버가 돌려준 글이 나타나고, 원본 음성과 함께 음성 방식으로 저장된다', async () => {
     const user = userEvent.setup()
     renderApp()
 
-    await user.click(screen.getByRole('button', { name: /말로 남기기/ }))
-    await user.click(screen.getByRole('button', { name: /눌러서 말하기/ }))
+    await 녹음하고_멈추기(user)
 
-    인식기.onresult?.({
-      results: [[{ transcript: '점심을 거의 안 드셨어요' }]],
-    })
-
-    const textarea = await screen.findByLabelText(/인식된 내용/)
-    expect(textarea).toHaveValue('점심을 거의 안 드셨어요')
+    const textarea = await screen.findByLabelText(/말씀하신 내용/)
+    await waitFor(() => expect(textarea).toHaveValue('점심을 거의 안 드셨어요.'))
+    expect(전사_호출[0]).toMatch(/^data:audio\/webm;base64,/)
 
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
     await screen.findByRole('heading', { name: '제출 완료' })
-    expect(보낸_요청[0]).toMatchObject({ inputMethod: 'VOICE', rawText: '점심을 거의 안 드셨어요' })
+    expect(보낸_요청[0]).toMatchObject({
+      inputMethod: 'VOICE',
+      rawText: '점심을 거의 안 드셨어요.',
+    })
+    // 원본 음성이 함께 저장돼야 카드에서 다시 들을 수 있다. (Manyfast R-ONESTC 수락기준)
+    expect(보낸_요청[0].audioData).toMatch(/^data:audio\/webm;base64,/)
   })
 
-  it('화면을 벗어나면(뒤로가기) 인식을 멈춘다 — 상시 녹음 금지', async () => {
+  /** 말하는 중에는 채워지지 않는다. 예전 실시간 타이핑을 되살리지 않았는지 본다. */
+  it('말하는 중에는 글이 채워지지 않는다', async () => {
     const user = userEvent.setup()
     renderApp()
 
     await user.click(screen.getByRole('button', { name: /말로 남기기/ }))
     await user.click(screen.getByRole('button', { name: /눌러서 말하기/ }))
+    await waitFor(() => expect(가짜_녹음기.instances).toHaveLength(1))
+
+    expect(screen.getByLabelText(/말씀하신 내용/)).toHaveValue('')
+    expect(전사_호출).toHaveLength(0)
+  })
+
+  /** 자동 채움 대조는 서버가 돌려준 글을 기준으로 한다. (Manyfast F-YJJJUX rules v49) */
+  it('서버가 돌려준 글로 대상 어르신이 자동으로 채워진다', async () => {
+    전사_응답 = { status: 200, body: { text: '김말순 어르신이 점심을 거의 안 드셨어요.' } }
+    const user = userEvent.setup()
+    renderApp()
+
+    await 녹음하고_멈추기(user)
+    await waitFor(() =>
+      expect(screen.getByLabelText(/말씀하신 내용/)).toHaveValue(
+        '김말순 어르신이 점심을 거의 안 드셨어요.',
+      ),
+    )
+
+    // 칩을 누르지 않고 그대로 저장한다 — 자동으로 채워져 있어야 통과한다.
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    await screen.findByRole('heading', { name: '제출 완료' })
+    expect(보낸_요청[0]).toMatchObject({ careRecipientId: 1, inputMethod: 'VOICE' })
+  })
+
+  /**
+   * 변환이 실패해도 녹음된 원본 음성과 글 칸은 남아 있다. (Manyfast F-YJJJUX rules v49)
+   *
+   * 음성을 draft 에 붙이는 것이 변환보다 먼저라 지켜진다. 순서가 뒤집히면 여기서 걸린다.
+   */
+  it('변환이 실패해도 원본 음성은 저장되고 글은 직접 적어 마칠 수 있다', async () => {
+    전사_응답 = { status: 503, body: { code: 'LLM_UNAVAILABLE', message: '변환할 수 없습니다.' } }
+    const user = userEvent.setup()
+    renderApp()
+
+    await 녹음하고_멈추기(user)
+
+    expect(await screen.findByText(/글로 바꾸지 못했습니다/)).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/말씀하신 내용/), '점심을 거의 안 드셨어요.')
+    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
+
+    await screen.findByRole('heading', { name: '제출 완료' })
+    expect(보낸_요청[0]).toMatchObject({
+      inputMethod: 'VOICE',
+      rawText: '점심을 거의 안 드셨어요.',
+    })
+    expect(보낸_요청[0].audioData).toMatch(/^data:audio\/webm;base64,/)
+  })
+
+  it('아무 말도 담기지 않았으면 직접 적으라고 안내한다', async () => {
+    전사_응답 = { status: 200, body: { text: '' } }
+    const user = userEvent.setup()
+    renderApp()
+
+    await 녹음하고_멈추기(user)
+
+    expect(await screen.findByText(/아무 말도 들리지 않았습니다/)).toBeInTheDocument()
+  })
+
+  it('화면을 벗어나면(뒤로가기) 마이크를 놓는다 — 상시 녹음 금지', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole('button', { name: /말로 남기기/ }))
+    await user.click(screen.getByRole('button', { name: /눌러서 말하기/ }))
+    await waitFor(() => expect(가짜_녹음기.instances).toHaveLength(1))
     await user.click(screen.getByRole('button', { name: '이전' }))
 
-    expect(인식기.stop).toHaveBeenCalled()
+    expect(가짜_녹음기.instances[0].state).toBe('inactive')
+    await waitFor(() => expect(마이크_해제).toHaveBeenCalled())
   })
 
-  it('다른 입력 방식으로 바꾸면(같은 화면 안에서도) 듣기를 멈춘다', async () => {
+  it('다른 입력 방식으로 바꾸면(같은 화면 안에서도) 녹음을 멈춘다', async () => {
     const user = userEvent.setup()
     renderApp()
 
     await user.click(screen.getByRole('button', { name: /말로 남기기/ }))
     await user.click(screen.getByRole('button', { name: /눌러서 말하기/ }))
+    await waitFor(() => expect(가짜_녹음기.instances).toHaveLength(1))
     await user.click(screen.getByRole('button', { name: /텍스트로 쓰기/ }))
 
-    expect(인식기.stop).toHaveBeenCalled()
+    expect(가짜_녹음기.instances[0].state).toBe('inactive')
+    await waitFor(() => expect(마이크_해제).toHaveBeenCalled())
   })
 
-  it('듣는 중에 저장을 누르면 마이크를 멈추고 이어서 저장한다', async () => {
+  it('녹음 중에 저장을 누르면 멈추고 변환이 끝난 뒤 이어서 저장한다', async () => {
+    전사_응답 = { status: 200, body: { text: '김말순 어르신이 점심을 거의 안 드셨어요.' } }
     const user = userEvent.setup()
     renderApp()
 
     await user.click(screen.getByRole('button', { name: /말로 남기기/ }))
     await user.click(screen.getByRole('button', { name: /눌러서 말하기/ }))
-    인식기.onresult?.({ results: [[{ transcript: '점심을 거의 안 드셨어요' }]] })
-    await user.click(await screen.findByRole('button', { name: /김말순/ }))
+    await waitFor(() => expect(가짜_녹음기.instances).toHaveLength(1))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
-    expect(인식기.stop).toHaveBeenCalled()
     await screen.findByRole('heading', { name: '제출 완료' })
-    expect(보낸_요청[0]).toMatchObject({ inputMethod: 'VOICE', rawText: '점심을 거의 안 드셨어요' })
+    // 저장이 변환을 앞지르면 글이 빈 채로 나간다.
+    expect(보낸_요청[0]).toMatchObject({
+      inputMethod: 'VOICE',
+      rawText: '김말순 어르신이 점심을 거의 안 드셨어요.',
+    })
   })
 
-  it('마이크 권한이 없으면 안내하고 듣기를 멈춘 상태로 둔다', async () => {
+  it('마이크 권한이 없으면 안내하고 다시 누를 수 있는 상태로 둔다', async () => {
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: () => Promise.reject(new Error('NotAllowedError')) },
+    })
     const user = userEvent.setup()
     renderApp()
 
     await user.click(screen.getByRole('button', { name: /말로 남기기/ }))
     await user.click(screen.getByRole('button', { name: /눌러서 말하기/ }))
-    인식기.onerror?.({ error: 'not-allowed' })
 
     expect(await screen.findByText(/마이크 권한/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /눌러서 말하기/ })).toBeInTheDocument()
+    expect(전사_호출).toHaveLength(0)
   })
 })
 
