@@ -33,18 +33,13 @@ describe('제출 전 검증', () => {
   })
 
   it('빈 폼은 누락된 항목을 하나씩이 아니라 한 번에 모아 돌려준다', () => {
-    const found = 항목들(emptyDraft(new Date(2026, 7, 11, 13, 10)), '')
+    // 관찰 구분·입력 방식은 스마트 기본값이 채워진 채로 시작하므로 여기서는 걸리지 않는다.
+    const found = 항목들(emptyDraft(new Date(2026, 7, 11, 13, 10), 'TEXT'), '')
 
     expect(found).toEqual(
-      expect.arrayContaining([
-        'proxyInput',
-        'inputMethod',
-        'rawText',
-        'careRecipientId',
-        'reporterName',
-      ]),
+      expect.arrayContaining(['rawText', 'careRecipientId', 'reporterName']),
     )
-    expect(found.length).toBeGreaterThanOrEqual(5)
+    expect(found.length).toBeGreaterThanOrEqual(3)
   })
 
   it('대리 입력인데 정보 출처가 없으면 출처를 짚어 준다', () => {

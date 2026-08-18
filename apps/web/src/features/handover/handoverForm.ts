@@ -47,12 +47,19 @@ export function fieldLabel(field: string): string {
   return FIELD_LABELS[field] ?? field
 }
 
-export function emptyDraft(now: Date): HandoverDraft {
+/**
+ * 스마트 기본값이 채워진 빈 폼. (Manyfast F-YJJJUX rules — §2.4 클릭은 기본값으로 줄인다)
+ *
+ * 관찰 구분은 항상 '직접 관찰'(대리 입력은 사용자가 바꿔야 나온다), 입력 방식은 호출하는 쪽이
+ * 기기별 마지막 사용 방식을 계산해 넘긴다(`lastInputMethod.ts`). 둘 다 화면에 이미 선택된 채로
+ * 보이고, 사용자가 언제든 바꿀 수 있다.
+ */
+export function emptyDraft(now: Date, inputMethod: InputMethod): HandoverDraft {
   return {
     careRecipientId: null,
-    proxyInput: null,
+    proxyInput: false,
     infoSource: null,
-    inputMethod: null,
+    inputMethod,
     rawText: '',
     checkedItems: [],
     occurredAt: toDateTimeLocal(now),
