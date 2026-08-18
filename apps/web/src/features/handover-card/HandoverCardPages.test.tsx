@@ -423,15 +423,16 @@ describe('인계 카드 상세 (n20 → n21 · n22)', () => {
     await user.click(await screen.findByRole('link', { name: /점심 식사량 저하/ }))
 
     // 캐시에 이미 있으므로 "불러오는 중"을 거치지 않는다. 최신 확인은 뒤에서 따로 한다.
-    expect(screen.getByRole('heading', { name: '김말순' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /^김말순/ })).toBeInTheDocument()
     expect(screen.queryByText(/불러오는 중/)).not.toBeInTheDocument()
   })
 
-  it('근거 원문과 관찰 시각, 다음 행동 제안값을 함께 보여 준다', async () => {
+  it('근거 원문과 관찰 시각·검토 상태, 다음 행동 제안값을 인라인 한 줄로 보여 준다', async () => {
     renderApp('/handover-cards/31')
 
     expect(await screen.findByText(/점심을 거의 안 드셨어요/)).toBeInTheDocument()
-    expect(screen.getByText(/오늘 12:40에 있었던 일/)).toBeInTheDocument()
+    // 카드 관찰 시각은 2026-08-11(화) 12:40. 검토 상태는 기본값 NEEDS_REVIEW
+    expect(screen.getByText('2026-08-11 (화) 12:40 입력 / 검토 필요')).toBeInTheDocument()
     expect(screen.getByText('제안 · 요양보호사 · 17:00까지')).toBeInTheDocument()
   })
 
@@ -493,6 +494,6 @@ describe('인계 카드 상세 (n20 → n21 · n22)', () => {
   it('관리자로 들어와도 같은 상세를 본다', async () => {
     renderApp('/handover-cards/31', 'MANAGER')
 
-    expect(await screen.findByRole('heading', { name: '김말순' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /^김말순/ })).toBeInTheDocument()
   })
 })

@@ -4,6 +4,7 @@ import type {
   HandoverCardList,
   RecipientCards,
   JobRole,
+  ReviewStatus,
 } from './handoverCardApi'
 
 /**
@@ -346,4 +347,26 @@ export function dateLabelWithWeekday(date: string): string {
   const [, year, month, day] = matched
   const parsed = new Date(Number(year), Number(month) - 1, Number(day))
   return `${date} (${WEEKDAY_LABELS[parsed.getDay()]})`
+}
+
+/** `observedAt`(`2026-08-11T12:40:00`)을 `2026-08-11 (화) 12:40`으로. 원문에서 시각을 못 읽은 카드는 `null`. */
+export function observedDateTimeLabel(observedAt: string | null): string | null {
+  if (observedAt === null) {
+    return null
+  }
+  const matched = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(observedAt)
+  if (matched === null) {
+    return null
+  }
+  return `${dateLabelWithWeekday(matched[1])} ${matched[2]}`
+}
+
+const REVIEW_STATUS_LABELS: Record<ReviewStatus, string> = {
+  NEEDS_REVIEW: '검토 필요',
+  REVIEWED: '검토 완료',
+}
+
+/** 카드 헤더 인라인 표기 전용. `HandoverCardBody`의 배지(`CardBadges`)와 같은 문구를 쓴다(#92 소유, 별도 유지). */
+export function reviewStatusLabel(status: ReviewStatus): string {
+  return REVIEW_STATUS_LABELS[status]
 }
