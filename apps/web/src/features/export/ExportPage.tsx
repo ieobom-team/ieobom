@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
+import { ArrowRight } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError } from '../../shared/api/client'
 import { BigButton } from '../../shared/ui/BigButton'
 import { CardsLoadFailed, CardsLoading } from '../handover-card/CardsLoadState'
-import { findCard } from '../handover-card/handoverCard'
+import { cardEntries, findCard, observedDateTimeLabel } from '../handover-card/handoverCard'
 import type { HandoverCard } from '../handover-card/handoverCardApi'
 import { useHandoverCards } from '../handover-card/useHandoverCards'
 import { PageLayout } from '../../shared/ui/PageLayout'
@@ -55,13 +56,11 @@ export function ExportPage() {
       backTo={`/handover-cards/${cardId}`}
       backLabel="카드로 돌아가기"
     >
-      <h1 className="text-3xl font-bold text-slate-900">기록·보호자 전달 문구</h1>
-
       {cards.isPending && <CardsLoading />}
       {cards.isError && <CardsLoadFailed onRetry={() => void cards.refetch()} />}
 
       {cards.isSuccess && card === null && (
-        <p className="text-xl text-slate-600">
+        <p className="text-xl text-ink-muted">
           그 인계 카드를 찾지 못했습니다. 오늘 목록에 없는 카드일 수 있습니다.
         </p>
       )}
@@ -92,6 +91,62 @@ function ExportLoadFailed({ error, onRetry }: { error: unknown; onRetry: () => v
         다시 시도하기
       </BigButton>
     </div>
+  )
+}
+
+/**
+ * "인계 카드 요약" 박스. (완료 조건 — 어르신 이름·인계 일시·분류·상태변화/조치/다음행동·원문 근거)
+ *
+ * 새 API를 부르지 않는다. 이 화면에 진입하려면 카드가 이미 로드돼 있어야 하므로(`ExportPage`),
+ * 그 `card`를 그대로 재사용한다 — `TaskDetailPage`의 `LinkedCardBody`와 같은 패턴이다. (Manyfast F-SNBVHR)
+ */
+function HandoverCardSummary({ card }: { card: HandoverCard }) {
+  const observed = observedDateTimeLabel(card.observedAt)
+
+  return (
+    <section
+      aria-label="인계 카드 요약"
+      className="flex flex-col gap-3 rounded-2xl border-2 border-border-card bg-white px-5 py-6"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-bold text-ink">인계 카드 요약</h2>
+        <Link
+          to={`/handover-cards/${card.id}`}
+          className="inline-flex items-center gap-1 text-lg font-semibold text-primary hover:underline"
+        >
+          원문 근거 확인 가능 <ArrowRight size={18} strokeWidth={2.4} aria-hidden="true" />
+        </Link>
+      </div>
+
+      <p className="text-xl font-bold text-ink">
+        {card.careRecipientName ?? '대상 어르신 미정'}
+        {card.careRecipientName && <span className="ml-1 text-lg font-normal text-ink-muted">어르신</span>}
+      </p>
+      <p className="text-lg text-ink-muted">인계 일시 {observed ?? '시각 미상'}</p>
+      <span
+        className={`w-fit rounded-full px-3 py-1 text-base font-semibold ${
+          card.safetyRelated ? 'bg-primary-soft text-primary' : 'bg-btn-neutral text-ink-muted'
+        }`}
+      >
+        {card.safetyRelated ? '안전' : '일반'}
+      </span>
+
+      <dl className="flex flex-col gap-2">
+        {cardEntries(card).map((entry) => (
+          <div key={entry.key} className="flex flex-col gap-0.5">
+            <dt className="text-base font-semibold text-ink-muted">{entry.label}</dt>
+            <dd className={`text-lg ${entry.value === null ? 'text-ink-tertiary' : 'text-ink'}`}>
+              {entry.value ?? '없음'}
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      <figure className="rounded-xl border-l-4 border-border-card bg-surface-card px-4 py-3">
+        <figcaption className="text-base font-semibold text-ink-muted">원문 근거</figcaption>
+        <blockquote className="mt-1 text-lg text-ink">“{card.evidenceText}”</blockquote>
+      </figure>
+    </section>
   )
 }
 
@@ -144,10 +199,12 @@ function ExportContent({
 
   return (
     <>
-      <section className="flex flex-col gap-6">
-        <h2 className="text-2xl font-bold text-slate-900">이 카드의 문구</h2>
+      <HandoverCardSummary card={card} />
 
-        {phrasesQuery.isPending && <p className="text-xl text-slate-600">문구를 만드는 중입니다…</p>}
+      <section className="flex flex-col gap-6">
+        <h2 className="text-2xl font-bold text-ink">이 카드의 문구</h2>
+
+        {phrasesQuery.isPending && <p className="text-xl text-ink-muted">문구를 만드는 중입니다…</p>}
         {phrasesQuery.isError && (
           <ExportLoadFailed
             error={phrasesQuery.error}
@@ -161,8 +218,8 @@ function ExportContent({
       </section>
 
       <section className="flex flex-col gap-6">
-        <h2 className="text-2xl font-bold text-slate-900">어르신 당일 묶음</h2>
-        <p className="text-lg text-slate-500">
+        <h2 className="text-2xl font-bold text-ink">어르신 당일 묶음</h2>
+        <p className="text-lg text-ink-muted">
           오늘 검토 완료된 카드의 문구를 유형별로 이어 붙입니다. 여러 카드를 한 번에 옮길 때 씁니다.
         </p>
 
@@ -177,7 +234,7 @@ function ExportContent({
           caption="오늘 인계 항목을 담당·기한·처리 상태까지 표로 내려받기"
         />
 
-        {bundlesQuery.isPending && <p className="text-xl text-slate-600">묶음을 만드는 중입니다…</p>}
+        {bundlesQuery.isPending && <p className="text-xl text-ink-muted">묶음을 만드는 중입니다…</p>}
         {bundlesQuery.isError && (
           <ExportLoadFailed
             error={bundlesQuery.error}
@@ -242,7 +299,7 @@ function DownloadRow<F extends string>({
 
   return (
     <div className="mt-4">
-      <p className="text-lg font-semibold text-slate-500">{blocked ?? caption}</p>
+      <p className="text-lg font-semibold text-ink-muted">{blocked ?? caption}</p>
       <div className="mt-2 flex flex-wrap gap-3">
         {formats.map(({ format, label }) => (
           <button
@@ -250,7 +307,7 @@ function DownloadRow<F extends string>({
             type="button"
             disabled={blocked !== null}
             onClick={() => void handleDownload(format)}
-            className="rounded-2xl border-2 border-slate-300 bg-white px-5 py-3 text-xl font-semibold text-slate-900 hover:border-teal-600 hover:bg-teal-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300 disabled:border-slate-200 disabled:text-slate-400"
+            className="rounded-full border-2 border-border-card bg-white px-5 py-3 text-xl font-semibold text-ink hover:border-primary hover:bg-primary-soft focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 disabled:border-border-card/60 disabled:text-ink-tertiary"
           >
             {pending === format ? '내려받는 중…' : `${label}(.${format})`}
           </button>
@@ -320,19 +377,19 @@ function PhraseCard({
   }
 
   return (
-    <article className="rounded-2xl border-2 border-slate-200 bg-white px-5 py-5">
+    <article className="rounded-2xl border-2 border-border-card bg-white px-5 py-5">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-2xl font-bold text-slate-900">{phrase.phraseTypeLabel}</h3>
+        <h3 className="text-2xl font-bold text-ink">{phrase.phraseTypeLabel}</h3>
         {phrase.copiedAt !== null && !dirty && (
-          <span className="rounded-full bg-teal-100 px-3 py-1 text-lg font-bold text-teal-900">
+          <span className="rounded-full bg-success/10 px-3 py-1 text-lg font-bold text-success">
             복사됨
           </span>
         )}
       </div>
 
-      <figure className="mt-4 rounded-xl border-l-4 border-slate-300 bg-slate-50 px-4 py-3">
-        <figcaption className="text-lg font-semibold text-slate-500">근거 원문</figcaption>
-        <blockquote className="mt-1 text-xl text-slate-800">“{phrase.evidenceText}”</blockquote>
+      <figure className="mt-4 rounded-xl border-l-4 border-border-card bg-surface-card px-4 py-3">
+        <figcaption className="text-lg font-semibold text-ink-muted">근거 원문</figcaption>
+        <blockquote className="mt-1 text-xl text-ink">“{phrase.evidenceText}”</blockquote>
       </figure>
 
       {phrase.needsReview && phrase.reviewNotice !== null && (
@@ -345,14 +402,14 @@ function PhraseCard({
       )}
 
       {phrase.text === null ? (
-        <p className="mt-4 text-xl text-slate-500">
+        <p className="mt-4 text-xl text-ink-muted">
           이 문구는 만들지 못했습니다. 카드 내용을 검토한 뒤 다시 열어 주세요.
         </p>
       ) : (
         <>
           <label
             htmlFor={`phrase-${phrase.id}`}
-            className="mt-4 block text-lg font-semibold text-slate-500"
+            className="mt-4 block text-lg font-semibold text-ink-muted"
           >
             문구 ({draft.length}/{MAX_LENGTH[phrase.phraseType]}자)
           </label>
@@ -362,7 +419,7 @@ function PhraseCard({
             onChange={(event) => setDraft(event.target.value)}
             rows={4}
             maxLength={MAX_LENGTH[phrase.phraseType]}
-            className="mt-1 w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-xl text-slate-900 focus:border-teal-600 focus:outline-none"
+            className="mt-1 w-full rounded-2xl border-2 border-border-card px-5 py-4 text-xl text-ink focus:border-primary focus:outline-none"
           />
 
           <div className="mt-4 flex flex-col gap-3">
@@ -387,7 +444,7 @@ function PhraseCard({
           />
 
           {copyNotice !== null && (
-            <p role="status" className="mt-3 text-lg text-teal-800">
+            <p role="status" className="mt-3 text-lg text-success">
               {copyNotice}
             </p>
           )}
@@ -455,10 +512,10 @@ function BundleCard({
   }
 
   return (
-    <article className="rounded-2xl border-2 border-slate-200 bg-white px-5 py-5">
+    <article className="rounded-2xl border-2 border-border-card bg-white px-5 py-5">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-2xl font-bold text-slate-900">{bundle.phraseTypeLabel} 묶음</h3>
-        <span className="text-lg text-slate-500">{bundle.phraseCount}건</span>
+        <h3 className="text-2xl font-bold text-ink">{bundle.phraseTypeLabel} 묶음</h3>
+        <span className="text-lg text-ink-muted">{bundle.phraseCount}건</span>
       </div>
 
       {bundle.notice !== null && (
@@ -467,7 +524,7 @@ function BundleCard({
           className={`mt-4 rounded-xl border-l-4 px-4 py-3 text-lg ${
             bundle.needsReview
               ? 'border-amber-400 bg-amber-50 text-amber-900'
-              : 'border-slate-300 bg-slate-50 text-slate-700'
+              : 'border-border-card bg-surface-card text-ink-muted'
           }`}
         >
           {bundle.notice}
@@ -476,7 +533,7 @@ function BundleCard({
 
       {!bundle.empty && (
         <>
-          <p className="mt-4 whitespace-pre-wrap text-xl text-slate-900">{bundle.text}</p>
+          <p className="mt-4 whitespace-pre-wrap text-xl text-ink">{bundle.text}</p>
 
           <div className="mt-4">
             <BigButton onClick={() => void handleCopy()}>
@@ -491,7 +548,7 @@ function BundleCard({
           />
 
           {copyNotice !== null && (
-            <p role="status" className="mt-3 text-lg text-teal-800">
+            <p role="status" className="mt-3 text-lg text-success">
               {copyNotice}
             </p>
           )}
@@ -507,19 +564,19 @@ function BundleCard({
           )}
 
           <details className="mt-4">
-            <summary className="cursor-pointer text-lg font-semibold text-slate-500">
+            <summary className="cursor-pointer text-lg font-semibold text-ink-muted">
               포함된 카드 근거 보기
             </summary>
             <ul className="mt-3 flex flex-col gap-3">
               {bundle.phrases.map((phrase) => (
                 <li
                   key={phrase.id}
-                  className="rounded-xl border-l-4 border-slate-300 bg-slate-50 px-4 py-3"
+                  className="rounded-xl border-l-4 border-border-card bg-surface-card px-4 py-3"
                 >
-                  <blockquote className="text-lg text-slate-800">“{phrase.evidenceText}”</blockquote>
+                  <blockquote className="text-lg text-ink">“{phrase.evidenceText}”</blockquote>
                   <Link
                     to={`/handover-cards/${phrase.cardId}/export`}
-                    className="mt-2 inline-block text-lg font-semibold text-teal-800 underline underline-offset-4"
+                    className="mt-2 inline-block text-lg font-semibold text-primary underline underline-offset-4"
                   >
                     이 카드에서 근거·수정 보기
                   </Link>
