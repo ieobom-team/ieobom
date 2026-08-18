@@ -78,11 +78,21 @@ const SETTINGS_FIELDS = new Set(['proxyInput', 'infoSource', 'occurredAt'])
  */
 const VOICE_DEBUG_PARAM = 'voicedebug'
 
-/** 진단 패널에서 고를 수 있는 시작 순서. 무엇을 가르는지는 `speechRecognition.ts` 맨 위에 있다. */
+/** 진단 패널에서 고를 수 있는 조합. 무엇을 가르는지는 `speechRecognition.ts` 맨 위에 있다. */
 const VOICE_DEBUG_MODES: { mode: SpeechDiagnosticsMode; label: string; hint: string }[] = [
   { mode: 'default', label: 'A 지금 동작', hint: '녹음 → 인식 (배포된 순서 그대로)' },
-  { mode: 'recognition-only', label: 'B 인식만', hint: '녹음을 걸지 않는다 — 마이크 경합 확인' },
-  { mode: 'recognition-first', label: 'C 인식 먼저', hint: '인식을 동기로 먼저 — 제스처 소실 확인' },
+  { mode: 'recognition-only', label: 'B 인식만', hint: '녹음을 걸지 않는다 — 1차에서 유일하게 인식됨' },
+  { mode: 'recognition-first', label: 'C 인식 먼저', hint: '인식을 동기로 먼저 — 1차에서 기각된 가설' },
+  {
+    mode: 'stream-only',
+    label: 'D 스트림만',
+    hint: 'getUserMedia 만 하고 MediaRecorder 는 만들지 않는다 — 경합의 주체를 가른다',
+  },
+  {
+    mode: 'web-audio',
+    label: 'E 웹오디오',
+    hint: 'MediaRecorder 대신 Web Audio 로 스트림을 소비한다 — 직접 캡처 우회가 살아남는지 본다',
+  },
 ]
 
 function defaultInputMethod(): InputMethod {
@@ -690,7 +700,7 @@ function VoiceDebugPanel({ debug, listening }: { debug: VoiceDebug; listening: b
         음성 진단 (임시 · ?voicedebug=1) — 순서를 고르고 마이크를 누르세요
       </p>
 
-      <div className="flex gap-2">
+      <div className="grid grid-cols-3 gap-2">
         {VOICE_DEBUG_MODES.map(({ mode, label, hint }) => (
           <button
             key={mode}
@@ -698,7 +708,7 @@ function VoiceDebugPanel({ debug, listening }: { debug: VoiceDebug; listening: b
             title={hint}
             disabled={listening}
             onClick={() => debug.onPickMode(mode)}
-            className={`flex-1 rounded border px-2 py-3 text-sm disabled:opacity-40 ${
+            className={`rounded border px-2 py-3 text-sm disabled:opacity-40 ${
               debug.mode === mode
                 ? 'border-slate-800 bg-slate-800 font-bold text-white'
                 : 'border-slate-400 bg-white text-slate-700'

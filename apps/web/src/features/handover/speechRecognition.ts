@@ -21,15 +21,27 @@
  * 현상을 조사하기 위한 코드가 `SpeechDiagnostics` 로 들어와 있다.
  *
  * 화면에서 `?voicedebug=1` 로만 켜지며, 파라미터가 없으면 아래 동작은 종전과 완전히 같다.
- * 목적은 **시작 순서 세 가지를 갈라 보는 것**이다.
+ *
+ * ### 1차 (완료) — 마이크 경합으로 원인 확정
  *
  * - `default` — 녹음(`getUserMedia` → `MediaRecorder`)을 먼저 띄우고 그 `Promise` 안에서
  *   인식을 시작한다. 지금 배포된 동작 그대로다.
- * - `recognition-only` — 녹음을 아예 걸지 않고 인식만 한다. 여기서 글자가 나오면 마이크를
- *   `MediaRecorder` 가 물고 있는 것이 원인이다.
- * - `recognition-first` — 인식을 클릭 핸들러 안에서 **동기로** 먼저 시작하고 녹음을 뒤에
- *   붙인다. 여기서만 글자가 나오면 `Promise` 를 건너며 사용자 제스처 컨텍스트를 잃은 것이
- *   원인이다.
+ * - `recognition-only` — 녹음을 아예 걸지 않고 인식만 한다.
+ * - `recognition-first` — 인식을 클릭 핸들러 안에서 **동기로** 먼저 시작하고 녹음을 뒤에 붙인다.
+ *
+ * 삼성인터넷 30(Android 10) 실기기 결과: `recognition-only` 만 인식됐고, `recognition-first` 는
+ * 인식이 마이크를 먼저 잡았는데도 `MediaRecorder.start()` 직후부터 소리 이벤트가 끊겼다.
+ * 제스처 소실이 아니라 **마이크 경합**이다.
+ *
+ * ### 2차 — 경합의 주체가 `getUserMedia` 인지 `MediaRecorder` 인지
+ *
+ * 1차에서는 둘이 1ms 차이로 붙어 있어 갈리지 않았다. 여기서 갈리면 원본 음성(#44)을 모바일에서도
+ * 지킬 수 있는지가 정해진다.
+ *
+ * - `stream-only` — `getUserMedia` 로 스트림만 잡고 `MediaRecorder` 는 만들지 않는다.
+ *   인식되면 `MediaRecorder` 가, 안 되면 마이크 세션 자체가 범인이다.
+ * - `web-audio` — 스트림을 Web Audio 로 소비한다. `stream-only` 가 통과했을 때, 직접 캡처하는
+ *   우회가 실제로 살아남는지 본다.
  */
 
 declare global {
@@ -76,8 +88,13 @@ export type SpeechRecognizer = {
   stop: () => void
 }
 
-/** 진단 모드에서 갈라 볼 시작 순서. 무엇을 가르는지는 파일 맨 위 주석에 있다. */
-export type SpeechDiagnosticsMode = 'default' | 'recognition-only' | 'recognition-first'
+/** 진단 모드에서 갈라 볼 조합. 무엇을 가르는지는 파일 맨 위 주석에 있다. */
+export type SpeechDiagnosticsMode =
+  | 'default'
+  | 'recognition-only'
+  | 'recognition-first'
+  | 'stream-only'
+  | 'web-audio'
 
 /** 진단 설정. 넘기지 않으면 로그도 남지 않고 동작도 종전과 같다. */
 export type SpeechDiagnostics = {
@@ -152,6 +169,8 @@ export function createSpeechRecognizer(
   /** 녹음을 Data URL 로 바꾸는 중인지. 인식 종료가 먼저 와도 음성을 버리지 않기 위해 본다. */
   let encoding = false
   let limitTimer: ReturnType<typeof setTimeout> | null = null
+  /** `web-audio` 진단 모드에서만 쓴다. 다른 모드에서는 끝까지 `null` 이다. */
+  let audioContext: AudioContext | null = null
 
   /** 마이크를 놓는다. 이걸 빠뜨리면 화면을 떠난 뒤에도 브라우저 탭에 녹음 표시가 남는다. */
   const releaseMic = () => {
@@ -159,6 +178,8 @@ export function createSpeechRecognizer(
       clearTimeout(limitTimer)
       limitTimer = null
     }
+    void audioContext?.close()
+    audioContext = null
     stream?.getTracks().forEach((track) => track.stop())
     stream = null
   }
@@ -188,12 +209,47 @@ export function createSpeechRecognizer(
     finish(null)
   }
 
+  /** 마지막 `onresult` 의 인덱스별 스냅샷. 세션이 끝날 때 통째로 한 번 더 남긴다. */
+  let lastResults: { index: number; final: boolean; text: string }[] = []
+
+  /**
+   * 인식 결과를 진단 로그로 남긴다. **`isFinal` 을 보려는 것**이다.
+   *
+   * 삼성인터넷에서 같은 말이 수십 번 겹쳐 쌓이는데, 중간 결과를 같은 인덱스에 덮어쓰지 않고 새
+   * 인덱스에 계속 붙이기 때문인지 확인해야 위 `onresult` 의 이어 붙이기를 어떻게 고칠지 정할 수 있다.
+   */
+  const logResults = (event: SpeechRecognitionEventLike) => {
+    if (diagnostics === undefined || event.results.length === 0) {
+      return
+    }
+    lastResults = []
+    let flags = ''
+    for (let i = 0; i < event.results.length; i += 1) {
+      const result = event.results[i]
+      flags += result.isFinal ? 'F' : 'i'
+      lastResults.push({ index: i, final: result.isFinal, text: result[0].transcript })
+    }
+    const last = lastResults[lastResults.length - 1]
+    log(
+      `rec.onresult ${event.results.length}건 flags=${flags} | 끝 ${last.index}${last.final ? 'F' : 'i'} "${last.text}"`,
+    )
+  }
+
+  /** 세션이 끝날 때 인덱스별 내용을 한 번에 남긴다. 중복이 어디서 생기는지 눈으로 보려는 것이다. */
+  const dumpResults = () => {
+    if (diagnostics === undefined || lastResults.length === 0) {
+      return
+    }
+    log(`--- 결과 덤프 (${lastResults.length}건) ---`)
+    lastResults.forEach((item) => log(`  ${item.index}${item.final ? 'F' : 'i'} "${item.text}"`))
+  }
+
   recognition.onresult = (event) => {
     let combined = ''
     for (let i = 0; i < event.results.length; i += 1) {
       combined += event.results[i][0].transcript
     }
-    log(`rec.onresult (${event.results.length}건) — ${combined}`)
+    logResults(event)
     onTranscript(combined)
   }
 
@@ -205,6 +261,7 @@ export function createSpeechRecognizer(
 
   recognition.onend = () => {
     log('rec.onend')
+    dumpResults()
     stopRecording()
   }
 
@@ -289,6 +346,30 @@ export function createSpeechRecognizer(
     log(`MediaRecorder.start() — ${mediaRecorder.mimeType || '기본 형식'} · ${mediaRecorder.state}`)
   }
 
+  /**
+   * `web-audio` 진단 모드. 스트림을 Web Audio 로 소비하되 저장은 하지 않는다.
+   *
+   * `MediaRecorder` 대신 직접 캡처하는 우회가 살아남는지만 보는 것이라 `ScriptProcessorNode` 로
+   * 충분하다. (실제 구현이라면 `AudioWorklet` 을 쓰겠지만 둘 다 같은 스트림을 소비한다.)
+   */
+  const startWebAudioTap = (granted: MediaStream) => {
+    stream = granted
+    audioContext = new AudioContext()
+    const source = audioContext.createMediaStreamSource(granted)
+    const processor = audioContext.createScriptProcessor(4096, 1, 1)
+    let frames = 0
+    processor.onaudioprocess = () => {
+      frames += 1
+      // 매 프레임을 남기면 로그가 넘친다. 흐르고 있다는 것만 띄엄띄엄 확인한다.
+      if (frames === 1 || frames % 40 === 0) {
+        log(`WebAudio 프레임 ${frames}개 수신`)
+      }
+    }
+    source.connect(processor)
+    processor.connect(audioContext.destination)
+    log(`WebAudio tap 시작 — ${audioContext.state} · ${audioContext.sampleRate}Hz`)
+  }
+
   return {
     start: () => {
       log(`start() — mode=${mode}`)
@@ -322,8 +403,16 @@ export function createSpeechRecognizer(
             finish(null)
             return
           }
-          startRecording(granted)
-          if (mode === 'default') {
+          if (mode === 'stream-only') {
+            // 스트림만 잡고 아무것도 하지 않는다. 경합의 주체가 마이크 세션 자체인지 본다.
+            stream = granted
+            log('MediaRecorder 를 만들지 않는다 — 스트림만 잡은 상태')
+          } else if (mode === 'web-audio') {
+            startWebAudioTap(granted)
+          } else {
+            startRecording(granted)
+          }
+          if (mode !== 'recognition-first') {
             startRecognition()
           }
         })
