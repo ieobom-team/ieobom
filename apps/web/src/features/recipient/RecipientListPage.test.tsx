@@ -110,7 +110,7 @@ describe('어르신 명단 화면 (n49 · n50)', () => {
 
     await user.click(screen.getByRole('link', { name: '어르신 명단' }))
 
-    expect(await screen.findByRole('heading', { name: '어르신 명단' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: '+ 어르신 추가' })).toBeInTheDocument()
   })
 
   it('이름과 내부 ID 를 함께 표시한다', async () => {
@@ -128,15 +128,43 @@ describe('어르신 명단 화면 (n49 · n50)', () => {
 })
 
 describe('어르신 등록 (n51 · n52 · n53)', () => {
-  it('이름을 등록하면 목록에 내부 ID와 함께 나타난다', async () => {
+  it('"+ 어르신 추가" 를 누르면 등록 모달이 열린다', async () => {
     const user = userEvent.setup()
     renderApp()
     await screen.findByText('김말순 (IB-001)')
 
+    await user.click(screen.getByRole('button', { name: '+ 어르신 추가' }))
+
+    expect(screen.getByRole('dialog', { name: '어르신 등록' })).toBeInTheDocument()
+    expect(screen.getByLabelText('이용자 ID')).toHaveValue('자동으로 생성됩니다 (예: E-007)')
+  })
+
+  it('취소를 누르면 모달이 닫히고 입력값이 폐기된다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+    await screen.findByText('김말순 (IB-001)')
+
+    await user.click(screen.getByRole('button', { name: '+ 어르신 추가' }))
     await user.type(screen.getByLabelText('어르신 이름'), '홍길동')
-    await user.click(screen.getByRole('button', { name: '등록' }))
+    await user.click(screen.getByRole('button', { name: '취소' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '+ 어르신 추가' }))
+    expect(screen.getByLabelText('어르신 이름')).toHaveValue('')
+  })
+
+  it('이름을 등록하면 모달이 닫히고 목록에 내부 ID와 함께 나타난다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+    await screen.findByText('김말순 (IB-001)')
+
+    await user.click(screen.getByRole('button', { name: '+ 어르신 추가' }))
+    await user.type(screen.getByLabelText('어르신 이름'), '홍길동')
+    await user.click(screen.getByRole('button', { name: '등록 완료' }))
 
     expect(await screen.findByText('홍길동 (IB-021)')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('이름이 비어 있으면 저장하지 않고 이름을 입력하도록 안내한다', async () => {
@@ -144,7 +172,8 @@ describe('어르신 등록 (n51 · n52 · n53)', () => {
     renderApp()
     await screen.findByText('김말순 (IB-001)')
 
-    await user.click(screen.getByRole('button', { name: '등록' }))
+    await user.click(screen.getByRole('button', { name: '+ 어르신 추가' }))
+    await user.click(screen.getByRole('button', { name: '등록 완료' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('어르신 이름을 입력해 주세요.')
     expect(마지막_등록_요청).toBeNull()
@@ -159,11 +188,13 @@ describe('어르신 등록 (n51 · n52 · n53)', () => {
     renderApp()
     await screen.findByText('김말순 (IB-001)')
 
+    await user.click(screen.getByRole('button', { name: '+ 어르신 추가' }))
     await user.type(screen.getByLabelText('어르신 이름'), '김말순')
-    await user.click(screen.getByRole('button', { name: '등록' }))
+    await user.click(screen.getByRole('button', { name: '등록 완료' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('IB-001')
-    expect(screen.getByRole('button', { name: '확인하고 등록' })).toBeInTheDocument()
+    const 모달 = screen.getByRole('dialog', { name: '동명이인이 있어요' })
+    expect(within(모달).getByText(/IB-001/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '계속 등록' })).toBeInTheDocument()
   })
 
   it('동명이인을 확인하면 그대로 저장한다 (n53)', async () => {
@@ -175,15 +206,50 @@ describe('어르신 등록 (n51 · n52 · n53)', () => {
     renderApp()
     await screen.findByText('김말순 (IB-001)')
 
+    await user.click(screen.getByRole('button', { name: '+ 어르신 추가' }))
     await user.type(screen.getByLabelText('어르신 이름'), '김말순')
-    await user.click(screen.getByRole('button', { name: '등록' }))
-    await screen.findByRole('button', { name: '확인하고 등록' })
+    await user.click(screen.getByRole('button', { name: '등록 완료' }))
+    await screen.findByRole('button', { name: '계속 등록' })
 
     등록_응답 = { status: 201, body: 어르신({ id: 3, name: '김말순', code: 'IB-021' }) }
-    await user.click(screen.getByRole('button', { name: '확인하고 등록' }))
+    await user.click(screen.getByRole('button', { name: '계속 등록' }))
 
     expect(await screen.findByText('김말순 (IB-021)')).toBeInTheDocument()
     expect(마지막_등록_요청).toEqual({ name: '김말순', confirmDuplicateName: true })
+  })
+})
+
+describe('명단 검색 (Issue #102)', () => {
+  beforeEach(() => {
+    명단 = [어르신(), 어르신({ id: 2, name: '박순자', code: 'IB-002' })]
+  })
+
+  it('이름으로 실시간 필터링한다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+    await screen.findByText('김말순 (IB-001)')
+
+    await user.type(screen.getByLabelText('이름 또는 ID 검색'), '박순자')
+
+    expect(screen.queryByText('김말순 (IB-001)')).not.toBeInTheDocument()
+    expect(screen.getByText('박순자 (IB-002)')).toBeInTheDocument()
+  })
+
+  it('ID로 실시간 필터링한다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+    await screen.findByText('김말순 (IB-001)')
+
+    await user.type(screen.getByLabelText('이름 또는 ID 검색'), 'IB-002')
+
+    expect(screen.queryByText('김말순 (IB-001)')).not.toBeInTheDocument()
+    expect(screen.getByText('박순자 (IB-002)')).toBeInTheDocument()
+  })
+
+  it('총 등록 인원 수를 표시한다', async () => {
+    renderApp()
+
+    expect(await screen.findByText('총 2명 등록됨')).toBeInTheDocument()
   })
 })
 
