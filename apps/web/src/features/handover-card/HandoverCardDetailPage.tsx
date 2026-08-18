@@ -4,7 +4,7 @@ import { ApiError } from '../../shared/api/client'
 import { BigButton } from '../../shared/ui/BigButton'
 import { PageLayout } from '../../shared/ui/PageLayout'
 import { CardsLoadFailed, CardsLoading } from './CardsLoadState'
-import { findCard, observedTimeLabel } from './handoverCard'
+import { findCard, observedDateTimeLabel, reviewStatusLabel } from './handoverCard'
 import { markSafety, type HandoverCard } from './handoverCardApi'
 import { HandoverCardBody } from './HandoverCardBody'
 import { useCardCacheUpdate, useHandoverCards } from './useHandoverCards'
@@ -26,7 +26,7 @@ export function HandoverCardDetailPage() {
   const parsed = Number(cardId)
   const card =
     cards.data === undefined || !Number.isInteger(parsed) ? null : findCard(cards.data, parsed)
-  const observedTime = card === null ? null : observedTimeLabel(card.observedAt)
+  const observedDateTime = card === null ? null : observedDateTimeLabel(card.observedAt)
 
   return (
     <PageLayout title="인계 카드 상세" backTo="/handover-cards" backLabel="목록으로">
@@ -34,23 +34,26 @@ export function HandoverCardDetailPage() {
       {cards.isError && <CardsLoadFailed onRetry={() => void cards.refetch()} />}
 
       {cards.isSuccess && card === null && (
-        <p className="text-xl text-slate-600">
+        <p className="text-xl text-ink-muted">
           그 인계 카드를 찾지 못했습니다. 오늘 목록에 없는 카드일 수 있습니다.
         </p>
       )}
 
       {card !== null && (
         <>
-          <header>
-            <h1 className="text-3xl font-bold text-slate-900">
+          <header className="flex flex-col gap-1">
+            <h1 className="text-3xl font-bold text-ink">
               {card.careRecipientName ?? '대상 어르신 미정'}
+              {card.careRecipientName && <span className="ml-1 text-2xl font-normal text-ink-muted">어르신</span>}
             </h1>
-            {observedTime !== null && (
-              <p className="mt-2 text-xl text-slate-600">오늘 {observedTime}에 있었던 일</p>
-            )}
+            {/* 날짜(요일)·시각·검토 상태를 한 줄에 인라인으로 (예: "2026-08-14 (금) 10:25 입력 / 검토 필요") */}
+            <p className="text-lg text-ink-muted">
+              {observedDateTime !== null && `${observedDateTime} 입력 / `}
+              {reviewStatusLabel(card.reviewStatus)}
+            </p>
           </header>
 
-          <article className="rounded-2xl border-2 border-slate-200 bg-white px-5 py-5">
+          <article className="rounded-2xl border-2 border-border-card bg-white px-5 py-5">
             <HandoverCardBody card={card} />
           </article>
 
@@ -67,7 +70,7 @@ export function HandoverCardDetailPage() {
           {/* n21 → n25. 어르신을 가리지 못한 카드도 여기서 지정해 확정한다 */}
           <Link
             to={`/handover-cards/${card.id}/edit`}
-            className="block rounded-2xl border-2 border-slate-300 bg-white px-6 py-5 text-center text-2xl font-semibold text-slate-900 hover:border-teal-600 hover:bg-teal-50"
+            className="block rounded-2xl border-2 border-border-card bg-white px-6 py-5 text-center text-2xl font-semibold text-ink hover:border-primary hover:bg-primary-soft"
           >
             카드 검토·수정하기
           </Link>
@@ -75,7 +78,7 @@ export function HandoverCardDetailPage() {
           {card.careRecipientId !== null && card.nextAction !== null && (
             <Link
               to={`/handover-cards/${card.id}/tasks/new`}
-              className="block rounded-2xl bg-teal-700 px-6 py-5 text-center text-2xl font-semibold text-white hover:bg-teal-800"
+              className="block rounded-2xl bg-primary px-6 py-5 text-center text-2xl font-semibold text-white hover:brightness-95"
             >
               다음 행동을 후속 업무로 배정하기
             </Link>
@@ -139,7 +142,7 @@ function SafetyToggle({ card }: { card: HandoverCard }) {
 function ExportEntry({ card }: { card: HandoverCard }) {
   if (!card.exportAllowed) {
     return (
-      <p className="text-lg text-slate-500">
+      <p className="text-lg text-ink-muted">
         {card.exportBlockedReason ?? '아직 문구를 만들 수 없습니다.'}
       </p>
     )
@@ -148,7 +151,7 @@ function ExportEntry({ card }: { card: HandoverCard }) {
   return (
     <Link
       to={`/handover-cards/${card.id}/export`}
-      className="block rounded-2xl bg-teal-700 px-6 py-5 text-center text-2xl font-semibold text-white hover:bg-teal-800"
+      className="block rounded-2xl bg-primary px-6 py-5 text-center text-2xl font-semibold text-white hover:brightness-95"
     >
       기록·보호자 전달 문구 만들기
     </Link>

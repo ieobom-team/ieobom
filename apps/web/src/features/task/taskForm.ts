@@ -22,7 +22,7 @@ export type TaskDraft = {
 }
 
 export const TASK_FIELD_LABELS: Record<string, string> = {
-  content: '다음 행동',
+  content: '후속 업무',
   assigneeJobRole: '담당',
   assigneeName: '담당',
   dueTime: '기한',

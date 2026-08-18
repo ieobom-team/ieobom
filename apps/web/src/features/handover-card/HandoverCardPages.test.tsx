@@ -122,7 +122,7 @@ describe('인계 카드 목록 (n18 · n19)', () => {
 
     await user.click(screen.getByRole('button', { name: /^인계 카드/ }))
 
-    expect(await screen.findByRole('heading', { name: '인계 카드' })).toBeInTheDocument()
+    expect(await screen.findByText('오늘의 인계 카드')).toBeInTheDocument()
   })
 
   it('어르신 이름을 카드 헤더에 함께 보여 준다', async () => {
@@ -299,7 +299,7 @@ describe('인계 카드 목록 (n18 · n19)', () => {
     expect(screen.queryByRole('link', { name: /기침/ })).not.toBeInTheDocument()
   })
 
-  it('어르신 필터로 특정 어르신 카드만 모아볼 수 있다', async () => {
+  it('이름 검색으로 특정 어르신 카드만 실시간으로 모아볼 수 있다', async () => {
     const user = userEvent.setup()
     목록_응답 = {
       status: 200,
@@ -317,10 +317,36 @@ describe('인계 카드 목록 (n18 · n19)', () => {
     await screen.findByRole('link', { name: /김말순 특이사항/ })
     expect(screen.getByRole('link', { name: /박순자 특이사항/ })).toBeInTheDocument()
 
-    // 박순자 어르신 선택
-    await user.selectOptions(screen.getByLabelText(/어르신 선택/), '2')
+    // 박순자로 검색
+    await user.type(screen.getByLabelText('어르신 이름 검색'), '박순자')
     expect(screen.queryByRole('link', { name: /김말순 특이사항/ })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: /박순자 특이사항/ })).toBeInTheDocument()
+  })
+
+  it('현황 요약 타일이 getCardStats 값을 정확히 보여준다', async () => {
+    목록_응답 = {
+      status: 200,
+      body: {
+        date: '2026-08-11',
+        recipients: [
+          {
+            careRecipientId: 1,
+            careRecipientName: '김말순',
+            cards: [
+              카드({ id: 31, reviewStatus: 'NEEDS_REVIEW' }),
+              카드({ id: 32, reviewStatus: 'REVIEWED' }),
+            ],
+          },
+        ],
+        unresolved: [],
+      },
+    }
+    renderApp()
+
+    await screen.findByRole('link', { name: /점심 식사량 저하/ })
+    // 라벨(전체/검토 필요/검토 완료)은 타일과 필터 칩에 함께 나오므로, 값은 타일 전용 접미사("개")로 짚는다
+    expect(screen.getByText('2개')).toBeInTheDocument()
+    expect(screen.getAllByText('1개')).toHaveLength(2)
   })
 
   it('당일 카드가 없으면 비어 있다고 알린다', async () => {
@@ -397,15 +423,16 @@ describe('인계 카드 상세 (n20 → n21 · n22)', () => {
     await user.click(await screen.findByRole('link', { name: /점심 식사량 저하/ }))
 
     // 캐시에 이미 있으므로 "불러오는 중"을 거치지 않는다. 최신 확인은 뒤에서 따로 한다.
-    expect(screen.getByRole('heading', { name: '김말순' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /^김말순/ })).toBeInTheDocument()
     expect(screen.queryByText(/불러오는 중/)).not.toBeInTheDocument()
   })
 
-  it('근거 원문과 관찰 시각, 다음 행동 제안값을 함께 보여 준다', async () => {
+  it('근거 원문과 관찰 시각·검토 상태, 다음 행동 제안값을 인라인 한 줄로 보여 준다', async () => {
     renderApp('/handover-cards/31')
 
     expect(await screen.findByText(/점심을 거의 안 드셨어요/)).toBeInTheDocument()
-    expect(screen.getByText(/오늘 12:40에 있었던 일/)).toBeInTheDocument()
+    // 카드 관찰 시각은 2026-08-11(화) 12:40. 검토 상태는 기본값 NEEDS_REVIEW
+    expect(screen.getByText('2026-08-11 (화) 12:40 입력 / 검토 필요')).toBeInTheDocument()
     expect(screen.getByText('제안 · 요양보호사 · 17:00까지')).toBeInTheDocument()
   })
 
@@ -467,6 +494,6 @@ describe('인계 카드 상세 (n20 → n21 · n22)', () => {
   it('관리자로 들어와도 같은 상세를 본다', async () => {
     renderApp('/handover-cards/31', 'MANAGER')
 
-    expect(await screen.findByRole('heading', { name: '김말순' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /^김말순/ })).toBeInTheDocument()
   })
 })

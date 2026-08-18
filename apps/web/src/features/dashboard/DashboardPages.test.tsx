@@ -205,7 +205,7 @@ describe('당일 운영 현황 대시보드 (n42 관리자 대시보드 · n43 �
     await user.click(await 미처리.findByRole('link', { name: '인계 카드 보기' }))
 
     // n46 인계 카드로 이동 → n18 인계 카드 상세 화면. 카드 상세는 어르신 이름을 제목으로 연다.
-    expect(await screen.findByRole('heading', { name: '김말순', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /^김말순/, level: 1 })).toBeInTheDocument()
     // 근거 원문은 따옴표와 텍스트가 다른 노드로 나뉘어 그려진다.
     expect(screen.getByText(/점심을 거의 안 드셨어요/)).toBeInTheDocument()
   })

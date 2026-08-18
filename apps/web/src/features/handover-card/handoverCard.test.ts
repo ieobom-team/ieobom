@@ -4,8 +4,12 @@ import {
   chipTextsFor,
   createdAtTimeLabel,
   dateLabel,
+  dateLabelWithWeekday,
+  filterByRecipientName,
   filterCards,
   findCard,
+  observedDateTimeLabel,
+  reviewStatusLabel,
   flattenCards,
   generalCards,
   getCardStats,
@@ -215,6 +219,47 @@ describe('시각과 날짜', () => {
 
   it('조회 기준일을 사람이 읽는 형태로 바꾼다', () => {
     expect(dateLabel('2026-08-11')).toBe('8월 11일')
+  })
+
+  it('요일 포함 날짜는 YYYY-MM-DD (요일) 형태로 바꾼다', () => {
+    // 2026-08-14는 금요일이다
+    expect(dateLabelWithWeekday('2026-08-14')).toBe('2026-08-14 (금)')
+  })
+
+  it('관찰 일시는 요일 포함 날짜와 시각을 한 줄로 합친다 (HandoverCardDetailPage 헤더)', () => {
+    // 2026-08-11은 화요일이다
+    expect(observedDateTimeLabel('2026-08-11T12:40:00')).toBe('2026-08-11 (화) 12:40')
+  })
+
+  it('원문에서 시각을 읽지 못한 카드는 관찰 일시를 보여주지 않는다', () => {
+    expect(observedDateTimeLabel(null)).toBeNull()
+  })
+})
+
+describe('검토 상태 라벨 (HandoverCardDetailPage 헤더 — CardBadges와 같은 문구)', () => {
+  it('검토 필요/검토 완료 문구를 돌려준다', () => {
+    expect(reviewStatusLabel('NEEDS_REVIEW')).toBe('검토 필요')
+    expect(reviewStatusLabel('REVIEWED')).toBe('검토 완료')
+  })
+})
+
+describe('어르신 이름 검색 (HandoverCreatePage TargetStep과 동일한 부분일치 방식)', () => {
+  const 카드들 = [
+    카드({ id: 1, careRecipientId: 1, careRecipientName: '김말순' }),
+    카드({ id: 2, careRecipientId: 2, careRecipientName: '박순자' }),
+  ]
+
+  it('검색어가 비어 있으면 전체를 돌려준다', () => {
+    expect(filterByRecipientName(카드들, '').map((c) => c.id)).toEqual([1, 2])
+  })
+
+  it('이름에 검색어가 포함된 카드만 남긴다', () => {
+    expect(filterByRecipientName(카드들, '박순자').map((c) => c.id)).toEqual([2])
+  })
+
+  it('어르신을 가리지 못해 이름이 없는 카드는 검색어와 매칭되지 않는다', () => {
+    const 미확정 = 카드({ id: 3, careRecipientId: null, careRecipientName: null })
+    expect(filterByRecipientName([...카드들, 미확정], '김').map((c) => c.id)).toEqual([1])
   })
 })
 

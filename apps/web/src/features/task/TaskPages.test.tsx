@@ -83,8 +83,11 @@ let 목록_응답: Outcome
 let 상세_응답: Outcome
 let 완료_응답: Outcome
 let 클레임_응답: Outcome
+/** 업무(handoverCardId: 31)가 연결하는 인계 카드. 개별 테스트에서 exportAllowed 등을 오버라이드한다. */
+let 연결된카드: HandoverCard
 
 beforeEach(() => {
+  연결된카드 = 카드()
   목록_응답 = { status: 200, body: { date: '2026-08-12', tasks: [업무()] } }
   상세_응답 = { status: 200, body: 업무() }
   완료_응답 = {
@@ -148,7 +151,7 @@ beforeEach(() => {
                 {
                   careRecipientId: 1,
                   careRecipientName: '김말순',
-                  cards: [카드()],
+                  cards: [연결된카드],
                 },
               ],
               unresolved: [],
@@ -230,7 +233,7 @@ describe('업무 목록 (n31 · n32)', () => {
 
     await user.click(screen.getByRole('button', { name: /^오늘의 업무/ }))
 
-    expect(await screen.findByRole('heading', { name: '오늘의 업무' })).toBeInTheDocument()
+    expect(await screen.findByText('오늘의 후속 업무')).toBeInTheDocument()
   })
 
   it('담당·기한·상태를 함께 보여 준다', async () => {
@@ -265,6 +268,27 @@ describe('업무 목록 (n31 · n32)', () => {
     expect(within(열린업무목록.getByRole('button', { name: /물 챙겨 드리기/ })).getByText('직종만 배정')).toBeInTheDocument()
   })
 
+  it('현황 요약 타일이 내게 배정된 업무 + 내 직종에 열려 있는 업무 기준으로 정확히 표시된다', async () => {
+    목록_응답 = {
+      status: 200,
+      body: {
+        date: '2026-08-12',
+        tasks: [
+          업무({ id: 4, content: '저녁 식사량 확인', assigneeName: '김하늘', status: 'PENDING', statusLabel: '미처리' }),
+          열린업무({ id: 5, content: '물 챙겨 드리기', assigneeJobRole: 'CAREGIVER', assigneeJobRoleLabel: '요양보호사' }),
+          // 다른 직원에게 배정된 업무는 이 화면 범위 밖이라 집계에서도 빠져야 한다.
+          업무({ id: 6, content: '이도윤 담당 업무', assigneeName: '이도윤', status: 'DONE', statusLabel: '완료' }),
+        ],
+      },
+    }
+    renderApp()
+
+    await screen.findByText('저녁 식사량 확인')
+    // 전체 = 내 업무(1) + 열린 업무(1) = 2, 둘 다 미처리라 전체·미처리 타일이 함께 '2개'
+    expect(screen.getAllByText('2개')).toHaveLength(2)
+    expect(screen.getByText('0개')).toBeInTheDocument() // 완료 없음. 다른 직원 업무는 집계에서 빠진다
+  })
+
   it('다른 직원에게 배정되었거나 다른 직종에 열린 업무는 보이지 않는다', async () => {
     목록_응답 = {
       status: 200,
@@ -296,7 +320,7 @@ describe('업무 목록 (n31 · n32)', () => {
 
     await user.click(await screen.findByRole('button', { name: /저녁 식사량 확인/ }))
 
-    expect(await screen.findByRole('heading', { name: '업무 상세' })).toBeInTheDocument()
+    expect(await screen.findByText('업무 상세')).toBeInTheDocument()
   })
 })
 
@@ -308,7 +332,7 @@ describe('업무 상세와 완료 처리 (n35 · n59 · n60 · n33)', () => {
     await user.click(await screen.findByRole('button', { name: '완료 처리' }))
     await user.click(screen.getByRole('button', { name: '아니오' }))
 
-    expect(await screen.findByRole('heading', { name: '오늘의 업무' })).toBeInTheDocument()
+    expect(await screen.findByText('오늘의 후속 업무')).toBeInTheDocument()
   })
 
   it('수행 확인 후 확인자 이름으로 완료 처리하면 대리 완료 여부와 확인자를 보여 준다', async () => {
@@ -352,6 +376,49 @@ describe('업무 상세와 완료 처리 (n35 · n59 · n60 · n33)', () => {
   })
 })
 
+describe('연결된 인계 카드 (Manyfast F-SNBVHR — task.handoverCardId로 오늘 목록에서 조인)', () => {
+  it('어르신·분류·상태 변화·조치·다음 행동·원문 근거를 보여주고, 원문 근거 링크로 카드 상세로 이동한다', async () => {
+    renderApp('/tasks/4')
+
+    const 연결카드박스 = within(await screen.findByRole('region', { name: '연결된 인계 카드' }))
+    expect(연결카드박스.getByText(/^김말순/)).toBeInTheDocument()
+    expect(연결카드박스.getByText('일반')).toBeInTheDocument() // 연결된카드 기본값 safetyRelated: false
+    expect(연결카드박스.getByText('상태 변화')).toBeInTheDocument()
+    expect(연결카드박스.getByText('점심 식사량 저하')).toBeInTheDocument()
+    expect(연결카드박스.getByText('원문 근거')).toBeInTheDocument()
+    // 원문 근거는 접거나 가리지 않고 상시 펼쳐 보여준다 (Manyfast F-SNBVHR rules)
+    expect(연결카드박스.getByText(/점심을 거의 안 드셨어요/)).toBeInTheDocument()
+
+    const link = 연결카드박스.getByRole('link', { name: /원문 근거 확인 가능/ })
+    expect(link).toHaveAttribute('href', '/handover-cards/31')
+  })
+
+  it('오늘 목록에 없는 카드면 블록을 생략하지 않고 찾지 못했다고 안내한다', async () => {
+    상세_응답 = { status: 200, body: 업무({ handoverCardId: 999 }) }
+    renderApp('/tasks/4')
+
+    const 연결카드박스 = within(await screen.findByRole('region', { name: '연결된 인계 카드' }))
+    expect(await 연결카드박스.findByText(/연결된 인계 카드를 찾지 못했습니다/)).toBeInTheDocument()
+  })
+
+  it('연결 카드의 exportAllowed가 true면 기록 문구 출력 버튼을 보여준다', async () => {
+    renderApp('/tasks/4')
+
+    expect(await screen.findByRole('link', { name: '기록 문구 출력' })).toHaveAttribute(
+      'href',
+      '/handover-cards/31/export',
+    )
+  })
+
+  it('연결 카드의 exportAllowed가 false면 기록 문구 출력 버튼을 보여주지 않는다', async () => {
+    연결된카드 = 카드({ exportAllowed: false, exportBlockedReason: '검토 완료 후 생성할 수 있습니다.' })
+    renderApp('/tasks/4')
+
+    await screen.findByRole('region', { name: '연결된 인계 카드' })
+    expect(screen.queryByRole('link', { name: '기록 문구 출력' })).not.toBeInTheDocument()
+  })
+})
+
 describe("담당 확정 ('새 플로우 5' n40 → '내가 처리할게요' 선택)", () => {
   it('직종만 배정된 업무에는 버튼이 뜨고, 맡으면 담당자·확정 시각으로 바뀌며 버튼이 사라진다', async () => {
     상세_응답 = { status: 200, body: 열린업무() }
@@ -363,8 +430,9 @@ describe("담당 확정 ('새 플로우 5' n40 → '내가 처리할게요' 선�
 
     const notice = await screen.findByRole('status')
     expect(within(notice).getByText('담당자로 확정되었습니다.')).toBeInTheDocument()
-    expect(screen.getByText(/담당 김하늘/)).toBeInTheDocument()
-    expect(screen.getByText('담당자 확정')).toBeInTheDocument()
+    const 핵심정보 = within(screen.getByRole('region', { name: '업무 핵심 정보' }))
+    expect(핵심정보.getByText('김하늘')).toBeInTheDocument()
+    expect(핵심정보.getByText('담당자 확정')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '내가 처리할게요' })).not.toBeInTheDocument()
   })
 
@@ -372,7 +440,10 @@ describe("담당 확정 ('새 플로우 5' n40 → '내가 처리할게요' 선�
     상세_응답 = { status: 200, body: 업무() }
     renderApp('/tasks/4')
 
-    expect(await screen.findByText('저녁 식사량 확인')).toBeInTheDocument()
+    const 핵심정보 = within(
+      await screen.findByRole('region', { name: '업무 핵심 정보' }),
+    )
+    expect(핵심정보.getByText('저녁 식사량 확인')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '내가 처리할게요' })).not.toBeInTheDocument()
   })
 
@@ -403,7 +474,9 @@ describe("담당 확정 ('새 플로우 5' n40 → '내가 처리할게요' 선�
 
     const notice = await screen.findByRole('status')
     expect(within(notice).getByText(/이준호님이 \d+분 전 맡았습니다\./)).toBeInTheDocument()
-    expect(screen.getByText(/담당 이준호/)).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('region', { name: '업무 핵심 정보' })).getByText('이준호'),
+    ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '내가 처리할게요' })).not.toBeInTheDocument()
   })
 
@@ -447,7 +520,9 @@ describe("담당 확정 ('새 플로우 5' n40 → '내가 처리할게요' 선�
 
     expect(await screen.findByRole('alert')).toHaveTextContent('서버 오류')
     // 실패해도 업무 상세와 버튼은 그대로 남는다.
-    expect(screen.getByText('저녁 식사량 확인')).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('region', { name: '업무 핵심 정보' })).getByText('저녁 식사량 확인'),
+    ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '내가 처리할게요' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '완료 처리' })).toBeInTheDocument()
   })
@@ -457,7 +532,7 @@ describe('후속 업무 배정 (n26 → n27 · n28 · n29 · n30)', () => {
   it('카드의 제안값으로 채워져 열리며 제안된 직종의 소속 직원만 드롭다운에 노출된다', async () => {
     renderApp('/handover-cards/31/tasks/new')
 
-    expect(await screen.findByLabelText('다음 행동')).toHaveValue('저녁 식사량 확인')
+    expect(await screen.findByLabelText('후속 업무')).toHaveValue('저녁 식사량 확인')
     expect(screen.getByLabelText('기한')).toHaveValue('17:00')
 
     const select = screen.getByLabelText('담당자 (선택)') as HTMLSelectElement
@@ -467,6 +542,18 @@ describe('후속 업무 배정 (n26 → n27 · n28 · n29 · n30)', () => {
     expect(screen.getByRole('option', { name: '최민재 (ST-004)' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: '정유진 (ST-005)' })).toBeInTheDocument()
     expect(screen.queryByRole('option', { name: '김하늘 (ST-001)' })).not.toBeInTheDocument()
+  })
+
+  it('인계 카드 요약에 어르신 이름·카드 요약을 보여주고 원문 근거 링크로 카드 상세로 이동한다', async () => {
+    renderApp('/handover-cards/31/tasks/new')
+
+    // 카드 요약은 새 API 없이 이미 로드된 카드 값(statusChange)을 그대로 쓴다
+    expect(await screen.findByText('인계 카드 요약')).toBeInTheDocument()
+    expect(screen.getByText(/^김말순/)).toBeInTheDocument()
+    expect(screen.getByText('점심 식사량 저하')).toBeInTheDocument()
+
+    const link = screen.getByRole('link', { name: /원문 근거 확인 가능/ })
+    expect(link).toHaveAttribute('href', '/handover-cards/31')
   })
 
   it('직종을 바꾸면 해당 직종의 직원 목록으로 바뀌고 직원을 골라 배정할 수 있다', async () => {
@@ -483,7 +570,7 @@ describe('후속 업무 배정 (n26 → n27 · n28 · n29 · n30)', () => {
 
     await user.selectOptions(select, 'ST-001')
 
-    await user.click(screen.getByRole('button', { name: '업무로 배정하기' }))
+    await user.click(screen.getByRole('button', { name: '업무 배정 완료' }))
 
     const notice = await screen.findByRole('status')
     expect(within(notice).getByRole('heading', { name: '업무를 배정했습니다' })).toBeInTheDocument()
@@ -494,7 +581,7 @@ describe('후속 업무 배정 (n26 → n27 · n28 · n29 · n30)', () => {
     const user = userEvent.setup()
     renderApp('/handover-cards/31/tasks/new')
 
-    const button = await screen.findByRole('button', { name: '업무로 배정하기' })
+    const button = await screen.findByRole('button', { name: '업무 배정 완료' })
     await user.click(button)
 
     const notice = await screen.findByRole('status')
