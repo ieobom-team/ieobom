@@ -315,7 +315,8 @@ describe('당일 운영 현황 대시보드 (n42 관리자 대시보드 · n43 �
     expect(브리핑박스.getByText(/미처리 항목 1건이 하원 전까지 확인이 필요합니다/)).toBeInTheDocument()
 
     await user.click(브리핑박스.getByRole('link', { name: '하원 미처리 브리핑 열기' }))
-    expect(await screen.findByRole('heading', { name: '하원 미처리 브리핑' })).toBeInTheDocument()
+    // 화면 제목은 AppHeader 2행에서만 노출된다 — 본문에 중복 h1을 두지 않는다. (#101)
+    expect(await screen.findByText('하원 미처리 브리핑')).toBeInTheDocument()
   })
 })
 
@@ -326,7 +327,8 @@ describe('하원 미처리 브리핑 (n48 브리핑 선택 → n44 브리핑 · 
 
     await user.click(await screen.findByRole('link', { name: '하원 미처리 브리핑 열기' }))
 
-    expect(await screen.findByRole('heading', { name: '하원 미처리 브리핑' })).toBeInTheDocument()
+    // 화면 제목은 AppHeader 2행에서만 노출된다 — 본문에 중복 h1을 두지 않는다. (#101)
+    expect(await screen.findByText('하원 미처리 브리핑')).toBeInTheDocument()
   })
 
   it('미처리만 보여 주고 다음 날로 넘어가지 않는다고 알린다', async () => {
@@ -343,7 +345,8 @@ describe('하원 미처리 브리핑 (n48 브리핑 선택 → n44 브리핑 · 
     await screen.findByText('저녁 식사량 확인')
 
     await user.click(screen.getByRole('link', { name: '하원 미처리 브리핑 열기' }))
-    await screen.findByRole('heading', { name: '하원 미처리 브리핑' })
+    // 화면 제목은 AppHeader 2행에서만 노출된다 — 본문에 중복 h1을 두지 않는다. (#101)
+    await screen.findByText('하원 미처리 브리핑')
 
     // 이 호출이 서버의 브리핑 확인 기록이다. 캐시로 때우면 기록이 남지 않는다.
     const 호출 = vi.mocked(fetch).mock.calls.map(([input]) => String(input))
