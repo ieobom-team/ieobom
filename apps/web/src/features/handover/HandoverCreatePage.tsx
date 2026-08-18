@@ -22,6 +22,7 @@ import { enqueue, OFFLINE_QUEUE_KEY } from './offlineQueue'
 import {
   createSpeechRecognizer,
   isSpeechRecognitionSupported,
+  type SpeechDiagnosticsMode,
   type SpeechRecognizer,
 } from './speechRecognition'
 import {
@@ -66,6 +67,24 @@ type Outcome = 'form' | 'done' | 'queued'
 /** 이 필드들의 보완 안내가 뜨면 "추가 설정" 아코디언을 강제로 펼친다 — 접힌 채로는 고칠 수 없다. */
 const SETTINGS_FIELDS = new Set(['proxyInput', 'infoSource', 'occurredAt'])
 
+/**
+ * 음성 진단 패널을 켜는 주소 파라미터. **임시다 — 원인이 확정되면 되돌린다.**
+ *
+ * Android 모바일 배포에서만 인식 결과가 하나도 오지 않고 아무 안내 없이 세션이 끝나는 현상을
+ * 실기기에서 재현해 보기 위한 것이다. USB 원격 디버깅을 붙일 수 없는 브라우저(삼성인터넷 등)에서도
+ * 이벤트 순서를 눈으로 볼 수 있어야 해서 화면에 직접 그린다.
+ *
+ * `?voicedebug=1` 이 없으면 패널도 없고 인식기에 진단 설정도 넘기지 않는다 — 동작은 종전 그대로다.
+ */
+const VOICE_DEBUG_PARAM = 'voicedebug'
+
+/** 진단 패널에서 고를 수 있는 시작 순서. 무엇을 가르는지는 `speechRecognition.ts` 맨 위에 있다. */
+const VOICE_DEBUG_MODES: { mode: SpeechDiagnosticsMode; label: string; hint: string }[] = [
+  { mode: 'default', label: 'A 지금 동작', hint: '녹음 → 인식 (배포된 순서 그대로)' },
+  { mode: 'recognition-only', label: 'B 인식만', hint: '녹음을 걸지 않는다 — 마이크 경합 확인' },
+  { mode: 'recognition-first', label: 'C 인식 먼저', hint: '인식을 동기로 먼저 — 제스처 소실 확인' },
+]
+
 function defaultInputMethod(): InputMethod {
   return resolveDefaultInputMethod(readLastInputMethod(), isSpeechRecognitionSupported())
 }
@@ -88,6 +107,17 @@ export function HandoverCreatePage() {
   const [voiceFinishing, setVoiceFinishing] = useState(false)
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null)
   const voiceRecognizerRef = useRef<SpeechRecognizer | null>(null)
+  /** 음성 진단(임시). `?voicedebug=1` 일 때만 켜진다 — 없으면 아래 세 값은 쓰이지 않는다. */
+  const voiceDebug = useMemo(
+    () =>
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).has(VOICE_DEBUG_PARAM),
+    [],
+  )
+  const [voiceDebugMode, setVoiceDebugMode] = useState<SpeechDiagnosticsMode>('default')
+  const [voiceDebugLog, setVoiceDebugLog] = useState<string[]>([])
+  /** 로그 시각의 기준점. 마이크를 누른 순간부터의 경과 ms 를 보려고 둔다. */
+  const voiceDebugStartRef = useRef(0)
   /**
    * 듣는 중에 저장을 눌렀는지. 마이크가 멈추고 정리가 끝나면(effect가 감지) 이어서 실제 저장으로
    * 넘어간다. 인식기 콜백(`handleVoiceEnd`)에서 바로 저장을 부르지 않는 이유는, 그 콜백이 마이크를
@@ -231,16 +261,29 @@ export function HandoverCreatePage() {
     }
   }
 
+  /** 진단 로그 한 줄. 원격 디버깅을 붙일 수 있는 브라우저에서도 보이도록 콘솔에도 같이 남긴다. */
+  const appendVoiceDebugLog = (line: string) => {
+    const elapsed = Date.now() - voiceDebugStartRef.current
+    const entry = `[${String(elapsed).padStart(5)}ms] ${line}`
+    console.log('[VOICE]', entry)
+    setVoiceDebugLog((current) => [...current, entry])
+  }
+
   const toggleVoiceListening = () => {
     if (voiceListening) {
       setVoiceFinishing(true)
       voiceRecognizerRef.current?.stop()
       return
     }
+    if (voiceDebug) {
+      voiceDebugStartRef.current = Date.now()
+      setVoiceDebugLog([`UA — ${navigator.userAgent}`])
+    }
     const recognizer = createSpeechRecognizer(
       (transcript) => update({ rawText: transcript }),
       handleVoiceEnd,
       (message) => setVoiceNotice(message),
+      voiceDebug ? { mode: voiceDebugMode, log: appendVoiceDebugLog } : undefined,
     )
     voiceRecognizerRef.current = recognizer
     // 새로 말하면 앞서 녹음한 음성은 더 이상 지금 글의 원본이 아니다.
@@ -366,6 +409,11 @@ export function HandoverCreatePage() {
         voiceFinishing={voiceFinishing}
         voiceNotice={voiceNotice}
         onToggleVoiceListening={toggleVoiceListening}
+        voiceDebug={
+          voiceDebug
+            ? { mode: voiceDebugMode, onPickMode: setVoiceDebugMode, log: voiceDebugLog }
+            : null
+        }
       />
 
       <RecipientSection
@@ -619,6 +667,58 @@ function TextContent({ value, onChange }: { value: string; onChange: (value: str
   )
 }
 
+/** 음성 진단 패널에 필요한 것 묶음(임시). `null` 이면 패널을 그리지 않는다. */
+type VoiceDebug = {
+  mode: SpeechDiagnosticsMode
+  onPickMode: (mode: SpeechDiagnosticsMode) => void
+  log: string[]
+}
+
+/**
+ * 음성 진단 패널. **임시다 — 원인이 확정되면 이 컴포넌트와 호출부를 함께 되돌린다.**
+ *
+ * `?voicedebug=1` 로만 뜨므로 실제 사용자에게는 보이지 않는다. 그래서 디자인 시스템
+ * (`docs/DESIGN.md`)의 큰 글자·색 규칙을 따르지 않고, 로그가 최대한 많이 보이도록 잡았다.
+ *
+ * 세 가지 시작 순서를 골라 눌러 보고 어디서 끊기는지 비교하는 것이 목적이다. 판정 기준은
+ * `speechRecognition.ts` 맨 위 주석에 있다.
+ */
+function VoiceDebugPanel({ debug, listening }: { debug: VoiceDebug; listening: boolean }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border-2 border-dashed border-slate-400 bg-slate-50 p-3">
+      <p className="text-sm font-bold text-slate-700">
+        음성 진단 (임시 · ?voicedebug=1) — 순서를 고르고 마이크를 누르세요
+      </p>
+
+      <div className="flex gap-2">
+        {VOICE_DEBUG_MODES.map(({ mode, label, hint }) => (
+          <button
+            key={mode}
+            type="button"
+            title={hint}
+            disabled={listening}
+            onClick={() => debug.onPickMode(mode)}
+            className={`flex-1 rounded border px-2 py-3 text-sm disabled:opacity-40 ${
+              debug.mode === mode
+                ? 'border-slate-800 bg-slate-800 font-bold text-white'
+                : 'border-slate-400 bg-white text-slate-700'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-slate-600">
+        {VOICE_DEBUG_MODES.find((item) => item.mode === debug.mode)?.hint}
+      </p>
+
+      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-all rounded bg-slate-900 p-2 text-xs leading-relaxed text-green-400">
+        {debug.log.length === 0 ? '(마이크를 누르면 이벤트가 여기 쌓입니다)' : debug.log.join('\n')}
+      </pre>
+    </div>
+  )
+}
+
 /**
  * 음성 입력 내용. 순수하게 보여 주기만 한다 — 인식기·상시 녹음 금지는 부모(`HandoverCreatePage`)가
  * 쥐고 있다. 저장 버튼이 "듣는 중이면 멈추고 이어서 저장"을 하려면 녹음기가 부모 쪽에 있어야
@@ -632,6 +732,7 @@ function VoiceContent({
   notice,
   onToggleListening,
   onChangeRawText,
+  debug,
 }: {
   rawText: string
   audioData: string | undefined
@@ -640,6 +741,7 @@ function VoiceContent({
   notice: string | null
   onToggleListening: () => void
   onChangeRawText: (value: string) => void
+  debug: VoiceDebug | null
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -662,6 +764,8 @@ function VoiceContent({
           {finishing ? '정리하는 중…' : listening ? '듣고 있어요 · 눌러서 멈추기' : '눌러서 말하기'}
         </p>
       </div>
+
+      {debug !== null && <VoiceDebugPanel debug={debug} listening={listening} />}
 
       {!listening && !finishing && audioData !== undefined && (
         <p role="status" className="text-xl text-ink-muted">
@@ -741,6 +845,7 @@ function MethodSection({
   voiceFinishing,
   voiceNotice,
   onToggleVoiceListening,
+  voiceDebug,
 }: {
   draft: HandoverDraft
   onPickMethod: (value: InputMethod) => void
@@ -750,6 +855,7 @@ function MethodSection({
   voiceFinishing: boolean
   voiceNotice: string | null
   onToggleVoiceListening: () => void
+  voiceDebug: VoiceDebug | null
 }) {
   return (
     <section aria-labelledby="method-heading" className="flex flex-col gap-4">
@@ -770,6 +876,7 @@ function MethodSection({
           notice={voiceNotice}
           onToggleListening={onToggleVoiceListening}
           onChangeRawText={onChangeRawText}
+          debug={voiceDebug}
         />
       )}
       {draft.inputMethod === 'CHECK' && (

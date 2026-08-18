@@ -12,6 +12,24 @@
  * 일어나고, 화면을 벗어나면 호출한 쪽이 반드시 `stop()`을 불러야 한다 — 상시 녹음 금지는
  * 화면(`HandoverCreatePage`)의 책임이다. 다만 마이크 허용이 화면을 벗어난 뒤에 떨어지는
  * 경우까지 화면이 막을 수는 없어서, 그 한 경우만 이 파일이 함께 막는다.
+ *
+ * ---
+ *
+ * ## 진단 모드 (임시 — 원인 확정 후 되돌린다)
+ *
+ * Android 모바일 배포에서만 인식 결과가 하나도 오지 않고, 아무 안내 없이 세션이 조용히 끝나는
+ * 현상을 조사하기 위한 코드가 `SpeechDiagnostics` 로 들어와 있다.
+ *
+ * 화면에서 `?voicedebug=1` 로만 켜지며, 파라미터가 없으면 아래 동작은 종전과 완전히 같다.
+ * 목적은 **시작 순서 세 가지를 갈라 보는 것**이다.
+ *
+ * - `default` — 녹음(`getUserMedia` → `MediaRecorder`)을 먼저 띄우고 그 `Promise` 안에서
+ *   인식을 시작한다. 지금 배포된 동작 그대로다.
+ * - `recognition-only` — 녹음을 아예 걸지 않고 인식만 한다. 여기서 글자가 나오면 마이크를
+ *   `MediaRecorder` 가 물고 있는 것이 원인이다.
+ * - `recognition-first` — 인식을 클릭 핸들러 안에서 **동기로** 먼저 시작하고 녹음을 뒤에
+ *   붙인다. 여기서만 글자가 나오면 `Promise` 를 건너며 사용자 제스처 컨텍스트를 잃은 것이
+ *   원인이다.
  */
 
 declare global {
@@ -34,6 +52,15 @@ interface SpeechRecognitionInstance {
   onresult: ((event: SpeechRecognitionEventLike) => void) | null
   onend: (() => void) | null
   onerror: ((event: SpeechRecognitionErrorLike) => void) | null
+  /** 아래는 진단 로그에서만 쓴다. 브라우저가 실제로 어디까지 오는지 보려는 것뿐이다. */
+  onstart?: (() => void) | null
+  onaudiostart?: (() => void) | null
+  onsoundstart?: (() => void) | null
+  onspeechstart?: (() => void) | null
+  onspeechend?: (() => void) | null
+  onsoundend?: (() => void) | null
+  onaudioend?: (() => void) | null
+  onnomatch?: (() => void) | null
 }
 
 interface SpeechRecognitionEventLike {
@@ -47,6 +74,15 @@ interface SpeechRecognitionErrorLike {
 export type SpeechRecognizer = {
   start: () => void
   stop: () => void
+}
+
+/** 진단 모드에서 갈라 볼 시작 순서. 무엇을 가르는지는 파일 맨 위 주석에 있다. */
+export type SpeechDiagnosticsMode = 'default' | 'recognition-only' | 'recognition-first'
+
+/** 진단 설정. 넘기지 않으면 로그도 남지 않고 동작도 종전과 같다. */
+export type SpeechDiagnostics = {
+  mode: SpeechDiagnosticsMode
+  log: (line: string) => void
 }
 
 /** Chrome 이 실제로 녹음하는 형식. 지원하지 않으면 브라우저 기본값으로 떨어진다. */
@@ -85,16 +121,22 @@ export function speechErrorMessage(error: string): string {
  *
  * `onTranscript`는 지금까지 인식된 전체 문장을 매번 통째로 준다 — 중간 결과와 최종
  * 결과를 이어 붙이는 계산을 화면 쪽이 다시 하지 않게 하기 위해서다.
+ *
+ * `diagnostics`는 임시 조사용이다. 넘기지 않으면 동작이 달라지지 않는다.
  */
 export function createSpeechRecognizer(
   onTranscript: (transcript: string) => void,
   onEnd: (audioBase64: string | null) => void,
   onError: (message: string) => void,
+  diagnostics?: SpeechDiagnostics,
 ): SpeechRecognizer | null {
   const Ctor = speechRecognitionConstructor()
   if (Ctor === null) {
     return null
   }
+
+  const log = (line: string) => diagnostics?.log(line)
+  const mode: SpeechDiagnosticsMode = diagnostics?.mode ?? 'default'
 
   const recognition = new Ctor()
   recognition.lang = 'ko-KR'
@@ -132,6 +174,7 @@ export function createSpeechRecognizer(
       return
     }
     ended = true
+    log(`finish(음성 ${audio === null ? '없음' : `${audio.length}자`})`)
     releaseMic()
     onEnd(audio)
   }
@@ -150,16 +193,53 @@ export function createSpeechRecognizer(
     for (let i = 0; i < event.results.length; i += 1) {
       combined += event.results[i][0].transcript
     }
+    log(`rec.onresult (${event.results.length}건) — ${combined}`)
     onTranscript(combined)
   }
 
   recognition.onerror = (event) => {
+    log(`rec.onerror — ${event.error}`)
     onError(speechErrorMessage(event.error))
     stopRecording()
   }
 
   recognition.onend = () => {
+    log('rec.onend')
     stopRecording()
+  }
+
+  // 진단용 이벤트. 어디까지 오고 어디서 끊기는지 보려는 것뿐이라 동작에는 관여하지 않는다.
+  if (diagnostics !== undefined) {
+    recognition.onstart = () => log('rec.onstart')
+    recognition.onaudiostart = () => log('rec.onaudiostart — 마이크 입력 열림')
+    recognition.onsoundstart = () => log('rec.onsoundstart — 소리 감지')
+    recognition.onspeechstart = () => log('rec.onspeechstart — 말소리 감지')
+    recognition.onspeechend = () => log('rec.onspeechend')
+    recognition.onsoundend = () => log('rec.onsoundend')
+    recognition.onaudioend = () => log('rec.onaudioend')
+    recognition.onnomatch = () => log('rec.onnomatch')
+  }
+
+  /**
+   * 인식만 시작한다. 녹음과 분리해 둔 것은 시작 순서를 갈라 보기 위해서다.
+   *
+   * 길이 상한도 여기서 건다 — 녹음 없이 인식만 도는 경우에도 상시 녹음 금지는 지켜야 한다.
+   *
+   * 예외를 밖으로 던지지 않고 여기서 끝내는 이유는, 인식이 클릭 핸들러에서 **동기로** 시작되는
+   * 경로가 생겼기 때문이다. 던지면 화면 쪽 클릭 핸들러가 통째로 깨진다. 처리 내용은 종전에
+   * `getUserMedia` 의 `catch` 가 하던 것과 같다.
+   */
+  const startRecognition = () => {
+    // 상시 녹음이 되지 않게 길이에도 상한을 둔다. (Manyfast F-YJJJUX rules)
+    limitTimer = setTimeout(() => recognition.stop(), MAX_RECORDING_MS)
+    try {
+      recognition.start()
+      log('rec.start() 호출 성공')
+    } catch (error) {
+      log(`rec.start() 예외 — ${String(error)}`)
+      onError(speechErrorMessage('not-allowed'))
+      finish(null)
+    }
   }
 
   const startRecording = (granted: MediaStream) => {
@@ -180,6 +260,7 @@ export function createSpeechRecognizer(
 
     mediaRecorder.onstop = () => {
       const blob = new Blob(audioChunks, { type: mediaRecorder?.mimeType || PREFERRED_MIME_TYPE })
+      log(`MediaRecorder.onstop — ${blob.size}바이트`)
       if (blob.size === 0) {
         finish(null)
         return
@@ -205,22 +286,35 @@ export function createSpeechRecognizer(
     }
 
     mediaRecorder.start()
-    // 상시 녹음이 되지 않게 길이에도 상한을 둔다. (Manyfast F-YJJJUX rules)
-    limitTimer = setTimeout(() => recognition.stop(), MAX_RECORDING_MS)
-    recognition.start()
+    log(`MediaRecorder.start() — ${mediaRecorder.mimeType || '기본 형식'} · ${mediaRecorder.state}`)
   }
 
   return {
     start: () => {
+      log(`start() — mode=${mode}`)
+
+      if (mode === 'recognition-only') {
+        // 녹음을 아예 걸지 않는다. 마이크 경합 가설을 가른다.
+        startRecognition()
+        return
+      }
+
       if (navigator.mediaDevices?.getUserMedia === undefined) {
         // 녹음을 지원하지 않는 환경. 인식은 그대로 하고 원본 음성만 없이 간다.
-        recognition.start()
+        log('getUserMedia 없음 — 인식만 시작한다')
+        startRecognition()
         return
+      }
+
+      if (mode === 'recognition-first') {
+        // 클릭 핸들러 안에서 동기로 먼저 시작한다. 제스처 컨텍스트 소실 가설을 가른다.
+        startRecognition()
       }
 
       navigator.mediaDevices
         .getUserMedia({ audio: true })
         .then((granted) => {
+          log('getUserMedia 허용됨')
           if (stopped) {
             // 허용이 떨어지기 전에 화면을 벗어났다. 여기서 녹음을 시작하면 화면 밖에서
             // 마이크가 계속 켜져 있게 된다. (Manyfast F-YJJJUX rules — 상시 녹음 금지)
@@ -229,13 +323,18 @@ export function createSpeechRecognizer(
             return
           }
           startRecording(granted)
+          if (mode === 'default') {
+            startRecognition()
+          }
         })
-        .catch(() => {
+        .catch((error: unknown) => {
+          log(`getUserMedia 거부/실패 — ${String(error)}`)
           onError(speechErrorMessage('not-allowed'))
           finish(null)
         })
     },
     stop: () => {
+      log('stop() 호출됨')
       stopped = true
       recognition.stop()
       stopRecording()
