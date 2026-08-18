@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router'
 import { BigButton } from '../../shared/ui/BigButton'
 import { PageLayout } from '../../shared/ui/PageLayout'
 import { useSession } from '../session/sessionContext'
-import { assigneeLabel, claimStatusLabel, dueTimeLabel } from './task'
+import { assigneeLabel, claimStatusLabel, dueTimeLabel, myAssignedTasks, myOpenTasks } from './task'
 import { TasksLoadFailed, TasksLoading } from './TaskLoadState'
 import type { TaskResponse } from './taskApi'
 import { useTasks } from './useTasks'
@@ -24,12 +24,8 @@ export function TaskListPage() {
   const tasks = useTasks()
   const { session } = useSession()
 
-  const myTasks =
-    tasks.data?.tasks.filter((task) => task.assigneeName === session?.staff.name) ?? []
-  const openTasks =
-    tasks.data?.tasks.filter(
-      (task) => task.assigneeName === null && task.assigneeJobRole === session?.staff.jobRole,
-    ) ?? []
+  const myTasks = tasks.data ? myAssignedTasks(tasks.data.tasks, session?.staff) : []
+  const openTasks = tasks.data ? myOpenTasks(tasks.data.tasks, session?.staff) : []
 
   return (
     <PageLayout title="오늘의 업무" showBottomNav backTo="/field" backLabel="현장 홈">

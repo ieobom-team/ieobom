@@ -228,7 +228,7 @@ describe('업무 목록 (n31 · n32)', () => {
     const user = userEvent.setup()
     renderApp('/field')
 
-    await user.click(screen.getByRole('button', { name: /내 할 일 확인/ }))
+    await user.click(screen.getByRole('button', { name: /^오늘의 업무/ }))
 
     expect(await screen.findByRole('heading', { name: '오늘의 업무' })).toBeInTheDocument()
   })

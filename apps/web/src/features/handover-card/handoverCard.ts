@@ -138,6 +138,30 @@ export function sortInboxCards(cards: readonly HandoverCard[]): HandoverCard[] {
 }
 
 /**
+ * 당일 카드를 안전/일반으로 나눠 각각 최신순으로 돌려준다. (현장 홈 "오늘 특이사항" 요약)
+ *
+ * 어르신을 가리지 못한(`unresolved`) 카드는 대표 문구에 붙일 어르신명이 없어 여기 들어오지 않는다 —
+ * 호출하는 쪽에서 `flattenCards` 로 뽑은 목록을 넘긴다.
+ */
+export function safetyRelatedCards(cards: readonly HandoverCard[]): HandoverCard[] {
+  return sortLatestFirst(cards.filter((card) => card.safetyRelated))
+}
+
+export function generalCards(cards: readonly HandoverCard[]): HandoverCard[] {
+  return sortLatestFirst(cards.filter((card) => !card.safetyRelated))
+}
+
+/**
+ * 카드 한 장을 한 줄로 요약한 대표 문구. (현장 홈 "오늘 특이사항" 요약)
+ *
+ * 상태 변화 -> 조치 -> 다음 행동 순으로 값이 있는 첫 항목을 쓴다. 셋 다 비어 있으면(대상 어르신을
+ * 가리지 못해 구조화되지 않은 경우는 애초에 이 목록에 없지만) 근거 원문으로 대신한다.
+ */
+export function highlightSummary(card: HandoverCard): string {
+  return card.statusChange ?? card.actionTaken ?? card.nextAction ?? card.evidenceText
+}
+
+/**
  * 안전 관련 항목을 앞으로 보내고, 같은 상태면 최신순으로 정렬한다.
  */
 export function safetyFirst(cards: readonly HandoverCard[]): HandoverCard[] {

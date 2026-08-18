@@ -86,7 +86,7 @@ describe('진입 역할·본인 식별 선택', () => {
     await user.click(screen.getByRole('button', { name: /현장 근무자/ }))
     await user.click(await screen.findByRole('button', { name: /김하늘/ }))
 
-    expect(screen.getByRole('heading', { name: '현장 홈' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /특이사항 남기기/ })).toBeInTheDocument()
   })
 
   it('관리자·센터장을 고르면 관리자 홈으로 간다', async () => {
@@ -123,7 +123,7 @@ describe('명단을 받아 오지 못했을 때', () => {
     await user.click(screen.getByRole('button', { name: /현장 근무자/ }))
     await user.click(await screen.findByRole('button', { name: /김하늘/ }))
 
-    expect(screen.getByRole('heading', { name: '현장 홈' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /특이사항 남기기/ })).toBeInTheDocument()
   })
 
   it('받아 둔 명단도 없으면 다시 불러오기를 안내한다', async () => {
@@ -188,7 +188,7 @@ describe('진입 전 화면 접근', () => {
 
     renderApp('/admin')
 
-    expect(screen.getByRole('heading', { name: '현장 홈' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /특이사항 남기기/ })).toBeInTheDocument()
   })
 })
 
