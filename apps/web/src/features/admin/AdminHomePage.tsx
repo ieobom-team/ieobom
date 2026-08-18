@@ -18,7 +18,7 @@ export function AdminHomePage() {
       <div className="mt-4 flex flex-col gap-4">
         <Link
           to="/admin/dashboard"
-          className="flex min-h-20 w-full items-center rounded-2xl bg-primary px-6 py-5 text-2xl font-semibold text-white hover:brightness-95"
+          className="flex min-h-20 w-full items-center justify-center rounded-2xl bg-primary px-6 py-5 text-center text-2xl font-semibold text-white hover:brightness-95"
         >
           당일 운영 현황 보기
         </Link>
@@ -26,7 +26,7 @@ export function AdminHomePage() {
         {/* n58 — 어르신 명단 화면(n49)으로 이동한다. */}
         <Link
           to="/admin/care-recipients"
-          className="flex min-h-20 w-full items-center rounded-2xl border-2 border-border-card bg-white px-6 py-5 text-2xl font-semibold text-ink hover:border-primary hover:bg-primary-soft"
+          className="flex min-h-20 w-full items-center justify-center rounded-2xl border-2 border-border-card bg-white px-6 py-5 text-center text-2xl font-semibold text-ink hover:border-primary hover:bg-primary-soft"
         >
           어르신 명단
         </Link>

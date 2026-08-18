@@ -145,7 +145,7 @@ export function EntrySelectPage() {
               <ul className="flex flex-col gap-4">
                 {sortedStaff.map((staff) => (
                   <li key={staff.code}>
-                    <BigButton tone="plain" onClick={() => handlePickStaff(staff)}>
+                    <BigButton align="left" tone="plain" onClick={() => handlePickStaff(staff)}>
                       <span className="flex flex-wrap items-center justify-between gap-x-3">
                         <span className="flex flex-wrap items-baseline gap-x-3">
                           <span>{staff.name}</span>

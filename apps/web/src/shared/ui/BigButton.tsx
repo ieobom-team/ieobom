@@ -6,14 +6,25 @@ type BigButtonProps = {
   /** 화면에서 다음으로 눌러야 할 버튼인지 */
   tone?: 'primary' | 'plain'
   selected?: boolean
+  /** 텍스트 정렬 (기본값: 'center') */
+  align?: 'center' | 'left'
+  className?: string
 }
 
 /**
  * 큰 글씨·큰 버튼. 장갑 낀 손이나 노안에서도 한 번에 눌리도록 세로 높이를 크게 잡는다.
  */
-export function BigButton({ children, onClick, tone = 'primary', selected = false }: BigButtonProps) {
+export function BigButton({
+  children,
+  onClick,
+  tone = 'primary',
+  selected = false,
+  align = 'center',
+  className = '',
+}: BigButtonProps) {
   const base =
-    'w-full min-h-20 rounded-2xl px-6 py-5 text-left text-2xl font-semibold transition-colors focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30'
+    'w-full min-h-20 rounded-2xl px-6 py-5 text-2xl font-semibold transition-colors focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30'
+  const alignClass = align === 'left' ? 'text-left' : 'text-center'
   const toneClass =
     tone === 'primary'
       ? 'bg-primary text-white hover:brightness-95 active:brightness-90'
@@ -21,7 +32,11 @@ export function BigButton({ children, onClick, tone = 'primary', selected = fals
   const selectedClass = selected ? 'border-primary bg-primary-soft' : ''
 
   return (
-    <button type="button" onClick={onClick} className={`${base} ${toneClass} ${selectedClass}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`${base} ${alignClass} ${toneClass} ${selectedClass} ${className}`.trim()}
+    >
       {children}
     </button>
   )

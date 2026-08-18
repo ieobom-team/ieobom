@@ -109,7 +109,7 @@ function TaskListItem({ task }: { task: TaskResponse }) {
   const isDone = task.status === 'DONE'
 
   return (
-    <BigButton tone="plain" onClick={() => navigate(`/tasks/${task.id}`)}>
+    <BigButton align="left" tone="plain" onClick={() => navigate(`/tasks/${task.id}`)}>
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
           <p className="text-2xl font-semibold text-ink">{task.content}</p>

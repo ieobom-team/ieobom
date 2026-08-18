@@ -536,6 +536,7 @@ function RecipientSection({
         {shown.map((recipient) => (
           <li key={recipient.id}>
             <BigButton
+              align="left"
               tone="plain"
               selected={draft.careRecipientId === recipient.id}
               onClick={() => onPick(recipient.id)}
