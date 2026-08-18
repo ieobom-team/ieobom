@@ -31,9 +31,32 @@ export type HandoverResponse = {
   createdAt: string
 }
 
+export type HandoverTranscribeResponse = {
+  /** 인식된 글. 아무 말도 담기지 않았으면 빈 문자열이다 */
+  text: string
+}
+
 export function createHandover(request: HandoverCreateRequest): Promise<HandoverResponse> {
   return apiFetch<HandoverResponse>('/api/handovers', {
     method: 'POST',
     body: JSON.stringify(request),
+  })
+}
+
+/**
+ * 녹음한 음성을 글로 바꿔 달라고 서버에 부탁한다.
+ * (Manyfast F-YJJJUX rules — 기기가 녹음만 하고 서버가 그 음성을 글로 바꿔 돌려준다)
+ *
+ * **아무것도 저장되지 않는다.** 부르는 시점에는 인계 기록이 아직 없다 — 직원이 글을 확인하고
+ * 어르신을 고른 다음에야 `createHandover` 가 음성과 함께 저장한다. 그래서 같은 음성이 두 번
+ * 올라가지만, 저장 전에 글을 고칠 수 있어야 한다는 요구가 먼저다.
+ *
+ * 실패하면 `ApiError` 다(키 미설정·제공자 거부는 503, 연결 끊김은 `NETWORK_UNAVAILABLE`).
+ * 화면은 그때도 녹음한 원본 음성을 들고 있고, 글 칸에 직접 입력해 저장을 마칠 수 있다.
+ */
+export function transcribeAudio(audioData: string): Promise<HandoverTranscribeResponse> {
+  return apiFetch<HandoverTranscribeResponse>('/api/handovers/transcribe', {
+    method: 'POST',
+    body: JSON.stringify({ audioData }),
   })
 }

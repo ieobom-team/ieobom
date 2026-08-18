@@ -35,14 +35,18 @@ export function writeLastInputMethod(method: InputMethod): void {
 /**
  * 화면을 열 때 쓸 기본 입력 방식을 정한다.
  *
- * 이 기기에서 마지막으로 쓴 방식이 없으면(최초 사용) 음성이 기본값이다. 다만 음성 인식을
- * 지원하지 않는 브라우저에서는 고를 수 없는 방식을 기본값으로 내밀지 않는다 — 수동 선택 시와
- * 같은 규칙(텍스트로 대체 안내)을 기본값 계산에도 그대로 적용한다.
+ * 이 기기에서 마지막으로 쓴 방식이 없으면(최초 사용) 음성이 기본값이다. 다만 음성을 남길 수
+ * 없는 브라우저에서는 고를 수 없는 방식을 기본값으로 내밀지 않는다 — 수동 선택 시와 같은
+ * 규칙(텍스트로 대체 안내)을 기본값 계산에도 그대로 적용한다.
+ *
+ * **두 번째 인자는 "녹음할 수 있는가"다.** 예전에는 "브라우저가 음성 인식을 지원하는가"였는데,
+ * 인식이 서버로 옮겨 가면서 의미가 바뀌었다(#147). 그대로 뒀다면 Web Speech 가 없는
+ * 브라우저에서 멀쩡히 되는 음성 입력이 기본값으로 안 잡혔을 것이다.
  */
 export function resolveDefaultInputMethod(
   lastUsed: InputMethod | null,
-  supportsVoice: boolean,
+  canRecordVoice: boolean,
 ): InputMethod {
   const candidate = lastUsed ?? 'VOICE'
-  return candidate === 'VOICE' && !supportsVoice ? 'TEXT' : candidate
+  return candidate === 'VOICE' && !canRecordVoice ? 'TEXT' : candidate
 }

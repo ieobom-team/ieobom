@@ -46,6 +46,8 @@ ieobom:
   llm:
     base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
     model: ${LLM_MODEL:gpt-4.1-mini}
+    # 음성 → 글. 텍스트 모델과 계열이 달라 따로 둔다. (#147)
+    transcription-model: ${LLM_TRANSCRIPTION_MODEL:gpt-4o-transcribe}
     api-key: ${LLM_API_KEY:}
     timeout: ${LLM_TIMEOUT:60s}
 

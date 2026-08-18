@@ -25,7 +25,7 @@ cp .env.example .env
 | `MYSQL_DATABASE` `MYSQL_USER` `MYSQL_PASSWORD` `MYSQL_ROOT_PASSWORD` | `docker-compose.yml` | 로컬 MySQL 컨테이너 |
 | `DB_URL` `DB_USERNAME` `DB_PASSWORD` | `apps/api` | `application.yml`이 읽는다 |
 | `SERVER_PORT` | `apps/api` | 기본 8080 |
-| `LLM_API_KEY` `LLM_BASE_URL` `LLM_MODEL` `LLM_TIMEOUT` | `apps/api` | **백엔드에서만 쓴다.** 프론트로 내려보내지 않는다. 비어 있어도 앱은 뜨고 테스트도 통과한다 |
+| `LLM_API_KEY` `LLM_BASE_URL` `LLM_MODEL` `LLM_TRANSCRIPTION_MODEL` `LLM_TIMEOUT` | `apps/api` | **백엔드에서만 쓴다.** 프론트로 내려보내지 않는다. 비어 있어도 앱은 뜨고 테스트도 통과한다. `LLM_TRANSCRIPTION_MODEL`(기본 `gpt-4o-transcribe`)은 음성을 글로 바꿀 때만 쓴다 — 텍스트 모델과 계열이 달라 따로 둔다 |
 | `VAPID_PUBLIC_KEY` `VAPID_PRIVATE_KEY` `VAPID_SUBJECT` | `apps/api` | 웹 푸시 발송 키 (`npx web-push generate-vapid-keys` 로 생성). 비어 있으면 푸시 발송만 비활성화 |
 | `VITE_API_BASE_URL` | `apps/web` | **로컬도 배포도 비워 둔다.** 아래 설명을 읽는다 |
 
@@ -264,4 +264,5 @@ docker compose -f deploy/docker-compose.yml config
 
 **배포 실행과 비밀값 주입은 사람이 한다.** (`AGENTS.md` 승인 경계 등급 D)
 `SITE_ADDRESS` · `MYSQL_PASSWORD` · `MYSQL_ROOT_PASSWORD` · `LLM_API_KEY`가 그 대상이다.
-`LLM_API_KEY`가 없으면 앱은 뜨지만 AI 구조화가 503으로 끊긴다.
+`LLM_API_KEY`가 없으면 앱은 뜨지만 AI 구조화와 **음성 변환**이 503으로 끊긴다.
+음성 변환이 막히면 녹음은 그대로 저장되고 직원이 글 칸에 직접 입력해 마칠 수 있다.

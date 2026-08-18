@@ -1,10 +1,13 @@
 package com.ieobom.api.handover;
 
+import com.ieobom.api.ai.TranscriptionClient;
 import com.ieobom.api.common.NotFoundException;
 import com.ieobom.api.common.RequestValidationException;
 import com.ieobom.api.handover.dto.HandoverAudioContent;
 import com.ieobom.api.handover.dto.HandoverCreateRequest;
 import com.ieobom.api.handover.dto.HandoverResponse;
+import com.ieobom.api.handover.dto.HandoverTranscribeRequest;
+import com.ieobom.api.handover.dto.HandoverTranscribeResponse;
 import com.ieobom.api.recipient.CareRecipient;
 import com.ieobom.api.recipient.CareRecipientRepository;
 import java.util.Base64;
@@ -28,7 +31,7 @@ public class HandoverService {
 	 * 원본 음성 한 건의 상한. 데모 규모라 DB 에 그대로 넣으므로 상한을 정해 두지 않으면 한 건이 테이블을 밀어 낸다.
 	 *
 	 * <p>화면도 같은 상한을 갖는다 — 브라우저가 {@code AUDIO_MAX_MINUTES} 분에서 녹음을 스스로 멈춘다
-	 * ({@code apps/web/src/features/handover/speechRecognition.ts}). 이 값은 그 뒤를 받치는 마지막 방어선이다.
+	 * ({@code apps/web/src/features/handover/voiceRecorder.ts}). 이 값은 그 뒤를 받치는 마지막 방어선이다.
 	 */
 	static final int AUDIO_MAX_MINUTES = 5;
 
@@ -43,6 +46,7 @@ public class HandoverService {
 	private final HandoverRepository handoverRepository;
 	private final HandoverAudioRepository audioRepository;
 	private final CareRecipientRepository careRecipientRepository;
+	private final TranscriptionClient transcriptionClient;
 
 	/**
 	 * 특이사항을 저장하고 등록 이벤트를 남긴다.
@@ -104,10 +108,26 @@ public class HandoverService {
 	}
 
 	/**
-	 * 브라우저가 보낸 Base64 Data URL 을 바이트로 되돌린다. 음성을 붙이지 않았으면 {@code null} 이다.
+	 * 녹음한 음성을 글로 바꿔 돌려준다. (Manyfast F-YJJJUX rules — 기기가 녹음만 하고 서버가 글로 바꾼다)
 	 *
-	 * <p>형식은 {@code data:audio/webm;codecs=opus;base64,...} 다. 녹음 형식은 브라우저마다 다르므로 고정하지 않고 앞부분에
-	 * 적힌 값을 그대로 받아 두고, 재생할 때 그대로 돌려준다.
+	 * <p><b>아무것도 저장하지 않는다.</b> 이 시점에는 인계 기록이 아직 없다 — 직원이 글을 확인하고 어르신을 고른 다음에야 저장이 일어난다. 음성은
+	 * 그때 {@link #register} 로 다시 올라와 저장된다.
+	 *
+	 * <p>실명이 담긴 오디오가 외부 인식 서비스로 나간다. 브라우저 내장 인식도 오디오를 제조사 서버로 보냈으므로 새로 생긴 성격은 아니다. 실명을 내부 ID
+	 * 로 바꾸는 치환은 <b>글이 된 뒤 LLM 을 부르기 전에</b> 일어난다. (Manyfast F-LUDCWW rules)
+	 *
+	 * @throws RequestValidationException 음성 형식이 깨졌거나 상한을 넘을 때
+	 * @throws com.ieobom.api.ai.LlmUnavailableException 키가 없거나 인식 호출이 실패했을 때
+	 */
+	public HandoverTranscribeResponse transcribe(HandoverTranscribeRequest request) {
+		HandoverAudioContent audio = parseAudioDataUrl(request.audioData());
+		String text = transcriptionClient.transcribe(audio.mimeType(), audio.data());
+		log.debug("음성 변환 완료 — bytes={}, 글자수={}", audio.data().length, text.length());
+		return new HandoverTranscribeResponse(text);
+	}
+
+	/**
+	 * 저장 요청에 붙은 음성을 바이트로 되돌린다. 음성을 붙이지 않았으면 {@code null} 이다.
 	 *
 	 * @throws RequestValidationException 음성 입력이 아닌데 음성이 붙었거나, 형식이 깨졌거나, 상한을 넘을 때
 	 */
@@ -119,7 +139,21 @@ public class HandoverService {
 		if (request.inputMethod() != InputMethod.VOICE) {
 			throw new RequestValidationException("audioData", "원본 음성은 음성으로 남긴 입력에만 붙일 수 있습니다.");
 		}
+		return parseAudioDataUrl(dataUrl);
+	}
 
+	/**
+	 * 브라우저가 보낸 Base64 Data URL 을 바이트로 되돌린다.
+	 *
+	 * <p>형식은 {@code data:audio/webm;codecs=opus;base64,...} 다. 녹음 형식은 브라우저마다 다르므로 고정하지 않고 앞부분에
+	 * 적힌 값을 그대로 받아 두고, 재생할 때 그대로 돌려준다.
+	 *
+	 * <p><b>저장과 전사가 같은 파서와 같은 상한을 쓴다.</b> 갈라 두면 전사는 통과했는데 저장에서 막히는 음성이 생기고, 그때는 이미 마이크를 놓은
+	 * 뒤라 직원이 되돌릴 방법이 없다. (#147)
+	 *
+	 * @throws RequestValidationException 형식이 깨졌거나 상한을 넘을 때
+	 */
+	private HandoverAudioContent parseAudioDataUrl(String dataUrl) {
 		Matcher matcher = AUDIO_DATA_URL.matcher(dataUrl);
 		if (!matcher.matches()) {
 			throw new RequestValidationException("audioData", "원본 음성 형식을 읽을 수 없습니다.");
