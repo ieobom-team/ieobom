@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { QueryClientProvider } from '@tanstack/react-query'
@@ -125,7 +125,7 @@ describe('현장 홈에서 들어오기', () => {
 
     await user.click(screen.getByRole('button', { name: /특이사항 남기기/ }))
 
-    expect(screen.getByRole('heading', { name: '특이사항 남기기' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '어떻게 아신 내용인가요?' })).toBeInTheDocument()
   })
 })
 
@@ -175,7 +175,7 @@ describe('대리 입력과 정보 출처 (n8 → n9)', () => {
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
-    await screen.findByRole('heading', { name: '저장했습니다' })
+    await screen.findByRole('heading', { name: '제출 완료' })
     expect(보낸_요청[0].reporterName).toBe(김하늘.name)
     expect(보낸_요청[0].proxyInput).toBe(true)
     expect(보낸_요청[0].infoSource).toBe('GUARDIAN')
@@ -191,7 +191,7 @@ describe('텍스트 입력으로 등록 (n13 → n15 → n16)', () => {
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
-    await screen.findByRole('heading', { name: '저장했습니다' })
+    await screen.findByRole('heading', { name: '제출 완료' })
     expect(보낸_요청).toHaveLength(1)
     expect(보낸_요청[0]).toMatchObject({
       careRecipientId: 1,
@@ -211,7 +211,7 @@ describe('텍스트 입력으로 등록 (n13 → n15 → n16)', () => {
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
-    expect(await screen.findByRole('heading', { name: '저장했습니다' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '제출 완료' })).toBeInTheDocument()
     expect(await screen.findByText(/인계 카드 2건으로 정리했습니다/)).toBeInTheDocument()
     expect(screen.getByText(/김말순 어르신/)).toBeInTheDocument()
   })
@@ -308,7 +308,7 @@ describe('음성 입력으로 등록 (n12 → n15 → n16)', () => {
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
-    await screen.findByRole('heading', { name: '저장했습니다' })
+    await screen.findByRole('heading', { name: '제출 완료' })
     expect(보낸_요청[0]).toMatchObject({ inputMethod: 'VOICE', rawText: '점심을 거의 안 드셨어요' })
   })
 
@@ -352,7 +352,7 @@ describe('체크 입력으로 등록 (n14 → n15 → n16)', () => {
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
-    await screen.findByRole('heading', { name: '저장했습니다' })
+    await screen.findByRole('heading', { name: '제출 완료' })
     expect(보낸_요청[0]).toMatchObject({
       inputMethod: 'CHECK',
       rawText: '체크 항목: 낙상 위험 행동 관찰, 투약 거부 또는 누락',
@@ -371,7 +371,7 @@ describe('체크 입력으로 등록 (n14 → n15 → n16)', () => {
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
-    await screen.findByRole('heading', { name: '저장했습니다' })
+    await screen.findByRole('heading', { name: '제출 완료' })
     expect(보낸_요청[0].rawText).toBe('체크 항목: 낙상 위험 행동 관찰, 투약 거부 또는 누락')
   })
 
@@ -441,11 +441,11 @@ describe('인계 카드 정리로 넘기기 (n16 → n18)', () => {
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
-    expect(await screen.findByRole('heading', { name: '저장했습니다' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '제출 완료' })).toBeInTheDocument()
     expect(await screen.findByText(/다시 쓰지 않으셔도 됩니다/)).toBeInTheDocument()
   })
 
-  it('정리 결과에서 인계 카드 목록으로 갈 수 있다', async () => {
+  it('입력 시간·입력자를 보여 주고, 확인을 누르면 현장 홈으로 이동한다', async () => {
     const user = userEvent.setup()
     renderApp()
 
@@ -453,9 +453,18 @@ describe('인계 카드 정리로 넘기기 (n16 → n18)', () => {
     await user.click(await screen.findByRole('button', { name: /김말순/ }))
     await user.click(screen.getByRole('button', { name: '저장하기' }))
 
-    await user.click(await screen.findByRole('button', { name: '인계 카드 보기' }))
+    await screen.findByRole('heading', { name: '제출 완료' })
+    const notice = screen.getByRole('status')
+    expect(within(notice).getByText('입력자')).toBeInTheDocument()
+    expect(within(notice).getByText(김하늘.name)).toBeInTheDocument()
+    expect(within(notice).getByText('입력 시간')).toBeInTheDocument()
+    // #90 — "인계 카드 보기" 버튼은 없앤다. "하나 더 남기기"(보조)/"확인"(주요) 2개만 남는다.
+    expect(screen.queryByRole('button', { name: '인계 카드 보기' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '하나 더 남기기' })).toBeInTheDocument()
 
-    expect(await screen.findByText('오늘의 인계 카드')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '확인' }))
+
+    expect(await screen.findByRole('heading', { name: '오늘 특이사항' })).toBeInTheDocument()
   })
 })
 

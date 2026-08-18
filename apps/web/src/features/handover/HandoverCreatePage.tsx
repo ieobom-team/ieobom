@@ -211,6 +211,8 @@ export function HandoverCreatePage() {
     return (
       <SavedNotice
         careRecipientName={savedName}
+        occurredAt={draft.occurredAt}
+        reporterName={reporterName}
         organizing={structure.isPending}
         organized={structure.data ?? null}
         organizeFailed={structure.isError}
@@ -231,9 +233,8 @@ export function HandoverCreatePage() {
       backLabel="이전"
     >
       <header>
-        <h1 className="text-3xl font-bold text-slate-900">특이사항 남기기</h1>
-        <p className="mt-2 text-xl text-slate-600">
-          입력자 <span className="font-semibold text-slate-900">{reporterName}</span>
+        <p className="text-xl text-ink-muted">
+          입력자 <span className="font-semibold text-ink">{reporterName}</span>
         </p>
       </header>
 
@@ -288,7 +289,7 @@ function Problems({ errors, notice }: { errors: ApiFieldError[]; notice: string 
   return (
     <section
       role="alert"
-      className="rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4 text-xl text-amber-900"
+      className="rounded-lg border-2 border-amber-400 bg-amber-50 px-5 py-4 text-xl text-amber-900"
     >
       {errors.length > 0 && (
         <>
@@ -311,16 +312,16 @@ function Problems({ errors, notice }: { errors: ApiFieldError[]; notice: string 
 function ProxyStep({ onPick }: { onPick: (proxyInput: boolean) => void }) {
   return (
     <section aria-labelledby="proxy-heading" className="flex flex-col gap-5">
-      <h2 id="proxy-heading" className="text-2xl font-bold text-slate-900">
+      <h2 id="proxy-heading" className="text-2xl font-bold text-ink">
         어떻게 아신 내용인가요?
       </h2>
       <BigButton tone="plain" onClick={() => onPick(false)}>
         <span className="block">제가 직접 봤어요</span>
-        <span className="mt-1 block text-lg font-normal text-slate-500">직접 관찰한 내용입니다</span>
+        <span className="mt-1 block text-lg font-normal text-ink-muted">직접 관찰한 내용입니다</span>
       </BigButton>
       <BigButton tone="plain" onClick={() => onPick(true)}>
         <span className="block">다른 분께 들었어요</span>
-        <span className="mt-1 block text-lg font-normal text-slate-500">
+        <span className="mt-1 block text-lg font-normal text-ink-muted">
           대신 남깁니다. 들은 곳을 다음에 고릅니다
         </span>
       </BigButton>
@@ -338,10 +339,10 @@ function SourceStep({
 }) {
   return (
     <section aria-labelledby="source-heading" className="flex flex-col gap-5">
-      <h2 id="source-heading" className="text-2xl font-bold text-slate-900">
+      <h2 id="source-heading" className="text-2xl font-bold text-ink">
         어느 분께 들으셨나요?
       </h2>
-      <p className="text-xl text-slate-600">
+      <p className="text-xl text-ink-muted">
         남기는 사람과 들은 곳을 따로 적어 두면 나중에 누구에게 확인해야 할지 알 수 있습니다.
       </p>
       {INFO_SOURCES.map((source) => (
@@ -368,7 +369,7 @@ function MethodStep({
 }) {
   return (
     <section aria-labelledby="method-heading" className="flex flex-col gap-5">
-      <h2 id="method-heading" className="text-2xl font-bold text-slate-900">
+      <h2 id="method-heading" className="text-2xl font-bold text-ink">
         어떻게 남기시겠어요?
       </h2>
       {INPUT_METHODS.map((method) =>
@@ -386,7 +387,7 @@ function MethodStep({
             key={method.value}
             type="button"
             disabled
-            className="w-full min-h-20 cursor-not-allowed rounded-2xl border-2 border-dashed border-slate-300 bg-slate-100 px-6 py-5 text-left text-2xl font-semibold text-slate-400"
+            className="w-full min-h-20 cursor-not-allowed rounded-lg border-2 border-dashed border-border-card bg-surface-card px-6 py-5 text-left text-2xl font-semibold text-ink-tertiary"
           >
             <span className="block">{method.label}</span>
             <span className="mt-1 block text-lg font-normal">준비 중입니다 ({method.plannedIn})</span>
@@ -409,10 +410,10 @@ function TextStep({
 }) {
   return (
     <section aria-labelledby="text-heading" className="flex flex-col gap-5">
-      <h2 id="text-heading" className="text-2xl font-bold text-slate-900">
+      <h2 id="text-heading" className="text-2xl font-bold text-ink">
         무슨 일이 있었나요?
       </h2>
-      <label htmlFor="rawText" className="text-xl text-slate-600">
+      <label htmlFor="rawText" className="text-xl text-ink-muted">
         보신 그대로 짧게 남겨 주세요. 다듬지 않아도 됩니다.
       </label>
       <textarea
@@ -421,9 +422,9 @@ function TextStep({
         onChange={(event) => onChange(event.target.value)}
         rows={6}
         maxLength={RAW_TEXT_MAX_LENGTH}
-        className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
+        className="w-full rounded-lg border-2 border-border-card bg-white px-5 py-4 text-2xl text-ink focus:border-primary focus:outline-none"
       />
-      <p className="text-lg text-slate-500">
+      <p className="text-lg text-ink-muted">
         {value.length} / {RAW_TEXT_MAX_LENGTH}자
       </p>
       <BigButton onClick={onNext}>다음</BigButton>
@@ -520,30 +521,42 @@ function VoiceStep({
 
   return (
     <section aria-labelledby="voice-heading" className="flex flex-col gap-5">
-      <h2 id="voice-heading" className="text-2xl font-bold text-slate-900">
+      <h2 id="voice-heading" className="text-2xl font-bold text-ink">
         말씀해 주세요
       </h2>
-      <p className="text-xl text-slate-600">
+      <p className="text-xl text-ink-muted">
         마이크를 누르고 말씀하시면 아래에 글로 남습니다. 다시 누르면 멈춥니다.
       </p>
 
-      <BigButton tone={listening ? 'primary' : 'plain'} onClick={toggleListening}>
-        {listening ? '듣고 있어요 · 눌러서 멈추기' : '눌러서 말하기'}
-      </BigButton>
+      <div className="flex flex-col items-center gap-3 rounded-lg border border-border-card bg-surface-card px-5 py-8">
+        <button
+          type="button"
+          onClick={toggleListening}
+          aria-label={listening ? '듣고 있어요 · 눌러서 멈추기' : '눌러서 말하기'}
+          className={`flex h-20 w-20 items-center justify-center rounded-full text-4xl text-white transition-colors focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 ${
+            listening ? 'animate-pulse bg-primary' : 'bg-surface-dark hover:brightness-110'
+          }`}
+        >
+          🎙️
+        </button>
+        <p className="text-xl font-semibold text-ink">
+          {listening ? '듣고 있어요 · 눌러서 멈추기' : '눌러서 말하기'}
+        </p>
+      </div>
 
       {!listening && !finishing && draft.audioData !== undefined && (
-        <p role="status" className="text-xl text-slate-600">
+        <p role="status" className="text-xl text-ink-muted">
           말씀하신 원본 음성도 함께 저장됩니다. 카드에서 다시 들으실 수 있습니다.
         </p>
       )}
 
       {notice !== null && (
-        <p className="rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4 text-xl text-amber-900">
+        <p className="rounded-lg border-2 border-amber-400 bg-amber-50 px-5 py-4 text-xl text-amber-900">
           {notice}
         </p>
       )}
 
-      <label htmlFor="voiceText" className="text-xl text-slate-600">
+      <label htmlFor="voiceText" className="text-xl text-ink-muted">
         인식된 내용입니다. 다르면 고쳐 주세요.
       </label>
       <textarea
@@ -552,9 +565,9 @@ function VoiceStep({
         onChange={(event) => onChange({ rawText: event.target.value })}
         rows={6}
         maxLength={RAW_TEXT_MAX_LENGTH}
-        className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
+        className="w-full rounded-lg border-2 border-border-card bg-white px-5 py-4 text-2xl text-ink focus:border-primary focus:outline-none"
       />
-      <p className="text-lg text-slate-500">
+      <p className="text-lg text-ink-muted">
         {draft.rawText.length} / {RAW_TEXT_MAX_LENGTH}자
       </p>
       <BigButton onClick={handleNext}>{finishing ? '음성 저장 중…' : '다음'}</BigButton>
@@ -595,30 +608,30 @@ function TargetStep({
 
   return (
     <section aria-labelledby="target-heading" className="flex flex-col gap-5">
-      <h2 id="target-heading" className="text-2xl font-bold text-slate-900">
+      <h2 id="target-heading" className="text-2xl font-bold text-ink">
         어느 어르신이신가요?
       </h2>
 
       {draft.proxyInput && draft.infoSource !== null && (
-        <p className="text-xl text-slate-600">
+        <p className="text-xl text-ink-muted">
           정보 출처{' '}
-          <span className="font-semibold text-slate-900">{infoSourceLabel(draft.infoSource)}</span>
+          <span className="font-semibold text-ink">{infoSourceLabel(draft.infoSource)}</span>
         </p>
       )}
 
-      <label htmlFor="recipientKeyword" className="text-xl text-slate-600">
+      <label htmlFor="recipientKeyword" className="text-xl text-ink-muted">
         이름이나 식별번호로 찾기
       </label>
       <input
         id="recipientKeyword"
         value={keyword}
         onChange={(event) => setKeyword(event.target.value)}
-        className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
+        className="w-full rounded-lg border-2 border-border-card bg-white px-5 py-4 text-2xl text-ink focus:border-primary focus:outline-none"
       />
 
-      {loading && <p className="text-xl text-slate-600">어르신 목록을 불러오는 중입니다…</p>}
+      {loading && <p className="text-xl text-ink-muted">어르신 목록을 불러오는 중입니다…</p>}
       {loadFailed && (
-        <div className="flex flex-col gap-4 rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4">
+        <div className="flex flex-col gap-4 rounded-lg border-2 border-amber-400 bg-amber-50 px-5 py-4">
           <p className="text-xl text-amber-900">어르신 목록을 불러오지 못했습니다.</p>
           <BigButton tone="plain" onClick={onRetryLoad}>
             목록 다시 불러오기
@@ -626,7 +639,7 @@ function TargetStep({
         </div>
       )}
       {!loading && !loadFailed && shown.length === 0 && (
-        <p className="text-xl text-slate-600">찾으시는 어르신이 목록에 없습니다.</p>
+        <p className="text-xl text-ink-muted">찾으시는 어르신이 목록에 없습니다.</p>
       )}
 
       <ul className="flex flex-col gap-4">
@@ -639,23 +652,23 @@ function TargetStep({
             >
               <span className="flex flex-wrap items-baseline gap-x-3">
                 <span>{recipient.name}</span>
-                <span className="text-lg font-normal text-slate-500">{recipient.code}</span>
+                <span className="text-lg font-normal text-ink-muted">{recipient.code}</span>
               </span>
             </BigButton>
           </li>
         ))}
       </ul>
 
-      <label htmlFor="occurredAt" className="text-2xl font-bold text-slate-900">
+      <label htmlFor="occurredAt" className="text-2xl font-bold text-ink">
         언제 있었던 일인가요?
       </label>
-      <p className="text-xl text-slate-600">지금 시각이 채워져 있습니다. 다르면 고쳐 주세요.</p>
+      <p className="text-xl text-ink-muted">지금 시각이 채워져 있습니다. 다르면 고쳐 주세요.</p>
       <input
         id="occurredAt"
         type="datetime-local"
         value={draft.occurredAt}
         onChange={(event) => onChange({ occurredAt: event.target.value })}
-        className="w-full rounded-2xl border-2 border-slate-300 px-5 py-4 text-2xl text-slate-900 focus:border-teal-600 focus:outline-none"
+        className="w-full rounded-lg border-2 border-border-card bg-white px-5 py-4 text-2xl text-ink focus:border-primary focus:outline-none"
       />
 
       <BigButton onClick={onSubmit}>{saving ? '저장하는 중…' : '저장하기'}</BigButton>
@@ -671,12 +684,16 @@ function TargetStep({
  */
 function SavedNotice({
   careRecipientName,
+  occurredAt,
+  reporterName,
   organizing,
   organized,
   organizeFailed,
   onAnother,
 }: {
   careRecipientName: string
+  occurredAt: string
+  reporterName: string
   organizing: boolean
   organized: HandoverCardStructureResult | null
   organizeFailed: boolean
@@ -685,23 +702,34 @@ function SavedNotice({
   const navigate = useNavigate()
 
   return (
-    <PageLayout title="저장 완료">
-      <section role="status" className="rounded-2xl border-2 border-teal-600 bg-teal-50 px-5 py-6">
-        <h1 className="text-3xl font-bold text-teal-900">저장했습니다</h1>
-        <p className="mt-3 text-2xl text-teal-900">
-          {careRecipientName} 어르신 특이사항으로 남겼습니다.
+    <PageLayout title="제출 완료">
+      <section role="status" className="rounded-lg border-2 border-primary bg-primary-soft px-5 py-6">
+        <h1 className="text-3xl font-bold text-ink">제출 완료</h1>
+        <p className="mt-3 text-2xl text-ink">
+          {careRecipientName} 어르신 특이사항이 저장되었습니다.
         </p>
 
-        {organizing && <p className="mt-2 text-xl text-teal-800">인계 카드로 정리하는 중입니다…</p>}
+        <dl className="mt-4 flex flex-col gap-1 text-xl text-ink-muted">
+          <div className="flex gap-2">
+            <dt className="font-semibold text-ink">입력 시간</dt>
+            <dd>{formatOccurredAt(occurredAt)}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="font-semibold text-ink">입력자</dt>
+            <dd>{reporterName}</dd>
+          </div>
+        </dl>
+
+        {organizing && <p className="mt-3 text-xl text-ink-muted">인계 카드로 정리하는 중입니다…</p>}
 
         {organized !== null && (
           <>
-            <p className="mt-2 text-xl text-teal-800">
+            <p className="mt-3 text-xl text-ink-muted">
               인계 카드 {organized.createdCount}건으로 정리했습니다.
             </p>
             {/* 근거가 없어 빠진 항목이 있다는 사실을 감추지 않는다. 정상 동작의 결과다. */}
             {organized.discardedCount > 0 && (
-              <p className="mt-1 text-lg text-teal-800">
+              <p className="mt-1 text-lg text-ink-muted">
                 남긴 글에서 근거를 찾지 못한 {organized.discardedCount}건은 카드로 만들지
                 않았습니다.
               </p>
@@ -710,22 +738,28 @@ function SavedNotice({
         )}
 
         {organizeFailed && (
-          <p className="mt-2 text-xl text-teal-800">
+          <p className="mt-3 text-xl text-ink-muted">
             지금은 자동 정리가 되지 않았습니다. 남기신 내용은 저장돼 있으니 다시 쓰지 않으셔도
             됩니다.
           </p>
         )}
       </section>
 
-      <BigButton onClick={() => navigate('/handover-cards')}>인계 카드 보기</BigButton>
-      <BigButton tone="plain" onClick={onAnother}>
-        하나 더 남기기
-      </BigButton>
-      <BigButton tone="plain" onClick={() => navigate('/field')}>
-        현장 홈으로
-      </BigButton>
+      {/* 좌 보조(회색) / 우 주요(오렌지) — DESIGN.md §8.5 */}
+      <div className="grid grid-cols-2 gap-4">
+        <BigButton tone="plain" onClick={onAnother}>
+          하나 더 남기기
+        </BigButton>
+        <BigButton onClick={() => navigate('/field')}>확인</BigButton>
+      </div>
     </PageLayout>
   )
+}
+
+/** `HandoverDraft.occurredAt`(`datetime-local` 값)에서 시:분만 뽑는다. */
+function formatOccurredAt(occurredAt: string): string {
+  const [, time] = occurredAt.split('T')
+  return time ?? occurredAt
 }
 
 /**
@@ -792,19 +826,19 @@ function CheckStep({
 
   return (
     <section aria-labelledby="check-heading" className="flex flex-col gap-5">
-      <h2 id="check-heading" className="text-2xl font-bold text-slate-900">
+      <h2 id="check-heading" className="text-2xl font-bold text-ink">
         해당하는 항목을 골라 주세요
       </h2>
-      <p className="text-xl text-slate-600">여러 개를 고를 수 있습니다.</p>
+      <p className="text-xl text-ink-muted">여러 개를 고를 수 있습니다.</p>
       <ul className="flex flex-col gap-3">
         {CHECK_ITEMS.map((item) => (
           <li key={item.value}>
-            <label className="flex min-h-16 cursor-pointer items-center gap-4 rounded-2xl border-2 border-slate-300 bg-white px-5 py-4 text-2xl font-semibold text-slate-900 has-[:checked]:border-teal-700 has-[:checked]:bg-teal-50">
+            <label className="flex min-h-16 cursor-pointer items-center gap-4 rounded-lg border-2 border-border-card bg-white px-5 py-4 text-2xl font-semibold text-ink has-[:checked]:border-primary has-[:checked]:bg-primary-soft">
               <input
                 type="checkbox"
                 checked={checkedItems.includes(item.value)}
                 onChange={() => toggle(item.value)}
-                className="h-6 w-6 accent-teal-700"
+                className="h-6 w-6 accent-primary"
               />
               {item.label}
             </label>
