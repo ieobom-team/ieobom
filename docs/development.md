@@ -178,6 +178,14 @@ apps/web/src/
 `shared/api/client.ts`는 서버 오류 응답의 `fields`를 살려 `ApiError`로 던진다.
 **보완할 항목을 한 번에 모아 보여 주는 화면이 이 목록에 기대고 있으므로** 메시지 한 줄로 뭉개지 않는다.
 
+### 홈 화면에 추가 (PWA)
+
+`manifest.webmanifest`가 있어 HTTPS 배포 환경에서는 브라우저의 "홈 화면에 추가"(Android Chrome) /
+"공유 → 홈 화면에 추가"(iOS Safari)로 설치할 수 있다. 설치는 선택이며, 설치하지 않은 일반 브라우저
+탭 경로도 동일하게 동작해야 한다 (Manyfast F-YJJJUX — 네이티브 앱 제공 안 함, 설치 강제 안 함).
+설치 후에는 브라우저 주소창·툴바 없이 standalone으로 열린다. iOS는 standalone 상태와 별개로 웹 푸시를
+지원하지 않는다 (Manyfast F-QPWGNS, 초기 범위는 안드로이드 크롬·PC 웹).
+
 ### 테스트
 
 `vitest` + `@testing-library/react` + `jsdom`이다. 테스트 파일은 대상 파일 옆에 `*.test.ts(x)`로 둔다.

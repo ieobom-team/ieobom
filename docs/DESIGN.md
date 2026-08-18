@@ -233,6 +233,7 @@
   - 3개 탭 구조를 기본으로 하며, 세부 항목은 유연하게 구성합니다.
   - 활성 탭: 상단에 2px 테라코타 오렌지 라인 인디케이터 + 오렌지 원형 아이콘 + 오렌지 텍스트
   - 비활성 탭: 연한 그레이 원형 아이콘 + 다크 그레이 텍스트
+  - iOS 홈 인디케이터 등 세이프 에어리어와 겹치지 않도록 `env(safe-area-inset-bottom)` 만큼 하단 패딩을 두며, 이 값이 실제로 적용되려면 `viewport-fit=cover`가 viewport meta에 있어야 합니다.
 
 ### 8.2. Action Buttons (버튼)
 - **Primary Action Button (오렌지 CTA)**  
