@@ -282,6 +282,41 @@ describe('당일 운영 현황 대시보드 (n42 관리자 대시보드 · n43 �
     await screen.findByText('저녁 식사량 확인')
     expect(screen.getByRole('region', { name: '미처리 업무' })).toBeInTheDocument()
   })
+
+  it('인계 요약 타일이 getCardStats 값을 정확히 보여준다', async () => {
+    renderApp()
+
+    const 인계요약 = 영역('인계 요약')
+    // 카드 1건, 기본값 NEEDS_REVIEW → 전체·검토 필요 둘 다 1개
+    expect(await 인계요약.findAllByText('1개')).toHaveLength(2)
+    expect(인계요약.getByText('0개')).toBeInTheDocument() // 검토 완료 없음
+    expect(인계요약.queryByRole('link')).not.toBeInTheDocument()
+  })
+
+  it('후속 업무 타일이 taskList.pendingCount·doneCount를 정확히 보여주고, "기한 임박" 타일은 없다', async () => {
+    renderApp()
+
+    const 후속업무 = 영역('후속 업무')
+    await 후속업무.findByText('2개') // 전체 = pendingCount(1) + doneCount(1)
+    expect(후속업무.getAllByText('1개')).toHaveLength(2) // 미처리 1 · 완료 1
+    expect(screen.queryByText('기한 임박')).not.toBeInTheDocument()
+    // /tasks는 "내게 배정된 업무"만 보여주는 개인 스코프 화면이라 관리자에게는 맞지 않는다.
+    // 이동 링크 없이, 아래 미처리·완료 컬럼(조직 전체, 비필터)을 그대로 스크롤해서 본다.
+    expect(후속업무.queryByRole('link')).not.toBeInTheDocument()
+  })
+
+  it('하원 전 미처리 브리핑 박스에 미처리 건수를 보여주고, 클릭하면 브리핑으로 이동한다', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    const 브리핑박스 = within(
+      await screen.findByRole('region', { name: '하원 전 미처리 브리핑' }),
+    )
+    expect(브리핑박스.getByText(/미처리 항목 1건이 하원 전까지 확인이 필요합니다/)).toBeInTheDocument()
+
+    await user.click(브리핑박스.getByRole('link', { name: '하원 미처리 브리핑 열기' }))
+    expect(await screen.findByRole('heading', { name: '하원 미처리 브리핑' })).toBeInTheDocument()
+  })
 })
 
 describe('하원 미처리 브리핑 (n48 브리핑 선택 → n44 브리핑 · n45 미처리 건수·목록)', () => {

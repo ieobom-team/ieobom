@@ -21,27 +21,27 @@ function formatAssignee(task: TaskResponse): string {
  */
 export function TaskRow({ task }: { task: TaskResponse }) {
   return (
-    <li className="rounded-2xl border-2 border-slate-200 bg-white px-5 py-4">
+    <li className="rounded-2xl border-2 border-border-card bg-white px-5 py-4">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="text-xl font-bold text-slate-900">{task.careRecipientName}</span>
-        <span className="text-lg text-slate-500">{task.dueTime}까지</span>
+        <span className="text-xl font-bold text-ink">{task.careRecipientName}</span>
+        <span className="text-lg text-ink-muted">{task.dueTime}까지</span>
       </div>
 
-      <p className="mt-2 text-xl text-slate-900">{task.content}</p>
+      <p className="mt-2 text-xl text-ink">{task.content}</p>
 
-      <p className="mt-2 text-lg text-slate-600">
+      <p className="mt-2 text-lg text-ink-muted">
         {formatAssignee(task)} · {task.statusLabel}
       </p>
 
       {task.status === 'DONE' && task.completedByName !== null && (
-        <p className="mt-1 text-lg text-slate-600">
+        <p className="mt-1 text-lg text-ink-muted">
           {task.completedByName} 확인
           {/*
             대리 완료는 저장된 값이 아니라 담당자와 확인자를 비교한 판정이다. 직종만 배정된 업무는
             사람 단위로 정해진 적이 없어 거짓이고, 그때는 확인자 이름만 그대로 보여 준다.
           */}
           {task.delegated && (
-            <span className="ml-2 rounded-full bg-slate-100 px-3 py-1 text-base font-semibold text-slate-700">
+            <span className="ml-2 rounded-full bg-btn-neutral px-3 py-1 text-base font-semibold text-ink-muted">
               대리 완료
             </span>
           )}
@@ -51,19 +51,19 @@ export function TaskRow({ task }: { task: TaskResponse }) {
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-lg font-semibold">
         <Link
           to={`/tasks/${task.id}`}
-          className="text-teal-800 underline underline-offset-4"
+          className="text-primary underline underline-offset-4"
         >
           업무 상세
         </Link>
         <Link
           to={`/handover-cards/${task.handoverCardId}`}
-          className="text-teal-800 underline underline-offset-4"
+          className="text-primary underline underline-offset-4"
         >
           인계 카드 보기
         </Link>
         <Link
           to={`/handover-cards/${task.handoverCardId}/export`}
-          className="text-teal-800 underline underline-offset-4"
+          className="text-primary underline underline-offset-4"
         >
           기록 문구 출력
         </Link>

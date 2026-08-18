@@ -1,7 +1,7 @@
 import { Link } from 'react-router'
 import { PageLayout } from '../../shared/ui/PageLayout'
 import { CardsLoadFailed, CardsLoading } from '../handover-card/CardsLoadState'
-import { dateLabel, totalCardCount } from '../handover-card/handoverCard'
+import { dateLabel, getCardStats, totalCardCount } from '../handover-card/handoverCard'
 import { useHandoverCards } from '../handover-card/useHandoverCards'
 import { TaskRow } from './TaskRow'
 import { TasksLoadFailed, TasksLoading } from './TasksLoadState'
@@ -29,6 +29,8 @@ export function OperationsDashboardPage() {
   const cardList = cards.data
   const taskList = tasks.data
   const 기준일 = taskList?.date ?? cardList?.date
+  const cardStats = cardList ? getCardStats(cardList) : null
+  const taskTotal = taskList ? taskList.pendingCount + taskList.doneCount : null
 
   return (
     <PageLayout
@@ -38,21 +40,61 @@ export function OperationsDashboardPage() {
       backLabel="관리자 홈"
       maxWidth="6xl"
     >
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">당일 운영 현황</h1>
-          {기준일 !== undefined && (
-            <p className="mt-2 text-xl text-slate-600">{dateLabel(기준일)}</p>
-          )}
-        </div>
-        {/* n48 브리핑 선택 — 하원 시점에 미처리를 우선 확인하는 길. (Manyfast F-HQTFLK trigger) */}
-        <Link
-          to="/admin/briefing"
-          className="rounded-2xl bg-teal-700 px-6 py-4 text-xl font-semibold text-white"
+      {기준일 !== undefined && <p className="text-xl text-ink-muted">{dateLabel(기준일)}</p>}
+
+      {/* 인계 요약 — 기존 getCardStats 재사용, 새 API 없음 (Manyfast F-SNBVHR와 같은 데이터) */}
+      <section aria-label="인계 요약" className="flex flex-col gap-3">
+        <h2 className="text-xl font-bold text-ink">인계 요약</h2>
+        {cards.isPending && <CardsLoading />}
+        {cards.isError && <CardsLoadFailed onRetry={() => void cards.refetch()} />}
+        {cardStats !== null && (
+          <div className="grid max-w-2xl grid-cols-3 gap-3">
+            <StatTile label="전체" value={cardStats.totalCount} />
+            <StatTile label="검토 필요" value={cardStats.needsReviewCount} tone="primary" />
+            <StatTile label="검토 완료" value={cardStats.reviewedCount} tone="success" />
+          </div>
+        )}
+      </section>
+
+      {/*
+        후속 업무 — 기존 taskList.pendingCount·doneCount 재사용. "기한 임박" 타일은 도입하지 않는다.
+
+        이동 링크는 두지 않는다. /tasks(TaskListPage)는 "내게 배정된 업무 + 내 직종에 열려 있는
+        업무"만 보여주는 개인 스코프 화면이라 관리자가 누르면 자기 몫만 보이고 나머지는 빠진다.
+        관리자 전용 전체 업무 목록 라우트는 따로 없고, 이 페이지 아래 미처리·완료 컬럼이 이미
+        조직 전체(비필터) 목록을 그대로 보여주므로 별도 링크 없이 스크롤해서 보면 된다.
+      */}
+      <section aria-label="후속 업무" className="flex flex-col gap-3">
+        <h2 className="text-xl font-bold text-ink">후속 업무</h2>
+        {tasks.isPending && <TasksLoading />}
+        {tasks.isError && <TasksLoadFailed onRetry={() => void tasks.refetch()} />}
+        {taskList !== undefined && taskTotal !== null && (
+          <div className="grid max-w-2xl grid-cols-3 gap-3">
+            <StatTile label="전체" value={taskTotal} />
+            <StatTile label="미처리" value={taskList.pendingCount} tone="primary" />
+            <StatTile label="완료" value={taskList.doneCount} tone="success" />
+          </div>
+        )}
+      </section>
+
+      {/* 하원 전 미처리 브리핑 — 기존 링크·이동 경로(/admin/briefing) 동일, 경고 박스로 재구성 */}
+      {taskList !== undefined && (
+        <section
+          aria-label="하원 전 미처리 브리핑"
+          className="flex flex-col gap-3 rounded-2xl border-2 border-primary bg-primary-soft px-5 py-5"
         >
-          하원 미처리 브리핑 열기
-        </Link>
-      </header>
+          <p className="text-lg font-semibold text-primary">
+            ! 미처리 항목 {taskList.pendingCount}건이 하원 전까지 확인이 필요합니다
+          </p>
+          {/* n48 브리핑 선택 — 하원 시점에 미처리를 우선 확인하는 길. (Manyfast F-HQTFLK trigger) */}
+          <Link
+            to="/admin/briefing"
+            className="w-fit rounded-2xl bg-primary px-6 py-3 text-lg font-semibold text-white hover:brightness-95"
+          >
+            하원 미처리 브리핑 열기
+          </Link>
+        </section>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/*
@@ -60,7 +102,7 @@ export function OperationsDashboardPage() {
           테스트도 "어느 영역이 실패했는지"를 가릴 수 있어야 한다.
         */}
         <section aria-labelledby="dashboard-handovers" className="flex flex-col gap-4">
-          <h2 id="dashboard-handovers" className="text-2xl font-bold text-slate-900">
+          <h2 id="dashboard-handovers" className="text-2xl font-bold text-ink">
             당일 인계
           </h2>
 
@@ -82,22 +124,22 @@ export function OperationsDashboardPage() {
           )}
 
           {cardList !== undefined && totalCardCount(cardList) === 0 && (
-            <p className="text-xl text-slate-600">오늘 등록된 인계가 없습니다.</p>
+            <p className="text-xl text-ink-muted">오늘 등록된 인계가 없습니다.</p>
           )}
 
           <ul className="flex flex-col gap-4">
             {cardList?.recipients.map((recipient) => (
               <li
                 key={recipient.careRecipientId}
-                className="rounded-2xl border-2 border-slate-200 bg-white px-5 py-4"
+                className="rounded-2xl border-2 border-border-card bg-white px-5 py-4"
               >
-                <p className="text-xl font-bold text-slate-900">{recipient.careRecipientName}</p>
+                <p className="text-xl font-bold text-ink">{recipient.careRecipientName}</p>
                 <ul className="mt-2 flex flex-col gap-2">
                   {recipient.cards.map((card) => (
                     <li key={card.id}>
                       <Link
                         to={`/handover-cards/${card.id}`}
-                        className="text-lg text-slate-700 underline underline-offset-4"
+                        className="text-lg text-ink hover:text-primary underline underline-offset-4"
                       >
                         {card.statusChange ?? card.nextAction ?? card.evidenceText}
                       </Link>
@@ -111,11 +153,11 @@ export function OperationsDashboardPage() {
 
         <section aria-labelledby="dashboard-pending" className="flex flex-col gap-4">
           <div className="flex flex-wrap items-baseline gap-3">
-            <h2 id="dashboard-pending" className="text-2xl font-bold text-slate-900">
+            <h2 id="dashboard-pending" className="text-2xl font-bold text-ink">
               미처리 업무
             </h2>
             {taskList !== undefined && (
-              <span className="text-2xl font-bold text-teal-800">{taskList.pendingCount}건</span>
+              <span className="text-2xl font-bold text-primary">{taskList.pendingCount}건</span>
             )}
           </div>
 
@@ -123,7 +165,7 @@ export function OperationsDashboardPage() {
           {tasks.isError && <TasksLoadFailed onRetry={() => void tasks.refetch()} />}
 
           {taskList !== undefined && taskList.pending.length === 0 && (
-            <p className="text-xl text-slate-600">아직 안 닫힌 업무가 없습니다.</p>
+            <p className="text-xl text-ink-muted">아직 안 닫힌 업무가 없습니다.</p>
           )}
 
           <ul className="flex flex-col gap-4">
@@ -132,7 +174,7 @@ export function OperationsDashboardPage() {
         </section>
 
         <section aria-labelledby="dashboard-done" className="flex flex-col gap-4">
-          <h2 id="dashboard-done" className="text-2xl font-bold text-slate-900">
+          <h2 id="dashboard-done" className="text-2xl font-bold text-ink">
             완료 업무
           </h2>
 
@@ -141,7 +183,7 @@ export function OperationsDashboardPage() {
           {tasks.isError && <TasksLoadFailed onRetry={() => void tasks.refetch()} />}
 
           {taskList !== undefined && taskList.done.length === 0 && (
-            <p className="text-xl text-slate-600">오늘 완료된 업무가 없습니다.</p>
+            <p className="text-xl text-ink-muted">오늘 완료된 업무가 없습니다.</p>
           )}
 
           <ul className="flex flex-col gap-4">
@@ -150,5 +192,25 @@ export function OperationsDashboardPage() {
         </section>
       </div>
     </PageLayout>
+  )
+}
+
+/** 현황 요약 타일. 비상호작용 · 표시 전용 — 기존 집계(getCardStats · taskList) 값만 그대로 보여준다. */
+function StatTile({
+  label,
+  value,
+  tone = 'ink',
+}: {
+  label: string
+  value: number
+  tone?: 'ink' | 'primary' | 'success'
+}) {
+  const valueClass = tone === 'primary' ? 'text-primary' : tone === 'success' ? 'text-success' : 'text-ink'
+
+  return (
+    <div className="flex flex-col items-center gap-1 rounded-md border border-border-card bg-surface-card px-3 py-4">
+      <span className="text-base font-semibold text-ink-muted">{label}</span>
+      <span className={`text-3xl font-bold ${valueClass}`}>{value}개</span>
+    </div>
   )
 }
