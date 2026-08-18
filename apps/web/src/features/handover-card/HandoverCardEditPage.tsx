@@ -538,6 +538,7 @@ function RecipientPicker({
         {shown.map((recipient) => (
           <li key={recipient.id}>
             <BigButton
+              align="left"
               tone="plain"
               selected={selected === recipient.id}
               onClick={() => onSelect(recipient.id)}
@@ -551,7 +552,7 @@ function RecipientPicker({
         ))}
       </ul>
 
-      <BigButton tone="plain" selected={selected === null} onClick={() => onSelect(null)}>
+      <BigButton align="left" tone="plain" selected={selected === null} onClick={() => onSelect(null)}>
         아직 가리지 못했습니다
       </BigButton>
     </fieldset>
