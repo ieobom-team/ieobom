@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createSpeechRecognizer, isSpeechRecognitionSupported } from './speechRecognition'
+import {
+  canRecordOriginalAudio,
+  createSpeechRecognizer,
+  isSpeechRecognitionSupported,
+  mergeTranscript,
+} from './speechRecognition'
 
 type Listener = ((event: never) => void) | null
 
@@ -18,6 +23,64 @@ let fake: FakeRecognition
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+/**
+ * 인식 결과를 이어 붙이는 규칙. (#146)
+ *
+ * 브라우저마다 결과를 쌓는 방식이 달라서, 그냥 이어 붙이면 Android 에서 같은 말이 겹쳐 쌓인다.
+ */
+describe('인식 조각 합치기', () => {
+  it('데스크톱처럼 서로 다른 조각을 주면 이어 붙인다', () => {
+    expect(mergeTranscript('식사를 ', '거의 안 하셨어요')).toBe('식사를 거의 안 하셨어요')
+  })
+
+  it('Android 처럼 앞 내용을 포함한 누적본을 주면 이어 붙이지 않고 교체한다', () => {
+    expect(mergeTranscript('안녕하세요', '안녕하세요 테스트입니다')).toBe('안녕하세요 테스트입니다')
+  })
+
+  it('같은 조각을 다시 주면 무시한다', () => {
+    expect(mergeTranscript('안녕하세요', '안녕하세요')).toBe('안녕하세요')
+  })
+
+  it('빈 조각은 문장을 건드리지 않는다', () => {
+    expect(mergeTranscript('안녕하세요', '')).toBe('안녕하세요')
+    expect(mergeTranscript('', '안녕하세요')).toBe('안녕하세요')
+  })
+})
+
+describe('원본 음성을 저장할 수 있는 기기인지', () => {
+  it('모바일이면 저장하지 않는다 — 마이크를 잡는 순간 인식이 멈춘다 (#146)', () => {
+    vi.stubGlobal('navigator', {
+      mediaDevices: { getUserMedia: vi.fn() },
+      userAgent:
+        'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/30.0 Chrome/143.0.0.0 Mobile Safari/537.36',
+    })
+    expect(canRecordOriginalAudio()).toBe(false)
+  })
+
+  it('userAgentData 가 있으면 그것을 먼저 믿는다', () => {
+    vi.stubGlobal('navigator', {
+      mediaDevices: { getUserMedia: vi.fn() },
+      userAgentData: { mobile: true },
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/151.0.0.0 Safari/537.36',
+    })
+    expect(canRecordOriginalAudio()).toBe(false)
+  })
+
+  it('PC 면 저장한다', () => {
+    vi.stubGlobal('navigator', {
+      mediaDevices: { getUserMedia: vi.fn() },
+      userAgentData: { mobile: false },
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/151.0.0.0 Safari/537.36',
+    })
+    expect(canRecordOriginalAudio()).toBe(true)
+  })
+
+  it('녹음 자체를 지원하지 않으면 저장하지 않는다', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Chrome' })
+    expect(canRecordOriginalAudio()).toBe(false)
+  })
 })
 
 describe('지원 여부', () => {
@@ -104,6 +167,64 @@ describe('인식기', () => {
     expect(fake.start).toHaveBeenCalledOnce()
     expect(onEnd).toHaveBeenCalledWith(null)
   })
+
+  it('Android 처럼 누적본을 여러 번 줘도 한 문장으로 돌려준다 (#146)', () => {
+    stub()
+    const onTranscript = vi.fn()
+    createSpeechRecognizer(onTranscript, vi.fn(), vi.fn())
+
+    // 실기기(삼성인터넷 30 / Android 10)에서 "안녕하세요 테스트입니다" 한 번에 나온 결과다.
+    fake.onresult?.({
+      results: [
+        [{ transcript: '' }],
+        [{ transcript: '안녕하세요' }],
+        [{ transcript: '안녕하세요' }],
+        [{ transcript: '안녕하세요 테스트입니다' }],
+        [{ transcript: '안녕하세요 테스트입니다' }],
+      ] as never,
+    } as never)
+
+    expect(onTranscript).toHaveBeenCalledWith('안녕하세요 테스트입니다')
+  })
+
+  it('아무것도 못 알아듣고 조용히 끝나면 안내한다 — 모바일은 에러를 주지 않는다 (#146)', async () => {
+    stub()
+    const onError = vi.fn()
+    const recognizer = createSpeechRecognizer(vi.fn(), vi.fn(), onError)
+
+    recognizer?.start()
+    await Promise.resolve()
+    fake.onend?.()
+
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('아무 말도 들리지 않았습니다'))
+  })
+
+  it('인식된 내용이 있으면 끝나도 안내하지 않는다', async () => {
+    stub()
+    const onError = vi.fn()
+    const recognizer = createSpeechRecognizer(vi.fn(), vi.fn(), onError)
+
+    recognizer?.start()
+    await Promise.resolve()
+    fake.onresult?.({ results: [[{ transcript: '점심을 거의 안 드셨어요' }]] as never } as never)
+    fake.onend?.()
+
+    expect(onError).not.toHaveBeenCalled()
+  })
+
+  it('에러로 끝났으면 같은 실패를 두 번 알리지 않는다', async () => {
+    stub()
+    const onError = vi.fn()
+    const recognizer = createSpeechRecognizer(vi.fn(), vi.fn(), onError)
+
+    recognizer?.start()
+    await Promise.resolve()
+    fake.onerror?.({ error: 'not-allowed' } as never)
+    fake.onend?.()
+
+    expect(onError).toHaveBeenCalledOnce()
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('마이크 권한'))
+  })
 })
 
 /**
@@ -177,6 +298,28 @@ describe('원본 음성 캡처', () => {
     expect(onError).toHaveBeenCalledWith(expect.stringContaining('마이크 권한'))
     expect(onEnd).toHaveBeenCalledWith(null)
     expect(fake.start).not.toHaveBeenCalled()
+  })
+
+  it('모바일이면 마이크를 잡지 않고 인식만 한다 — 잡는 순간 인식이 멈춘다 (#146)', async () => {
+    const getUserMedia = vi.fn(() => Promise.resolve({ getTracks: () => tracks }))
+    fake = new FakeRecognition()
+    vi.stubGlobal('webkitSpeechRecognition', function FakeCtor() {
+      return fake
+    })
+    vi.stubGlobal('MediaRecorder', FakeRecorder)
+    vi.stubGlobal('navigator', {
+      mediaDevices: { getUserMedia },
+      userAgent:
+        'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/30.0 Chrome/143.0.0.0 Mobile Safari/537.36',
+    })
+    const onEnd = vi.fn()
+
+    createSpeechRecognizer(vi.fn(), onEnd, vi.fn())?.start()
+    await Promise.resolve()
+
+    expect(getUserMedia).not.toHaveBeenCalled()
+    expect(FakeRecorder.instances).toHaveLength(0)
+    expect(fake.start).toHaveBeenCalledOnce()
   })
 
   it('허용이 떨어지기 전에 화면을 벗어나면 녹음을 시작하지 않는다 — 상시 녹음 금지', async () => {
